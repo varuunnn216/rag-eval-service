@@ -259,39 +259,63 @@ def call_gemini_llm(prompt: str, system_prompt: str = SYSTEM_PROMPT) -> Tuple[st
     except Exception as exc:
         raise LLMGenerationError(f"Gemini SDK call failed ({model_name}): {exc}") from exc
 
-    # Direct REST call to Gemini Generative Language API
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
-        f"?key={key}"
-    )
-    payload = {
-        "systemInstruction": {"parts": [{"text": system_prompt}]},
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.0},
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as http_err:
-        err_body = http_err.read().decode("utf-8", errors="replace")
-        raise LLMGenerationError(
-            f"Gemini API HTTP {http_err.code} ({model_name}): {err_body[:300]}"
-        ) from http_err
-    except Exception as exc:
-        raise LLMGenerationError(f"Gemini API request failed ({model_name}): {exc}") from exc
+    # Direct REST call to Gemini Generative Language API (with automatic model upgrade if 2.5 is deprecated)
+    models_to_try = [model_name]
+    if "gemini-3.5-flash-lite" not in models_to_try:
+        models_to_try.append("gemini-3.5-flash-lite")
+
+    body = None
+    last_error: Optional[Exception] = None
+    for candidate_model in models_to_try:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent"
+            f"?key={key}"
+        )
+        payload = {
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.0},
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": key,
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                body = json.loads(resp.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as http_err:
+            err_body = http_err.read().decode("utf-8", errors="replace")
+            last_error = LLMGenerationError(
+                f"Gemini API HTTP {http_err.code} ({candidate_model}): {err_body[:300]}"
+            )
+            if http_err.code == 404 and candidate_model != models_to_try[-1]:
+                continue
+            raise last_error from http_err
+        except Exception as exc:
+            last_error = LLMGenerationError(
+                f"Gemini API request failed ({candidate_model}): {exc}"
+            )
+            if candidate_model != models_to_try[-1]:
+                continue
+            raise last_error from exc
+
+    if body is None:
+        raise last_error or LLMGenerationError("Gemini API call failed.")
 
     candidates = body.get("candidates") or []
     if not candidates:
         raise LLMGenerationError(f"Gemini API returned no candidates: {body}")
 
     parts = candidates[0].get("content", {}).get("parts") or []
-    text = "".join(p.get("text", "") for p in parts).strip()
+    text = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
+    if not text:
+        text = "".join(p.get("text", "") for p in parts).strip()
     usage = body.get("usageMetadata") or {}
     p_tok = int(usage.get("promptTokenCount") or estimate_token_count(prompt))
     c_tok = int(usage.get("candidatesTokenCount") or estimate_token_count(text))

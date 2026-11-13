@@ -167,6 +167,19 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8000) -> None:
+    bluebird_path = get_settings().project_root / "data" / "corpus" / "08_bluebird_cafe.md"
+    if bluebird_path.exists():
+        ingest_documents(
+            [
+                DocumentInput(
+                    id="doc_08_bluebird_cafe",
+                    title="Bluebird Cafe Staff Handbook",
+                    source="data/corpus/08_bluebird_cafe.md",
+                    content=bluebird_path.read_text(encoding="utf-8"),
+                    metadata={"filename": "08_bluebird_cafe.md"},
+                )
+            ]
+        )
     server = ThreadingHTTPServer((host, port), RAGWebRequestHandler)
     print(f"RAG Service & Eval Harness Web UI listening at http://{host}:{port}")
     try:

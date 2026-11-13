@@ -92,42 +92,53 @@ class EmbeddingService:
             )
             return [_deterministic_feature_embedding(t, self.dim) for t in texts]
 
-        from google import genai
-        from google.genai import types
+        try:
+            from google import genai
+            from google.genai import types
 
-        client = genai.Client(api_key=self.settings.gemini_api_key)
-        all_embeddings: List[List[float]] = []
+            client = genai.Client(api_key=self.settings.gemini_api_key)
+            all_embeddings: List[List[float]] = []
 
-        for start in range(0, len(texts), batch_size):
-            batch = texts[start : start + batch_size]
-            response = client.models.embed_content(
-                model=self.model,
-                contents=batch,
-                config=types.EmbedContentConfig(
-                    task_type="RETRIEVAL_DOCUMENT",
-                    output_dimensionality=self.dim,
-                ),
+            for start in range(0, len(texts), batch_size):
+                batch = texts[start : start + batch_size]
+                response = client.models.embed_content(
+                    model=self.model,
+                    contents=batch,
+                    config=types.EmbedContentConfig(
+                        task_type="RETRIEVAL_DOCUMENT",
+                        output_dimensionality=self.dim,
+                    ),
+                )
+                for emb in response.embeddings:
+                    all_embeddings.append(_normalize_vector(list(emb.values)))
+
+            return all_embeddings
+        except Exception as exc:
+            logger.info(
+                "Using deterministic local feature embeddings (%d dims) (%s).",
+                self.dim,
+                exc,
             )
-            for emb in response.embeddings:
-                all_embeddings.append(_normalize_vector(list(emb.values)))
-
-        return all_embeddings
+            return [_deterministic_feature_embedding(t, self.dim) for t in texts]
 
     def embed_query(self, query: str) -> List[float]:
         """Embed a single search query."""
         if not self._has_real_api_key():
             return _deterministic_feature_embedding(query, self.dim)
 
-        from google import genai
-        from google.genai import types
+        try:
+            from google import genai
+            from google.genai import types
 
-        client = genai.Client(api_key=self.settings.gemini_api_key)
-        response = client.models.embed_content(
-            model=self.model,
-            contents=query,
-            config=types.EmbedContentConfig(
-                task_type="RETRIEVAL_QUERY",
-                output_dimensionality=self.dim,
-            ),
-        )
-        return _normalize_vector(list(response.embeddings[0].values))
+            client = genai.Client(api_key=self.settings.gemini_api_key)
+            response = client.models.embed_content(
+                model=self.model,
+                contents=query,
+                config=types.EmbedContentConfig(
+                    task_type="RETRIEVAL_QUERY",
+                    output_dimensionality=self.dim,
+                ),
+            )
+            return _normalize_vector(list(response.embeddings[0].values))
+        except Exception:
+            return _deterministic_feature_embedding(query, self.dim)

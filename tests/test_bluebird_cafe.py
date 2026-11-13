@@ -152,22 +152,30 @@ class TestBluebirdCafeRAGPipeline(unittest.TestCase):
         )
 
         # 4b: Without an LLM key/caller, must return explicit error + retrieved chunks (never paste chunks)
+        from app.config import get_settings
+
+        settings = get_settings()
+        saved_key = settings.gemini_api_key
         set_custom_llm_caller(None)
-        resp_no_key = answer_question(
-            AskRequest(
-                question="What time does the cafe open on Sunday?",
-                mode="hybrid",
-                top_k=5,
-                use_reranker=True,
+        try:
+            settings.gemini_api_key = ""
+            resp_no_key = answer_question(
+                AskRequest(
+                    question="What time does the cafe open on Sunday?",
+                    mode="hybrid",
+                    top_k=5,
+                    use_reranker=True,
+                )
             )
-        )
-        self.assertIsNotNone(resp_no_key.error)
-        self.assertIn("GEMINI_API_KEY", resp_no_key.error or "")
-        self.assertGreaterEqual(len(resp_no_key.retrieved_chunks), 1)
-        self.assertEqual(
-            resp_no_key.retrieved_chunks[0].chunk_id,
-            "doc_08_bluebird_cafe::chunk_000",
-        )
+            self.assertIsNotNone(resp_no_key.error)
+            self.assertIn("GEMINI_API_KEY", resp_no_key.error or "")
+            self.assertGreaterEqual(len(resp_no_key.retrieved_chunks), 1)
+            self.assertEqual(
+                resp_no_key.retrieved_chunks[0].chunk_id,
+                "doc_08_bluebird_cafe::chunk_000",
+            )
+        finally:
+            settings.gemini_api_key = saved_key
 
     def test_5_ingest_metadata_honors_explicit_fields_and_upserts_without_duplication(self) -> None:
         # Explicit document_id, title, and source must override filename fallback

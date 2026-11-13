@@ -15,7 +15,7 @@ def _load_dotenv_file(env_path: Path) -> None:
         key, val = line.split("=", 1)
         key = key.strip()
         val = val.strip().strip("'").strip('"')
-        if key and key not in os.environ:
+        if key and not os.environ.get(key):
             os.environ[key] = val
 
 
@@ -29,7 +29,7 @@ class Settings:
     embedded_pg_data_dir: str = ".pgdata"
     embedding_model: str = "gemini-embedding-001"
     embedding_dim: int = 768
-    generation_model: str = "gemini-2.5-flash"
+    generation_model: str = "gemini-3.5-flash-lite"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     chunk_size_tokens: int = 350
     chunk_overlap_tokens: int = 50
@@ -57,7 +57,7 @@ class Settings:
             embedded_pg_data_dir=os.getenv("EMBEDDED_PG_DATA_DIR", ".pgdata"),
             embedding_model=os.getenv("EMBEDDING_MODEL", "gemini-embedding-001"),
             embedding_dim=int(os.getenv("EMBEDDING_DIM", "768")),
-            generation_model=os.getenv("GENERATION_MODEL", "gemini-2.5-flash"),
+            generation_model=os.getenv("GENERATION_MODEL", "gemini-3.5-flash-lite"),
             reranker_model=os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
             chunk_size_tokens=int(os.getenv("CHUNK_SIZE_TOKENS", "350")),
             chunk_overlap_tokens=int(os.getenv("CHUNK_OVERLAP_TOKENS", "50")),
