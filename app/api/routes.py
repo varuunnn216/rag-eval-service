@@ -22,17 +22,18 @@ def list_documents_endpoint() -> List[Dict[str, Any]]:
 
 @router.post("/search", response_model=SearchResponse)
 def search_endpoint(payload: SearchRequest) -> SearchResponse:
-    """Execute dense, sparse, or hybrid (RRF) search over indexed document chunks."""
-    candidates, latency_ms = retrieve_candidates(
+    """Execute dense, sparse, or hybrid (RRF) search with optional cross-encoder reranking."""
+    results, latency_ms = retrieve_candidates(
         query=payload.query,
         mode=payload.mode,
         top_k=payload.top_k,
         candidate_pool=payload.candidate_pool,
+        use_reranker=payload.use_reranker,
     )
     return SearchResponse(
         query=payload.query,
         mode=payload.mode,
-        use_reranker=False,
-        results=candidates[: payload.top_k],
+        use_reranker=payload.use_reranker,
+        results=results,
         latency_ms=latency_ms,
     )

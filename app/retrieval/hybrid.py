@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from app.config import get_settings
 from app.db import get_db_connection
 from app.ingestion.embedder import EmbeddingService
+from app.retrieval.reranker import rerank_chunks
 from app.schemas import RetrievalMode, RetrievedChunk
 
 _QUERY_TOKEN_RE = re.compile(r"[a-zA-Z0-9_]+")
@@ -211,10 +212,12 @@ def retrieve_candidates(
     mode: RetrievalMode = "hybrid",
     top_k: int = 5,
     candidate_pool: int = 20,
+    use_reranker: bool = True,
 ) -> tuple[List[RetrievedChunk], float]:
     """
-    Execute retrieval in `dense`, `sparse`, or `hybrid` (RRF) mode.
-    Returns (candidate_chunks, latency_ms).
+    Execute retrieval in `dense`, `sparse`, or `hybrid` (RRF) mode, with optional
+    cross-encoder reranking over the candidate pool.
+    Returns (top_k_chunks, latency_ms).
     """
     t0 = time.perf_counter()
     settings = get_settings()
@@ -240,5 +243,10 @@ def retrieve_candidates(
                 top_n=pool_size,
             )
 
+    if use_reranker and candidates:
+        results = rerank_chunks(query=query, candidates=candidates, top_k=top_k)
+    else:
+        results = candidates[:top_k]
+
     elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-    return candidates, elapsed_ms
+    return results, elapsed_ms
