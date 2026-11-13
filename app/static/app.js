@@ -403,6 +403,34 @@ window.tryQuestionInPlayground = function (questionText) {
 /* TAB 3: CORPUS & DOCUMENT INGESTION */
 function initCorpusControls() {
   document.getElementById("refresh-docs-btn").addEventListener("click", loadDocuments);
+
+  const fileInput = document.getElementById("file-upload-input");
+  if (fileInput) {
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const baseName = file.name.replace(/\.[^.]+$/, "");
+        const cleanSlug =
+          "doc_" +
+          baseName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "");
+        document.getElementById("ingest-id").value = cleanSlug;
+        document.getElementById("ingest-title").value = baseName.replace(/[_-]+/g, " ");
+        document.getElementById("ingest-source").value = `upload/${file.name}`;
+        document.getElementById("ingest-content").value = String(reader.result || "");
+        const statusEl = document.getElementById("uploaded-file-status");
+        if (statusEl) {
+          statusEl.textContent = `Loaded "${file.name}" (${file.size} bytes) — click "Chunk, Embed & Index Document" below to index it!`;
+        }
+      };
+      reader.readAsText(file);
+    });
+  }
+
   document.getElementById("ingest-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = document.getElementById("ingest-submit-btn");

@@ -237,10 +237,17 @@
 
         <div class="col-chunks">
           <div class="card">
-            <h3>Ingest New Markdown Document (<code>POST /api/v1/ingest</code>)</h3>
+            <h3>Upload or Paste a Document (<code>POST /api/v1/ingest</code>)</h3>
             <p class="muted-text">
-              Add or update a document in the vector + full-text index and immediately query it in the QA tab.
+              Upload a file (<code>.md</code>, <code>.txt</code>, <code>.json</code>, <code>.csv</code>, <code>.py</code>) from your computer or paste text below, then ask questions about it in Tab 1!
             </p>
+            <div class="file-upload-dropzone" id="file-dropzone">
+              <input type="file" id="file-upload-input" accept=".md,.txt,.markdown,.json,.csv,.py,.log,.yaml,.yml,.html" />
+              <div class="dropzone-label">
+                <strong>Choose a file from your Mac</strong> or drag &amp; drop it here
+                <div class="muted-text" id="uploaded-file-status">Supports .md, .txt, .json, .csv, .py, .yaml</div>
+              </div>
+            </div>
             <form id="ingest-form" class="ingest-form">
               <label>
                 <span>Document ID (deterministic slug)</span>
