@@ -1,0 +1,424 @@
+[
+  {
+    "id": "q01",
+    "category": "exact_lookup",
+    "question": "Which pgvector operator and operator class are used for cosine distance indexing?",
+    "expected_document_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_001"],
+    "expected_answer": "Cosine distance uses the <=> operator with the vector_cosine_ops operator class.",
+    "key_facts": ["<=>", "vector_cosine_ops"],
+    "should_abstain": false
+  },
+  {
+    "id": "q02",
+    "category": "exact_lookup",
+    "question": "What are the default values of m and ef_construction when creating a pgvector HNSW index?",
+    "expected_document_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_002"],
+    "expected_answer": "The default value of m is 16 and the default value of ef_construction is 64.",
+    "key_facts": ["16", "64", "ef_construction"],
+    "should_abstain": false
+  },
+  {
+    "id": "q03",
+    "category": "exact_lookup",
+    "question": "What is the default value of hnsw.ef_search at query time and what is the default hnsw.max_scan_tuples limit?",
+    "expected_document_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_003"],
+    "expected_answer": "The default value of hnsw.ef_search is 40, and hnsw.max_scan_tuples defaults to 20000.",
+    "key_facts": ["40", "20000", "ef_search"],
+    "should_abstain": false
+  },
+  {
+    "id": "q04",
+    "category": "exact_lookup",
+    "question": "How many dimensions does the halfvec data type support for HNSW indexes compared to standard vector columns?",
+    "expected_document_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_004"],
+    "expected_answer": "The halfvec data type supports up to 4000 dimensions for HNSW indexes, compared to 2000 dimensions for standard 32-bit vector columns.",
+    "key_facts": ["halfvec", "4000", "2000"],
+    "should_abstain": false
+  },
+  {
+    "id": "q05",
+    "category": "exact_lookup",
+    "question": "What normalization bitmask is passed to ts_rank_cd and what is the default gin_pending_list_limit size?",
+    "expected_document_id": "doc_hybrid_search",
+    "expected_chunk_ids": ["doc_hybrid_search::chunk_001"],
+    "expected_answer": "Normalization bitmask 32 is passed to ts_rank_cd (dividing rank by 1 + rank), and gin_pending_list_limit defaults to 4MB.",
+    "key_facts": ["32", "ts_rank_cd", "4MB"],
+    "should_abstain": false
+  },
+  {
+    "id": "q06",
+    "category": "exact_lookup",
+    "question": "What is the default smoothing constant k used in the Reciprocal Rank Fusion (RRF) formula?",
+    "expected_document_id": "doc_hybrid_search",
+    "expected_chunk_ids": ["doc_hybrid_search::chunk_002"],
+    "expected_answer": "The default RRF smoothing constant k is 60 (RRF_K = 60).",
+    "key_facts": ["60", "RRF"],
+    "should_abstain": false
+  },
+  {
+    "id": "q07",
+    "category": "exact_lookup",
+    "question": "Which cross-encoder model is used in the second-stage reranking pipeline and how many candidates does it compress to top_k?",
+    "expected_document_id": "doc_hybrid_search",
+    "expected_chunk_ids": ["doc_hybrid_search::chunk_003"],
+    "expected_answer": "It uses cross-encoder/ms-marco-MiniLM-L-6-v2 to compress candidate_pool = 20 candidates down to top_k = 5 chunks.",
+    "key_facts": ["ms-marco-MiniLM-L-6-v2", "20", "5"],
+    "should_abstain": false
+  },
+  {
+    "id": "q08",
+    "category": "exact_lookup",
+    "question": "What are the min_size, max_size, and max_lifetime settings for the psycopg_pool database connection pool?",
+    "expected_document_id": "doc_fastapi_service",
+    "expected_chunk_ids": ["doc_fastapi_service::chunk_001"],
+    "expected_answer": "The psycopg_pool connection pool uses min_size = 4, max_size = 20, and max_lifetime = 3600 seconds.",
+    "key_facts": ["4", "20", "3600"],
+    "should_abstain": false
+  },
+  {
+    "id": "q09",
+    "category": "exact_lookup",
+    "question": "What are the per-minute request rate limits and burst capacities for /api/v1/search and /api/v1/ask?",
+    "expected_document_id": "doc_fastapi_service",
+    "expected_chunk_ids": ["doc_fastapi_service::chunk_002"],
+    "expected_answer": "/api/v1/search allows 60 requests per minute (burst 15), and /api/v1/ask allows 20 requests per minute (burst 5), returning HTTP 429 with Retry-After when exceeded.",
+    "key_facts": ["60", "15", "20", "429"],
+    "should_abstain": false
+  },
+  {
+    "id": "q10",
+    "category": "exact_lookup",
+    "question": "Which HTTP header is used for ingestion deduplication on network retries and what is its cache TTL?",
+    "expected_document_id": "doc_fastapi_service",
+    "expected_chunk_ids": ["doc_fastapi_service::chunk_003"],
+    "expected_answer": "Clients pass the X-Idempotency-Key HTTP header, which is cached for a TTL of 24 hours (86400 seconds).",
+    "key_facts": ["X-Idempotency-Key", "24", "86400"],
+    "should_abstain": false
+  },
+  {
+    "id": "q11",
+    "category": "exact_lookup",
+    "question": "What are the election_timeout_ms range and heartbeat_interval_ms values in Raft?",
+    "expected_document_id": "doc_raft_consensus",
+    "expected_chunk_ids": ["doc_raft_consensus::chunk_002"],
+    "expected_answer": "In Raft, election_timeout_ms is randomized between 150ms and 300ms, and heartbeat_interval_ms is 30ms.",
+    "key_facts": ["150ms", "300ms", "30ms"],
+    "should_abstain": false
+  },
+  {
+    "id": "q12",
+    "category": "exact_lookup",
+    "question": "At what entry count or size threshold does Raft compact its log into a snapshot?",
+    "expected_document_id": "doc_raft_consensus",
+    "expected_chunk_ids": ["doc_raft_consensus::chunk_003"],
+    "expected_answer": "Raft compacts committed log entries into a snapshot when the log exceeds snapshot_threshold_entries = 10000 or snapshot_size_mb = 64.",
+    "key_facts": ["10000", "64", "InstallSnapshot"],
+    "should_abstain": false
+  },
+  {
+    "id": "q13",
+    "category": "exact_lookup",
+    "question": "Which SQLSTATE error code is raised on serialization conflicts in Repeatable Read or Serializable isolation levels?",
+    "expected_document_id": "doc_postgres_mvcc",
+    "expected_chunk_ids": ["doc_postgres_mvcc::chunk_001"],
+    "expected_answer": "Concurrent modifications or serialization anomalies abort the transaction with error SQLSTATE 40001.",
+    "key_facts": ["40001", "Repeatable Read", "Serializable"],
+    "should_abstain": false
+  },
+  {
+    "id": "q14",
+    "category": "exact_lookup",
+    "question": "What is the default autovacuum_freeze_max_age threshold used to prevent PostgreSQL transaction ID wraparound?",
+    "expected_document_id": "doc_postgres_mvcc",
+    "expected_chunk_ids": ["doc_postgres_mvcc::chunk_002"],
+    "expected_answer": "autovacuum_freeze_max_age is set to 200000000 (200 million transactions) to trigger anti-wraparound freezing.",
+    "key_facts": ["200000000", "FrozenTransactionId"],
+    "should_abstain": false
+  },
+  {
+    "id": "q15",
+    "category": "semantic_conceptual",
+    "question": "When should you use the negative inner product operator (<#>) in pgvector?",
+    "expected_document_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_001"],
+    "expected_answer": "Negative inner product (<#> with vector_ip_ops) is optimal when embedding vectors are already unit-normalized (L2 norm equal to 1.0).",
+    "key_facts": ["<#>", "vector_ip_ops", "unit-normalized"],
+    "should_abstain": false
+  },
+  {
+    "id": "q16",
+    "category": "semantic_conceptual",
+    "question": "How does pgvector 0.8.0 solve the problem of filtered HNSW vector queries returning fewer rows than LIMIT?",
+    "expected_document_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_003"],
+    "expected_answer": "Enabling hnsw.iterative_scan (set to relaxed_order or strict_order) continues scanning the HNSW graph until LIMIT matching tuples are found or hnsw.max_scan_tuples (20000) is reached.",
+    "key_facts": ["iterative_scan", "relaxed_order", "strict_order"],
+    "should_abstain": false
+  },
+  {
+    "id": "q17",
+    "category": "semantic_conceptual",
+    "question": "How should you choose the lists and ivfflat.probes parameters for an IVFFlat index up to 1 million rows?",
+    "expected_document_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_004"],
+    "expected_answer": "For up to 1 million rows, set lists to rows / 1000 and set query-time ivfflat.probes to sqrt(lists).",
+    "key_facts": ["rows / 1000", "sqrt(lists)", "probes"],
+    "should_abstain": false
+  },
+  {
+    "id": "q18",
+    "category": "semantic_conceptual",
+    "question": "Why does hybrid search combine dense vector retrieval with sparse lexical retrieval instead of relying only on embeddings?",
+    "expected_document_id": "doc_hybrid_search",
+    "expected_chunk_ids": ["doc_hybrid_search::chunk_000"],
+    "expected_answer": "Dense vector search captures semantic synonyms and conceptual paraphrases, while sparse lexical search handles exact alphanumeric identifiers, error codes, parameter names, and rare domain acronyms.",
+    "key_facts": ["semantic", "identifiers", "error codes"],
+    "should_abstain": false
+  },
+  {
+    "id": "q19",
+    "category": "semantic_conceptual",
+    "question": "How are section headings and body text weighted differently in the PostgreSQL tsvector column?",
+    "expected_document_id": "doc_hybrid_search",
+    "expected_chunk_ids": ["doc_hybrid_search::chunk_001"],
+    "expected_answer": "Section headings are assigned weight label A (weight 1.0) and body text is assigned weight label B (weight 0.4).",
+    "key_facts": ["A", "1.0", "B", "0.4"],
+    "should_abstain": false
+  },
+  {
+    "id": "q20",
+    "category": "semantic_conceptual",
+    "question": "Why does Reciprocal Rank Fusion use rank positions rather than adding raw cosine and ts_rank_cd scores directly?",
+    "expected_document_id": "doc_hybrid_search",
+    "expected_chunk_ids": ["doc_hybrid_search::chunk_002"],
+    "expected_answer": "Cosine similarity and cover-density lexical scores follow incompatible probability distributions, so summing raw scores is unstable; RRF uses rank positions with smoothing constant k=60 to reward consensus chunks.",
+    "key_facts": ["distributions", "rank", "60"],
+    "should_abstain": false
+  },
+  {
+    "id": "q21",
+    "category": "semantic_conceptual",
+    "question": "Why is a cross-encoder more accurate for reranking than a bi-encoder embedding model?",
+    "expected_document_id": "doc_hybrid_search",
+    "expected_chunk_ids": ["doc_hybrid_search::chunk_003"],
+    "expected_answer": "Unlike bi-encoders that encode queries and documents separately into single vectors, a cross-encoder performs full token-by-token cross-attention across the concatenated query and passage, capturing negation, entity binding, and word proximity.",
+    "key_facts": ["cross-attention", "bi-encoder", "proximity"],
+    "should_abstain": false
+  },
+  {
+    "id": "q22",
+    "category": "semantic_conceptual",
+    "question": "How does POST /api/v1/ingest guarantee idempotency when re-indexing an existing document?",
+    "expected_document_id": "doc_fastapi_service",
+    "expected_chunk_ids": ["doc_fastapi_service::chunk_003"],
+    "expected_answer": "Within a single atomic PostgreSQL transaction, it executes INSERT ... ON CONFLICT (id) DO UPDATE on documents, deletes existing chunks for that document_id, and inserts the newly chunked and embedded rows.",
+    "key_facts": ["ON CONFLICT", "transaction", "document_id"],
+    "should_abstain": false
+  },
+  {
+    "id": "q23",
+    "category": "semantic_conceptual",
+    "question": "How many node failures can a 5-node and a 7-node Raft cluster tolerate, and what quorum sizes do they require?",
+    "expected_document_id": "doc_raft_consensus",
+    "expected_chunk_ids": ["doc_raft_consensus::chunk_001"],
+    "expected_answer": "A 5-node Raft cluster requires a quorum of 3 nodes and tolerates 2 failures; a 7-node cluster requires a quorum of 4 nodes and tolerates 3 failures.",
+    "key_facts": ["3", "2", "4", "floor(N / 2) + 1"],
+    "should_abstain": false
+  },
+  {
+    "id": "q24",
+    "category": "semantic_conceptual",
+    "question": "What do the Log Matching Property and Leader Completeness Property guarantee in Raft?",
+    "expected_document_id": "doc_raft_consensus",
+    "expected_chunk_ids": ["doc_raft_consensus::chunk_003"],
+    "expected_answer": "Log Matching guarantees that if two log entries have the same index and term, they store the same command and identical preceding entries; Leader Completeness ensures a candidate cannot win an election unless its log is at least as up-to-date as a majority of the cluster.",
+    "key_facts": ["Log Matching Property", "Leader Completeness Property", "majority"],
+    "should_abstain": false
+  },
+  {
+    "id": "q25",
+    "category": "semantic_conceptual",
+    "question": "How does PostgreSQL use xmin and xmax tuple headers to implement non-blocking MVCC updates?",
+    "expected_document_id": "doc_postgres_mvcc",
+    "expected_chunk_ids": ["doc_postgres_mvcc::chunk_001"],
+    "expected_answer": "PostgreSQL marks the old tuple with the deleting transaction ID in xmax and inserts a new physical tuple version with the creating transaction ID in xmin instead of overwriting in place.",
+    "key_facts": ["xmin", "xmax", "tuple"],
+    "should_abstain": false
+  },
+  {
+    "id": "q26",
+    "category": "semantic_conceptual",
+    "question": "What conditions are required for a Heap-Only Tuple (HOT) update in PostgreSQL and what fillfactor is recommended?",
+    "expected_document_id": "doc_postgres_mvcc",
+    "expected_chunk_ids": ["doc_postgres_mvcc::chunk_002"],
+    "expected_answer": "A HOT update requires that no indexed column is modified and enough free space exists on the same 8KB heap page; setting fillfactor = 80 reserves 20% page space for HOT updates.",
+    "key_facts": ["HOT", "8KB", "fillfactor = 80"],
+    "should_abstain": false
+  },
+  {
+    "id": "q27",
+    "category": "semantic_conceptual",
+    "question": "Why does the ingestion pipeline use chunk_size_tokens = 350 with chunk_overlap_tokens = 50?",
+    "expected_document_id": "doc_rag_evaluation",
+    "expected_chunk_ids": ["doc_rag_evaluation::chunk_001"],
+    "expected_answer": "Chunks smaller than 150 tokens lose surrounding context, while chunks larger than 800 tokens dilute embeddings across topics; a 350-token window with 50-token overlap preserves boundary sentences.",
+    "key_facts": ["350", "50", "150", "800"],
+    "should_abstain": false
+  },
+  {
+    "id": "q28",
+    "category": "semantic_conceptual",
+    "question": "How are Recall@K, MRR@K, and NDCG@K defined in the retrieval evaluation harness?",
+    "expected_document_id": "doc_rag_evaluation",
+    "expected_chunk_ids": ["doc_rag_evaluation::chunk_002"],
+    "expected_answer": "Recall@K is the fraction of ground-truth chunks in top K; MRR@K is 1 / rank of the first relevant chunk; NDCG@K measures ranking quality using logarithmic discount log2(i + 1).",
+    "key_facts": ["Recall@K", "MRR@K", "NDCG@K"],
+    "should_abstain": false
+  },
+  {
+    "id": "q29",
+    "category": "multi_hop",
+    "question": "Compare the build-time parameters (m, ef_construction, maintenance_work_mem) and query-time parameters (hnsw.ef_search, hnsw.iterative_scan) for pgvector HNSW indexes.",
+    "expected_document_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": [
+      "doc_pgvector_indexing::chunk_002",
+      "doc_pgvector_indexing::chunk_003"
+    ],
+    "expected_answer": "At build time, HNSW uses m (default 16), ef_construction (default 64), and maintenance_work_mem (recommended >= 2GB). At query time, it uses hnsw.ef_search (default 40) and hnsw.iterative_scan (relaxed_order or strict_order).",
+    "key_facts": ["16", "64", "2GB", "40", "iterative_scan"],
+    "should_abstain": false
+  },
+  {
+    "id": "q30",
+    "category": "multi_hop",
+    "question": "How do PostgreSQL tsvector cover-density ranking and Reciprocal Rank Fusion work together before cross-encoder reranking?",
+    "expected_document_id": "doc_hybrid_search",
+    "expected_chunk_ids": [
+      "doc_hybrid_search::chunk_001",
+      "doc_hybrid_search::chunk_002",
+      "doc_hybrid_search::chunk_003"
+    ],
+    "expected_answer": "Sparse search scores tsvector matches with ts_rank_cd (normalization 32), RRF fuses dense and sparse ranks using k = 60 into candidate_pool = 20 chunks, and cross-encoder/ms-marco-MiniLM-L-6-v2 reranks them to top_k = 5.",
+    "key_facts": ["ts_rank_cd", "32", "60", "ms-marco-MiniLM-L-6-v2"],
+    "should_abstain": false
+  },
+  {
+    "id": "q31",
+    "category": "multi_hop",
+    "question": "What connection pool settings and rate limit policies protect the FastAPI RAG service under high concurrency?",
+    "expected_document_id": "doc_fastapi_service",
+    "expected_chunk_ids": [
+      "doc_fastapi_service::chunk_001",
+      "doc_fastapi_service::chunk_002"
+    ],
+    "expected_answer": "psycopg_pool uses min_size = 4, max_size = 20, max_lifetime = 3600s, and timeout = 10.0s, while token-bucket rate limiting caps /api/v1/search at 60 rpm and /api/v1/ask at 20 rpm (returning HTTP 429 with Retry-After).",
+    "key_facts": ["min_size = 4", "max_size = 20", "60", "20", "429"],
+    "should_abstain": false
+  },
+  {
+    "id": "q32",
+    "category": "multi_hop",
+    "question": "In Raft, how do randomized election timeouts, leader heartbeats, and log snapshot compaction keep the cluster available and bounded on disk?",
+    "expected_document_id": "doc_raft_consensus",
+    "expected_chunk_ids": [
+      "doc_raft_consensus::chunk_002",
+      "doc_raft_consensus::chunk_003"
+    ],
+    "expected_answer": "Randomized election timeouts (150ms-300ms) and 30ms leader AppendEntries heartbeats prevent split votes, while snapshot compaction at 10000 entries or 64MB bounds disk usage and updates lagging followers via InstallSnapshot.",
+    "key_facts": ["150ms", "300ms", "30ms", "10000", "InstallSnapshot"],
+    "should_abstain": false
+  },
+  {
+    "id": "q33",
+    "category": "multi_hop",
+    "question": "How does PostgreSQL maintain ACID durability with WAL checkpoints while cleaning up dead MVCC tuples and preventing XID wraparound?",
+    "expected_document_id": "doc_postgres_mvcc",
+    "expected_chunk_ids": [
+      "doc_postgres_mvcc::chunk_002",
+      "doc_postgres_mvcc::chunk_003"
+    ],
+    "expected_answer": "Autovacuum freezes tuples beyond autovacuum_freeze_max_age = 200000000 and fillfactor = 80 enables HOT updates on 8KB pages, while durability uses WAL (wal_level = replica, max_wal_size = 4GB, checkpoint_timeout = 15min, checkpoint_completion_target = 0.9).",
+    "key_facts": ["200000000", "fillfactor = 80", "4GB", "15min"],
+    "should_abstain": false
+  },
+  {
+    "id": "q34",
+    "category": "multi_hop",
+    "question": "What are the complete retrieval metrics and answer generation metrics reported by the RAG evaluation harness?",
+    "expected_document_id": "doc_rag_evaluation",
+    "expected_chunk_ids": [
+      "doc_rag_evaluation::chunk_002",
+      "doc_rag_evaluation::chunk_003"
+    ],
+    "expected_answer": "Retrieval is evaluated with Recall@K, HitRate@K, MRR@K, and NDCG@K, while generation is evaluated on Fact Coverage (Answer Accuracy), Citation Precision & Recall, Faithfulness, and Abstention Accuracy.",
+    "key_facts": ["Recall@K", "MRR@K", "NDCG@K", "Fact Coverage", "Faithfulness", "Abstention"],
+    "should_abstain": false
+  },
+  {
+    "id": "q35",
+    "category": "multi_hop",
+    "question": "What happens during PostgreSQL WAL configuration for Point-in-Time Recovery (PITR) and how does Serializable Snapshot Isolation detect conflicts?",
+    "expected_document_id": "doc_postgres_mvcc",
+    "expected_chunk_ids": [
+      "doc_postgres_mvcc::chunk_001",
+      "doc_postgres_mvcc::chunk_003"
+    ],
+    "expected_answer": "PITR requires wal_level set to replica or logical (with max_wal_size = 4GB and checkpoint_timeout = 15min), while Serializable isolation uses SIReadLock predicate locks to detect rw-antidependencies and raises SQLSTATE 40001.",
+    "key_facts": ["replica", "4GB", "SIReadLock", "40001"],
+    "should_abstain": false
+  },
+  {
+    "id": "q36",
+    "category": "unanswerable",
+    "question": "How do you configure BGP route reflector cluster-ids in Cisco IOS XR routers?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
+  },
+  {
+    "id": "q37",
+    "category": "unanswerable",
+    "question": "What is the recommended dosage of lithium carbonate for bipolar disorder maintenance therapy?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
+  },
+  {
+    "id": "q38",
+    "category": "unanswerable",
+    "question": "How does Apache Kafka KRaft controller quorum configure zookeeper.connection.timeout.ms in Kafka 0.8?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
+  },
+  {
+    "id": "q39",
+    "category": "unanswerable",
+    "question": "What are the webpack 5 ModuleFederationPlugin shared singleton configuration options for React 18?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
+  },
+  {
+    "id": "q40",
+    "category": "unanswerable",
+    "question": "What was the total global box office revenue of the movie Oppenheimer in 2023?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
+  }
+]

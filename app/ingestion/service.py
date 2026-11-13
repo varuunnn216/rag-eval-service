@@ -2,8 +2,6 @@ import json
 import logging
 from typing import Any, Dict, List
 
-import numpy as np
-
 from app.config import get_settings
 from app.db import get_db_connection
 from app.ingestion.chunker import ChunkData, chunk_document
@@ -41,6 +39,8 @@ def ingest_documents(documents: List[DocumentInput]) -> IngestResponse:
         f"{c.heading}\n{c.content}" if c.heading else c.content for c in all_chunks
     ]
     embeddings = embedder.embed_documents(texts_to_embed)
+
+    import numpy as np
 
     with get_db_connection() as conn:
         with conn.transaction():
