@@ -1,41 +1,65 @@
+from dataclasses import dataclass
 from functools import lru_cache
+import os
 from pathlib import Path
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
+def _load_dotenv_file(env_path: Path) -> None:
+    """Lightweight .env loader used if python-dotenv / pydantic-settings is not active."""
+    if not env_path.exists():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, val = line.split("=", 1)
+        key = key.strip()
+        val = val.strip().strip("'").strip('"')
+        if key and key not in os.environ:
+            os.environ[key] = val
+
+
+@dataclass
+class Settings:
     """Application configuration loaded from environment variables or .env file."""
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    # API Keys
     gemini_api_key: str = ""
-
-    # Database Configuration
     database_url: str = ""
     use_embedded_pg: bool = True
     embedded_pg_data_dir: str = ".pgdata"
-
-    # Model Configuration
     embedding_model: str = "gemini-embedding-001"
     embedding_dim: int = 768
     generation_model: str = "gemini-2.5-flash"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-    # Chunking Configuration
     chunk_size_tokens: int = 350
     chunk_overlap_tokens: int = 50
-
-    # Retrieval & RRF Hyperparameters
     rrf_k: int = 60
     dense_weight: float = 1.0
     sparse_weight: float = 1.0
     default_candidate_pool: int = 20
     default_top_k: int = 5
+
+    @classmethod
+    def from_env(cls) -> "Settings":
+        root = Path(__file__).resolve().parent.parent
+        _load_dotenv_file(root / ".env")
+        return cls(
+            gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
+            database_url=os.getenv("DATABASE_URL", ""),
+            use_embedded_pg=os.getenv("USE_EMBEDDED_PG", "true").lower() in ("1", "true", "yes"),
+            embedded_pg_data_dir=os.getenv("EMBEDDED_PG_DATA_DIR", ".pgdata"),
+            embedding_model=os.getenv("EMBEDDING_MODEL", "gemini-embedding-001"),
+            embedding_dim=int(os.getenv("EMBEDDING_DIM", "768")),
+            generation_model=os.getenv("GENERATION_MODEL", "gemini-2.5-flash"),
+            reranker_model=os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+            chunk_size_tokens=int(os.getenv("CHUNK_SIZE_TOKENS", "350")),
+            chunk_overlap_tokens=int(os.getenv("CHUNK_OVERLAP_TOKENS", "50")),
+            rrf_k=int(os.getenv("RRF_K", "60")),
+            dense_weight=float(os.getenv("DENSE_WEIGHT", "1.0")),
+            sparse_weight=float(os.getenv("SPARSE_WEIGHT", "1.0")),
+            default_candidate_pool=int(os.getenv("DEFAULT_CANDIDATE_POOL", "20")),
+            default_top_k=int(os.getenv("DEFAULT_TOP_K", "5")),
+        )
 
     @property
     def project_root(self) -> Path:
@@ -44,4 +68,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    return Settings.from_env()
