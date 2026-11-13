@@ -1,10 +1,8 @@
+from __future__ import annotations
+
 from contextlib import contextmanager
 import logging
 from typing import Any, Generator, Optional
-
-import psycopg
-from psycopg.rows import dict_row
-from pgvector.psycopg import register_vector
 
 from app.config import get_settings
 from app.models import get_schema_sql
@@ -44,6 +42,9 @@ def resolve_database_url() -> str:
 
 def init_db() -> None:
     """Initialize pgvector extension, tables, and indexes."""
+    import psycopg
+    from pgvector.psycopg import register_vector
+
     settings = get_settings()
     conn_url = resolve_database_url()
     with psycopg.connect(conn_url, autocommit=True) as conn:
@@ -53,8 +54,12 @@ def init_db() -> None:
 
 
 @contextmanager
-def get_db_connection() -> Generator[psycopg.Connection, None, None]:
+def get_db_connection() -> Generator[Any, None, None]:
     """Yield a psycopg connection with pgvector registered and dict_row factory."""
+    import psycopg
+    from psycopg.rows import dict_row
+    from pgvector.psycopg import register_vector
+
     conn_url = resolve_database_url()
     with psycopg.connect(conn_url, row_factory=dict_row) as conn:
         register_vector(conn)
