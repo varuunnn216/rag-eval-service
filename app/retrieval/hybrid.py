@@ -22,6 +22,33 @@ _SPARSE_STOPWORDS = {
 }
 
 _in_memory_cache: Optional[List[Tuple[RetrievedChunk, List[float]]]] = None
+_extra_ingested_docs: List[ Any ] = []
+
+
+def register_in_memory_documents(documents: List[Any]) -> int:
+    """Add dynamically ingested documents to the in-memory index mirror and return total new chunks."""
+    global _in_memory_cache, _extra_ingested_docs
+    from app.ingestion.chunker import chunk_document
+
+    settings = get_settings()
+    # Replace if id already exists
+    new_ids = {d.id for d in documents}
+    _extra_ingested_docs = [d for d in _extra_ingested_docs if d.id not in new_ids]
+    _extra_ingested_docs.extend(documents)
+    _in_memory_cache = None
+    total_chunks = 0
+    for d in documents:
+        total_chunks += len(
+            chunk_document(
+                document_id=d.id,
+                content=d.content,
+                max_tokens=settings.chunk_size_tokens,
+                overlap_tokens=settings.chunk_overlap_tokens,
+                base_metadata=d.metadata,
+            )
+        )
+    _get_in_memory_corpus_index()
+    return total_chunks
 
 
 def build_or_tsquery(query: str) -> str:
@@ -164,10 +191,23 @@ def _get_in_memory_corpus_index() -> List[Tuple[RetrievedChunk, List[float]]]:
     if _in_memory_cache is not None:
         return _in_memory_cache
 
+    from app.ingestion.chunker import chunk_document
     from app.ingestion.seed import load_corpus_documents, preview_corpus_chunks
 
-    docs_by_id = {d.id: d for d in load_corpus_documents()}
-    raw_chunks = preview_corpus_chunks()
+    settings = get_settings()
+    all_docs = load_corpus_documents() + list(_extra_ingested_docs)
+    docs_by_id = {d.id: d for d in all_docs}
+    raw_chunks = list(preview_corpus_chunks())
+    for d in _extra_ingested_docs:
+        raw_chunks.extend(
+            chunk_document(
+                document_id=d.id,
+                content=d.content,
+                max_tokens=settings.chunk_size_tokens,
+                overlap_tokens=settings.chunk_overlap_tokens,
+                base_metadata=d.metadata,
+            )
+        )
     embedder = EmbeddingService()
     texts = [f"{c.heading}\n{c.content}" if c.heading else c.content for c in raw_chunks]
     vectors = embedder.embed_documents(texts)

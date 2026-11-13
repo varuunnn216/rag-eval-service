@@ -1,6 +1,8 @@
+import json
 from typing import Any, Dict, List
 from fastapi import APIRouter
 
+from app.config import get_settings
 from app.generation.generator import answer_question
 from app.ingestion.service import ingest_documents, list_documents
 from app.retrieval.hybrid import retrieve_candidates
@@ -12,6 +14,7 @@ from app.schemas import (
     SearchRequest,
     SearchResponse,
 )
+from eval.runner import run_evaluation_suite
 
 router = APIRouter(prefix="/api/v1", tags=["rag"])
 
@@ -51,3 +54,19 @@ def search_endpoint(payload: SearchRequest) -> SearchResponse:
 def ask_endpoint(payload: AskRequest) -> AskResponse:
     """Retrieve, rerank, and generate a grounded answer with verified inline citations."""
     return answer_question(payload)
+
+
+@router.get("/eval/report")
+def get_eval_report_endpoint() -> Dict[str, Any]:
+    """Return the latest 40-question evaluation benchmark report."""
+    settings = get_settings()
+    report_path = settings.project_root / "eval" / "reports" / "latest_eval_report.json"
+    if not report_path.exists():
+        return run_evaluation_suite()
+    return json.loads(report_path.read_text(encoding="utf-8"))
+
+
+@router.post("/eval/run")
+def trigger_eval_run_endpoint() -> Dict[str, Any]:
+    """Re-run the 40-question evaluation suite across all ablation configurations."""
+    return run_evaluation_suite()

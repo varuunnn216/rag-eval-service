@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG Service & Evaluation Harness Workbench</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="logo-badge">RAG</div>
+      <div>
+        <h1>RAG Service &amp; Evaluation Harness</h1>
+        <p class="subtitle">FastAPI &bull; pgvector HNSW &bull; Hybrid RRF &bull; Cross-Encoder Reranking &bull; Verified Citations</p>
+      </div>
+    </div>
+    <div class="system-pills" id="health-pills">
+      <span class="pill pill-ok"><span class="dot"></span> System Online</span>
+      <span class="pill" id="pill-docs">6 Docs / 25 Chunks</span>
+      <span class="pill" id="pill-models">Gemini + MiniLM CrossEncoder</span>
+    </div>
+  </header>
+
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="tab-playground">
+      1. Grounded QA &amp; Hybrid Search
+    </button>
+    <button class="tab-btn" data-tab="tab-eval">
+      2. 40-Question Eval Harness
+    </button>
+    <button class="tab-btn" data-tab="tab-corpus">
+      3. Corpus &amp; Document Ingestion
+    </button>
+  </nav>
+
+  <main class="container">
+    <!-- TAB 1: QA & HYBRID SEARCH PLAYGROUND -->
+    <section id="tab-playground" class="tab-panel active">
+      <div class="card query-card">
+        <div class="card-header-row">
+          <h2>Ask with Grounded Inline Citations</h2>
+          <div class="preset-group">
+            <span class="preset-label">Sample Queries:</span>
+            <button class="chip-btn" data-preset="What are the default values of m and ef_construction when creating a pgvector HNSW index?">
+              Exact Lookup (HNSW)
+            </button>
+            <button class="chip-btn" data-preset="Why does Reciprocal Rank Fusion use rank positions rather than adding raw cosine and ts_rank_cd scores directly?">
+              Conceptual (RRF Math)
+            </button>
+            <button class="chip-btn" data-preset="Compare the build-time parameters (m, ef_construction, maintenance_work_mem) and query-time parameters (hnsw.ef_search, hnsw.iterative_scan) for pgvector HNSW indexes.">
+              Multi-Hop Synthesis
+            </button>
+            <button class="chip-btn chip-warn" data-preset="How do you configure BGP route reflector cluster-ids in Cisco IOS XR routers?">
+              Unanswerable Trap (Abstention)
+            </button>
+          </div>
+        </div>
+
+        <form id="ask-form" class="query-form">
+          <div class="input-row">
+            <input
+              type="text"
+              id="question-input"
+              placeholder="Ask any technical question across the indexed corpus..."
+              value="Compare the build-time parameters (m, ef_construction, maintenance_work_mem) and query-time parameters (hnsw.ef_search, hnsw.iterative_scan) for pgvector HNSW indexes."
+              required
+            />
+            <button type="submit" id="ask-submit-btn" class="primary-btn">
+              Run RAG Pipeline
+            </button>
+          </div>
+
+          <div class="controls-row">
+            <label class="control-item">
+              <span>Retrieval Mode</span>
+              <select id="mode-select">
+                <option value="hybrid" selected>Hybrid Search (Dense + Sparse RRF)</option>
+                <option value="dense">Dense Vector Only (pgvector HNSW)</option>
+                <option value="sparse">Sparse Lexical Only (Postgres tsvector)</option>
+              </select>
+            </label>
+
+            <label class="control-item">
+              <span>Cross-Encoder Reranker</span>
+              <select id="reranker-select">
+                <option value="true" selected>Enabled (ms-marco-MiniLM-L-6-v2)</option>
+                <option value="false">Disabled (Raw Retrieval Rank)</option>
+              </select>
+            </label>
+
+            <label class="control-item">
+              <span>Top-K Chunks: <strong id="topk-val">5</strong></span>
+              <input type="range" id="topk-slider" min="1" max="10" value="5" />
+            </label>
+
+            <label class="control-item">
+              <span>Candidate Pool: <strong id="pool-val">20</strong></span>
+              <input type="range" id="pool-slider" min="5" max="40" step="5" value="20" />
+            </label>
+          </div>
+        </form>
+      </div>
+
+      <div class="playground-grid">
+        <!-- Left column: Grounded Answer & Verified Citations -->
+        <div class="col-answer">
+          <div class="card">
+            <div class="card-header-row">
+              <h3>Grounded Answer</h3>
+              <div class="latency-badges" id="latency-badges"></div>
+            </div>
+            <div id="answer-status-banner" class="status-banner hidden"></div>
+            <div id="answer-output" class="answer-box">
+              Submit a question above to inspect grounded generation and inline citations.
+            </div>
+
+            <div class="citations-section">
+              <h4>Verified Citations (<span id="citation-count">0</span>)</h4>
+              <div id="citations-list" class="citations-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right column: Retrieved & Reranked Chunks Inspector -->
+        <div class="col-chunks">
+          <div class="card">
+            <div class="card-header-row">
+              <h3>Retrieved &amp; Reranked Context Chunks (<span id="chunk-count">0</span>)</h3>
+              <span class="hint-text">Showing Dense, Sparse, RRF &amp; Reranker scores</span>
+            </div>
+            <div id="chunks-list" class="chunks-list"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: 40-QUESTION EVALUATION HARNESS -->
+    <section id="tab-eval" class="tab-panel">
+      <div class="card">
+        <div class="card-header-row">
+          <div>
+            <h2>40-Question Golden Evaluation Harness</h2>
+            <p class="muted-text">
+              Benchmarks retrieval (Recall@K, MRR@5, NDCG@5) and generation (Answer Accuracy, Faithfulness, Citation Precision/Recall, Abstention) across 4 ablation configurations.
+            </p>
+          </div>
+          <div class="eval-actions">
+            <select id="ablation-config-select">
+              <option value="hybrid_rrf_rerank" selected>View Details: Hybrid (RRF) + Cross-Encoder Rerank</option>
+              <option value="hybrid_rrf">View Details: Hybrid Search (RRF)</option>
+              <option value="sparse_only">View Details: Sparse Only (tsvector)</option>
+              <option value="dense_only">View Details: Dense Only (pgvector)</option>
+            </select>
+            <button id="run-eval-btn" class="primary-btn">Re-Run All 40 Questions</button>
+          </div>
+        </div>
+
+        <div id="eval-kpi-grid" class="kpi-grid"></div>
+
+        <h3>Ablation Comparison Scorecard</h3>
+        <div class="table-wrap">
+          <table class="data-table" id="ablation-table">
+            <thead>
+              <tr>
+                <th>Configuration</th>
+                <th>Recall@1</th>
+                <th>Recall@3</th>
+                <th>Recall@5</th>
+                <th>MRR@5</th>
+                <th>NDCG@5</th>
+                <th>Answer Acc</th>
+                <th>Faithfulness</th>
+                <th>Citation Recall</th>
+                <th>Abstention Acc</th>
+                <th>Avg Latency</th>
+              </tr>
+            </thead>
+            <tbody id="ablation-tbody"></tbody>
+          </table>
+        </div>
+
+        <h3>Breakdown by Question Category</h3>
+        <div id="category-cards" class="category-grid"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header-row">
+          <h3>Per-Question Evaluation Inspector (40 Golden QA Pairs)</h3>
+          <div class="filter-bar">
+            <select id="eval-category-filter">
+              <option value="all">All Categories (40)</option>
+              <option value="exact_lookup">Exact Lookup (14)</option>
+              <option value="semantic_conceptual">Semantic / Conceptual (14)</option>
+              <option value="multi_hop">Multi-Hop Synthesis (7)</option>
+              <option value="unanswerable">Unanswerable Trap (5)</option>
+            </select>
+            <input type="text" id="eval-search-filter" placeholder="Filter questions or chunk IDs..." />
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="questions-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Category</th>
+                <th>Question</th>
+                <th>Ground-Truth Chunks</th>
+                <th>Top Retrieved</th>
+                <th>Recall@5</th>
+                <th>MRR@5</th>
+                <th>Answer Acc</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="questions-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: CORPUS & DOCUMENT INGESTION -->
+    <section id="tab-corpus" class="tab-panel">
+      <div class="playground-grid">
+        <div class="col-answer">
+          <div class="card">
+            <div class="card-header-row">
+              <h3>Indexed Technical Corpus</h3>
+              <button id="refresh-docs-btn" class="secondary-btn">Refresh List</button>
+            </div>
+            <p class="muted-text">
+              Documents are split along Markdown heading hierarchies (<code>H1 &gt; H2 &gt; H3</code>) with a 350-token window and 50-token sliding overlap.
+            </p>
+            <div id="documents-list" class="documents-list"></div>
+          </div>
+        </div>
+
+        <div class="col-chunks">
+          <div class="card">
+            <h3>Ingest New Markdown Document (<code>POST /api/v1/ingest</code>)</h3>
+            <p class="muted-text">
+              Add or update a document in the vector + full-text index and immediately query it in the QA tab.
+            </p>
+            <form id="ingest-form" class="ingest-form">
+              <label>
+                <span>Document ID (deterministic slug)</span>
+                <input type="text" id="ingest-id" placeholder="e.g. doc_redis_cluster" value="doc_redis_cluster" required />
+              </label>
+              <label>
+                <span>Document Title</span>
+                <input type="text" id="ingest-title" placeholder="e.g. Redis Cluster Hash Slots and Failover" value="Redis Cluster Hash Slots and Failover" required />
+              </label>
+              <label>
+                <span>Source Path / URL</span>
+                <input type="text" id="ingest-source" placeholder="e.g. data/corpus/07_redis_cluster.md" value="custom/07_redis_cluster.md" required />
+              </label>
+              <label>
+                <span>Markdown Content</span>
+                <textarea id="ingest-content" rows="9" required># Redis Cluster Hash Slots and Failover
+
+## Hash Slot Partitioning (CRC16)
+Redis Cluster partitions the keyspace into `16384` hash slots (`0` to `16383`). The slot for a given key is computed as `CRC16(key) mod 16384`. Using hash tags in curly braces such as `{user:1000}.profile` and `{user:1000}.orders` forces multiple keys into the exact same hash slot for multi-key atomic operations.
+
+## Node Failover and cluster-node-timeout
+Nodes exchange `PING` and `PONG` gossip packets continuously. If a master node does not respond within `cluster-node-timeout = 15000` milliseconds (`15` seconds), peers mark it as `PFAIL` (Possible Failure) and escalate to `FAIL` once a majority of master nodes agree.</textarea>
+              </label>
+              <button type="submit" id="ingest-submit-btn" class="primary-btn">
+                Chunk, Embed &amp; Index Document
+              </button>
+              <div id="ingest-feedback" class="ingest-feedback hidden"></div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
