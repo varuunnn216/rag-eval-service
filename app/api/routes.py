@@ -1,9 +1,17 @@
 from typing import Any, Dict, List
 from fastapi import APIRouter
 
+from app.generation.generator import answer_question
 from app.ingestion.service import ingest_documents, list_documents
 from app.retrieval.hybrid import retrieve_candidates
-from app.schemas import IngestRequest, IngestResponse, SearchRequest, SearchResponse
+from app.schemas import (
+    AskRequest,
+    AskResponse,
+    IngestRequest,
+    IngestResponse,
+    SearchRequest,
+    SearchResponse,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["rag"])
 
@@ -37,3 +45,9 @@ def search_endpoint(payload: SearchRequest) -> SearchResponse:
         results=results,
         latency_ms=latency_ms,
     )
+
+
+@router.post("/ask", response_model=AskResponse)
+def ask_endpoint(payload: AskRequest) -> AskResponse:
+    """Retrieve, rerank, and generate a grounded answer with verified inline citations."""
+    return answer_question(payload)
