@@ -135,20 +135,26 @@ async function runAskQuery() {
 
 function renderAskResponse(data) {
   const banner = document.getElementById("answer-status-banner");
-  banner.classList.remove("hidden", "grounded", "abstained");
-  if (data.abstained) {
+  banner.classList.remove("hidden", "grounded", "abstained", "error");
+  const citSummary = data.citation_summary || `Verified ${data.verified_citations_count || 0}/${data.total_citations_count || 0} citations`;
+
+  if (data.error) {
+    banner.classList.add("error");
+    banner.textContent = `LLM Generation Error: ${data.error}`;
+  } else if (data.abstained) {
     banner.classList.add("abstained");
     banner.textContent =
-      "Abstention Guard Triggered: Retrieved context lacks sufficient evidence to answer this question safely.";
+      `Abstention Guard Triggered • ${citSummary}`;
   } else {
     banner.classList.add("grounded");
-    banner.textContent = `Grounded Response • Verified ${data.citations.length} inline citation(s) across ${data.retrieved_chunks.length} retrieved chunks.`;
+    banner.textContent = `Grounded Response • ${citSummary}`;
   }
 
   document.getElementById("latency-badges").innerHTML = `
     <span class="latency-pill">Retrieval: <strong>${data.retrieval_latency_ms} ms</strong></span>
-    <span class="latency-pill">Generation: <strong>${data.generation_latency_ms} ms</strong></span>
+    <span class="latency-pill">LLM: <strong>${data.generation_latency_ms} ms</strong></span>
     <span class="latency-pill">Total: <strong>${data.total_latency_ms} ms</strong></span>
+    <span class="latency-pill">Tokens: <strong>${data.total_tokens || 0}</strong></span>
   `;
 
   document.getElementById("answer-output").innerHTML =
@@ -156,51 +162,64 @@ function renderAskResponse(data) {
 
   // Render Verified Citations
   const citList = document.getElementById("citations-list");
-  document.getElementById("citation-count").textContent = data.citations.length;
-  if (!data.citations.length) {
-    citList.innerHTML = `<div class="muted-text">No citations emitted (question abstained).</div>`;
+  document.getElementById("citation-count").textContent = citSummary;
+  if (!data.citations || !data.citations.length) {
+    citList.innerHTML = `<div class="muted-text">No citations emitted (${escapeHtml(citSummary)}).</div>`;
   } else {
     citList.innerHTML = data.citations
       .map(
-        (c) => `
+        (c) => {
+          const statusClass = c.verified ? "used" : "dropped";
+          const statusLabel = c.verified
+            ? `VERIFIED (sim=${Number(c.similarity_score || 0).toFixed(2)})`
+            : `UNVERIFIED (sim=${Number(c.similarity_score || 0).toFixed(2)})`;
+          return `
         <div class="citation-card" id="citation-card-${c.citation_number}">
           <div class="citation-header">
             <div>
               <span class="cite-badge">[${c.citation_number}]</span>
               <strong>${escapeHtml(c.document_title)}</strong>
+              <span class="chunk-status-badge ${statusClass}">${statusLabel}</span>
             </div>
             <span class="chunk-id-tag">${escapeHtml(c.chunk_id)}</span>
           </div>
+          ${c.claim ? `<div class="selection-reason">Claim: ${escapeHtml(c.claim)}</div>` : ""}
           <div class="quote-text">"${escapeHtml(c.quote)}"</div>
         </div>
-      `
+      `;
+        }
       )
       .join("");
   }
 
-  // Render Retrieved Chunks
+  // Render Retrieved Chunks (marked as USED or DROPPED with reason)
   const chunksList = document.getElementById("chunks-list");
-  document.getElementById("chunk-count").textContent = data.retrieved_chunks.length;
-  chunksList.innerHTML = data.retrieved_chunks
+  document.getElementById("chunk-count").textContent = (data.retrieved_chunks || []).length;
+  chunksList.innerHTML = (data.retrieved_chunks || [])
     .map((c, idx) => {
-      const rankNum = idx + 1;
+      const rankNum = c.context_index != null ? c.context_index : idx + 1;
+      const isUsed = Boolean(c.selected) || c.selection_status === "used";
+      const statusBadge = isUsed
+        ? `<span class="chunk-status-badge used">USED [${c.context_index || rankNum}]</span>`
+        : `<span class="chunk-status-badge dropped">DROPPED</span>`;
       const denseStr =
-        c.dense_rank != null ? `#${c.dense_rank} (${c.dense_score.toFixed(3)})` : "—";
+        c.dense_rank != null ? `#${c.dense_rank} (${Number(c.dense_score || 0).toFixed(3)})` : "—";
       const sparseStr =
-        c.sparse_rank != null ? `#${c.sparse_rank} (${c.sparse_score.toFixed(3)})` : "—";
-      const rrfStr = c.rrf_score ? c.rrf_score.toFixed(4) : "—";
+        c.sparse_rank != null ? `#${c.sparse_rank} (${Number(c.sparse_score || 0).toFixed(3)})` : "—";
+      const rrfStr = c.rrf_score ? Number(c.rrf_score).toFixed(4) : "—";
       const rerankStr =
-        c.rerank_score != null ? c.rerank_score.toFixed(4) : "Off";
+        c.rerank_score != null ? Number(c.rerank_score).toFixed(4) : "Off";
 
       return `
-        <div class="chunk-card" id="chunk-card-${rankNum}">
+        <div class="chunk-card" id="chunk-card-${rankNum}" style="${isUsed ? "" : "opacity: 0.72;"}">
           <div class="chunk-header">
             <div>
-              <span class="cite-badge">[${rankNum}]</span>
+              ${statusBadge}
               <strong>${escapeHtml(c.document_title)}</strong>
             </div>
             <span class="chunk-id-tag">${escapeHtml(c.chunk_id)}</span>
           </div>
+          ${c.selection_reason ? `<div class="selection-reason">${escapeHtml(c.selection_reason)}</div>` : ""}
           ${c.heading ? `<div class="chunk-heading">${escapeHtml(c.heading)}</div>` : ""}
           <div class="chunk-content">${escapeHtml(c.content)}</div>
           <div class="score-row">
@@ -401,6 +420,8 @@ window.tryQuestionInPlayground = function (questionText) {
 };
 
 /* TAB 3: CORPUS & DOCUMENT INGESTION */
+let lastUploadedFilename = "";
+
 function initCorpusControls() {
   document.getElementById("refresh-docs-btn").addEventListener("click", loadDocuments);
 
@@ -409,6 +430,7 @@ function initCorpusControls() {
     fileInput.addEventListener("change", (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
+      lastUploadedFilename = file.name;
       const reader = new FileReader();
       reader.onload = () => {
         const baseName = file.name.replace(/\.[^.]+$/, "");
@@ -418,9 +440,13 @@ function initCorpusControls() {
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, "_")
             .replace(/^_+|_+$/g, "");
-        document.getElementById("ingest-id").value = cleanSlug;
-        document.getElementById("ingest-title").value = baseName.replace(/[_-]+/g, " ");
-        document.getElementById("ingest-source").value = `upload/${file.name}`;
+        const idEl = document.getElementById("ingest-id");
+        const titleEl = document.getElementById("ingest-title");
+        const sourceEl = document.getElementById("ingest-source");
+        // Honor user-entered values; only populate fallback when empty
+        if (!idEl.value.trim()) idEl.value = cleanSlug;
+        if (!titleEl.value.trim()) titleEl.value = baseName.replace(/[_-]+/g, " ");
+        if (!sourceEl.value.trim()) sourceEl.value = `upload/${file.name}`;
         document.getElementById("ingest-content").value = String(reader.result || "");
         const statusEl = document.getElementById("uploaded-file-status");
         if (statusEl) {
@@ -439,12 +465,20 @@ function initCorpusControls() {
     btn.textContent = "Indexing...";
     feedback.classList.add("hidden");
 
+    const rawId = document.getElementById("ingest-id").value.trim();
+    const rawTitle = document.getElementById("ingest-title").value.trim();
+    const rawSource = document.getElementById("ingest-source").value.trim();
+
     const doc = {
-      id: document.getElementById("ingest-id").value.trim(),
-      title: document.getElementById("ingest-title").value.trim(),
-      source: document.getElementById("ingest-source").value.trim(),
+      id: rawId,
+      document_id: rawId,
+      title: rawTitle,
+      source: rawSource,
       content: document.getElementById("ingest-content").value,
-      metadata: { ingested_via: "web_ui" },
+      metadata: {
+        ingested_via: "web_ui",
+        filename: lastUploadedFilename || rawSource || "uploaded.md",
+      },
     };
 
     try {

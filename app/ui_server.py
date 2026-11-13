@@ -139,16 +139,19 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             if path == "/api/v1/ingest":
-                raw_docs = body.get("documents", [])
+                raw_docs = body.get("documents")
+                if raw_docs is None and "content" in body:
+                    raw_docs = [body]
                 docs = [
                     DocumentInput(
-                        id=str(d["id"]),
-                        title=str(d["title"]),
-                        source=str(d.get("source", "web-ui")),
+                        id=str(d.get("id") or d.get("document_id") or ""),
+                        document_id=str(d.get("document_id") or d.get("id") or ""),
+                        title=str(d.get("title") or ""),
+                        source=str(d.get("source") or ""),
                         content=str(d["content"]),
                         metadata=dict(d.get("metadata") or {}),
                     )
-                    for d in raw_docs
+                    for d in (raw_docs or [])
                 ]
                 res = ingest_documents(docs)
                 self._send_json(res.to_dict())

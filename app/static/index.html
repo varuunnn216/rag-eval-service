@@ -116,7 +116,7 @@
             </div>
 
             <div class="citations-section">
-              <h4>Verified Citations (<span id="citation-count">0</span>)</h4>
+              <h4>Verified Citations (<span id="citation-count">Verified 0/0 citations</span>)</h4>
               <div id="citations-list" class="citations-list"></div>
             </div>
           </div>
@@ -250,26 +250,20 @@
             </div>
             <form id="ingest-form" class="ingest-form">
               <label>
-                <span>Document ID (deterministic slug)</span>
-                <input type="text" id="ingest-id" placeholder="e.g. doc_redis_cluster" value="doc_redis_cluster" required />
+                <span>Document ID (optional — falls back to filename if empty)</span>
+                <input type="text" id="ingest-id" placeholder="e.g. doc_08_bluebird_cafe" value="" />
               </label>
               <label>
-                <span>Document Title</span>
-                <input type="text" id="ingest-title" placeholder="e.g. Redis Cluster Hash Slots and Failover" value="Redis Cluster Hash Slots and Failover" required />
+                <span>Document Title (optional — falls back to filename if empty)</span>
+                <input type="text" id="ingest-title" placeholder="e.g. Bluebird Cafe Staff Handbook" value="" />
               </label>
               <label>
-                <span>Source Path / URL</span>
-                <input type="text" id="ingest-source" placeholder="e.g. data/corpus/07_redis_cluster.md" value="custom/07_redis_cluster.md" required />
+                <span>Source Path / URL (optional — falls back to filename if empty)</span>
+                <input type="text" id="ingest-source" placeholder="e.g. upload/08_bluebird_cafe.md" value="" />
               </label>
               <label>
                 <span>Markdown Content</span>
-                <textarea id="ingest-content" rows="9" required># Redis Cluster Hash Slots and Failover
-
-## Hash Slot Partitioning (CRC16)
-Redis Cluster partitions the keyspace into `16384` hash slots (`0` to `16383`). The slot for a given key is computed as `CRC16(key) mod 16384`. Using hash tags in curly braces such as `{user:1000}.profile` and `{user:1000}.orders` forces multiple keys into the exact same hash slot for multi-key atomic operations.
-
-## Node Failover and cluster-node-timeout
-Nodes exchange `PING` and `PONG` gossip packets continuously. If a master node does not respond within `cluster-node-timeout = 15000` milliseconds (`15` seconds), peers mark it as `PFAIL` (Possible Failure) and escalate to `FAIL` once a majority of master nodes agree.</textarea>
+                <textarea id="ingest-content" rows="9" required placeholder="Paste Markdown content or choose a file above..."></textarea>
               </label>
               <button type="submit" id="ingest-submit-btn" class="primary-btn">
                 Chunk, Embed &amp; Index Document

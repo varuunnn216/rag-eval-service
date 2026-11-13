@@ -343,6 +343,40 @@ input[type="text"]:focus, textarea:focus, select:focus {
   color: #fcd34d;
 }
 
+.status-banner.error {
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+
+.chunk-status-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.chunk-status-badge.used {
+  background: var(--success-soft);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.chunk-status-badge.dropped {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.selection-reason {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin: 4px 0 8px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
 .hidden {
   display: none !important;
 }

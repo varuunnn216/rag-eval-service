@@ -128,7 +128,11 @@ def list_documents() -> List[Dict[str, Any]]:
         for chunk, _ in entries:
             counts[chunk.document_id] = counts.get(chunk.document_id, 0) + 1
 
-        docs = load_corpus_documents() + list(_extra_ingested_docs)
+        docs_by_id: Dict[str, Any] = {}
+        for d in load_corpus_documents():
+            docs_by_id[d.id] = d
+        for d in _extra_ingested_docs:
+            docs_by_id[d.id] = d
         return [
             {
                 "id": d.id,
@@ -137,5 +141,5 @@ def list_documents() -> List[Dict[str, Any]]:
                 "metadata": d.metadata,
                 "chunk_count": counts.get(d.id, 0),
             }
-            for d in docs
+            for d in docs_by_id.values()
         ]

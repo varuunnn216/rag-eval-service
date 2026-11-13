@@ -192,13 +192,18 @@ def _get_in_memory_corpus_index() -> List[Tuple[RetrievedChunk, List[float]]]:
         return _in_memory_cache
 
     from app.ingestion.chunker import chunk_document
-    from app.ingestion.seed import load_corpus_documents, preview_corpus_chunks
+    from app.ingestion.seed import load_corpus_documents
 
     settings = get_settings()
-    all_docs = load_corpus_documents() + list(_extra_ingested_docs)
-    docs_by_id = {d.id: d for d in all_docs}
-    raw_chunks = list(preview_corpus_chunks())
+    # Upsert semantics: extra ingested docs with the same document_id replace earlier docs
+    docs_by_id: Dict[str, Any] = {}
+    for d in load_corpus_documents():
+        docs_by_id[d.id] = d
     for d in _extra_ingested_docs:
+        docs_by_id[d.id] = d
+
+    raw_chunks = []
+    for d in docs_by_id.values():
         raw_chunks.extend(
             chunk_document(
                 document_id=d.id,

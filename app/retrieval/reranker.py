@@ -62,54 +62,55 @@ def _stem(tok: str) -> str:
     return tok
 
 
-def compute_pair_interaction_score(query: str, chunk: RetrievedChunk) -> float:
+def compute_pair_interaction_score(
+    query: str,
+    chunk: RetrievedChunk,
+    token_idf: Optional[dict[str, float]] = None,
+) -> float:
     """
-    Compute a deterministic cross-interaction score between (query, chunk) measuring:
-    1. Exact & stemmed query term coverage weighted by token specificity (length/identifiers)
-    2. Ordered bigram & window proximity (how tightly query terms cluster inside a sentence)
-    3. Section heading alignment
-    4. Upstream RRF / retrieval prior
+    Compute a calibrated cross-interaction relevance score in [0.0, 1.0] between (query, chunk):
+    1. Exact & stemmed query term coverage weighted by specificity and candidate-pool IDF
+    2. Sentence-level query term co-occurrence density
+    3. Ordered bigram proximity
+    4. Section heading match
+    Returns 0.0 when no query terms match the chunk.
     """
     q_tokens = [t for t in _TOKEN_RE.findall(query.lower()) if t not in _STOPWORDS and len(t) >= 2]
     if not q_tokens:
-        return float(chunk.final_score)
+        return 0.0
 
     q_stems = [_stem(t) for t in q_tokens]
-    doc_text = f"{chunk.heading}\n{chunk.content}".lower()
+    # Use leaf section heading + content so shared document title doesn't inflate unrelated sections
+    leaf_heading = chunk.heading.split(">")[-1].strip() if chunk.heading else ""
+    doc_text = f"{leaf_heading}\n{chunk.content}".lower()
     doc_tokens = [t for t in _TOKEN_RE.findall(doc_text) if t not in _STOPWORDS]
     doc_stems = [_stem(t) for t in doc_tokens]
     doc_stem_set = set(doc_stems)
     doc_token_set = set(doc_tokens)
 
-    # 1. Weighted term & identifier coverage
+    # 1. Weighted term & identifier coverage (with candidate-pool IDF specificity)
     total_weight = 0.0
     matched_weight = 0.0
+    matched_count = 0
     for raw_t, stem_t in zip(q_tokens, q_stems):
-        # Technical identifiers with underscores or digits carry higher specificity
-        is_identifier = ("_" in raw_t) or any(ch.isdigit() for ch in raw_t)
-        w = 2.5 if is_identifier else (1.4 if len(raw_t) >= 6 else 1.0)
+        is_identifier = ("_" in raw_t) or (any(ch.isdigit() for ch in raw_t) and any(ch.isalpha() for ch in raw_t))
+        base_w = 2.2 if is_identifier else (1.4 if len(raw_t) >= 6 else 1.0)
+        idf_w = token_idf.get(stem_t, 1.0) if token_idf else 1.0
+        w = base_w * idf_w
         total_weight += w
         if raw_t in doc_token_set:
             matched_weight += w
+            matched_count += 1
         elif stem_t in doc_stem_set:
-            matched_weight += 0.85 * w
+            matched_weight += 0.90 * w
+            matched_count += 1
+
+    if matched_count == 0:
+        return 0.0
 
     coverage = matched_weight / max(total_weight, 1e-6)
 
-    # 2. Bigram & sentence-level co-occurrence density
-    q_bigrams = set()
-    for i in range(len(q_stems) - 1):
-        q_bigrams.add((q_stems[i], q_stems[i + 1]))
-
-    doc_bigrams = set()
-    for i in range(len(doc_stems) - 1):
-        doc_bigrams.add((doc_stems[i], doc_stems[i + 1]))
-
-    bigram_score = (
-        len(q_bigrams & doc_bigrams) / len(q_bigrams) if q_bigrams else 0.0
-    )
-
-    # Best single-sentence concentration of query stems
+    # 2. Best single-sentence concentration of query stems
     sentences = re.split(r"[.!?\n]+", doc_text)
     max_sentence_coverage = 0.0
     unique_q_stems = set(q_stems)
@@ -121,29 +122,29 @@ def compute_pair_interaction_score(query: str, chunk: RetrievedChunk) -> float:
         if overlap > max_sentence_coverage:
             max_sentence_coverage = overlap
 
-    # 3. Heading alignment bonus
-    heading_stems = {_stem(t) for t in _TOKEN_RE.findall(chunk.heading.lower()) if t not in _STOPWORDS}
+    # 3. Bigram proximity
+    q_bigrams = {(q_stems[i], q_stems[i + 1]) for i in range(len(q_stems) - 1)}
+    doc_bigrams = {(doc_stems[i], doc_stems[i + 1]) for i in range(len(doc_stems) - 1)}
+    bigram_score = len(q_bigrams & doc_bigrams) / len(q_bigrams) if q_bigrams else 0.0
+
+    # 4. Leaf heading alignment bonus
+    leaf_stems = {_stem(t) for t in _TOKEN_RE.findall(leaf_heading.lower()) if t not in _STOPWORDS}
     heading_overlap = (
-        len(unique_q_stems & heading_stems) / len(unique_q_stems)
-        if unique_q_stems and heading_stems
+        len(unique_q_stems & leaf_stems) / len(unique_q_stems)
+        if unique_q_stems and leaf_stems
         else 0.0
     )
 
-    # 4. Substance factor (penalize tiny 1-sentence document preambles vs detailed sections)
-    substance = min(1.0, max(0.4, chunk.token_count / 65.0)) if chunk.token_count > 0 else 1.0
-    has_technical_specs = 0.06 if ("`" in chunk.content or any(c.isdigit() for c in chunk.content)) else 0.0
-
-    # 5. Combine with retrieval prior
+    # 5. Small RRF tie-breaker scaled by coverage so unrelated chunks stay near 0
     prior = chunk.rrf_score if chunk.rrf_score > 0 else (chunk.dense_score or chunk.sparse_score or 0.0)
-    raw_score = substance * (
-        0.42 * coverage
-        + 0.18 * max_sentence_coverage
-        + 0.15 * bigram_score
-        + 0.10 * heading_overlap
-        + 0.15 * min(1.0, prior * 30.0)
-        + has_technical_specs
+    raw_score = (
+        0.52 * coverage
+        + 0.26 * max_sentence_coverage
+        + 0.12 * heading_overlap
+        + 0.05 * bigram_score
+        + 0.05 * coverage * min(1.0, prior * 30.0)
     )
-    return round(float(raw_score), 6)
+    return round(min(1.0, float(raw_score)), 6)
 
 
 def _sigmoid(x: float) -> float:
@@ -181,8 +182,25 @@ def rerank_chunks(
             chunk.rerank_score = norm_score
             chunk.final_score = norm_score
     else:
+        # Compute candidate-pool IDF so rare/distinguishing query terms carry higher weight
+        q_stems = [
+            _stem(t)
+            for t in _TOKEN_RE.findall(query.lower())
+            if t not in _STOPWORDS and len(t) >= 2
+        ]
+        n_docs = len(reranked)
+        token_idf: dict[str, float] = {}
+        for qs in set(q_stems):
+            df = 0
+            for c in reranked:
+                leaf_h = c.heading.split(">")[-1].strip() if c.heading else ""
+                c_stems = {_stem(t) for t in _TOKEN_RE.findall(f"{leaf_h}\n{c.content}".lower())}
+                if qs in c_stems:
+                    df += 1
+            token_idf[qs] = 1.0 + math.log((n_docs + 1.0) / (df + 1.0))
+
         for chunk in reranked:
-            score = compute_pair_interaction_score(query, chunk)
+            score = compute_pair_interaction_score(query, chunk, token_idf=token_idf)
             chunk.rerank_score = score
             chunk.final_score = score
 

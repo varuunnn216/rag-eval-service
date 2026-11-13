@@ -2,12 +2,44 @@ from __future__ import annotations
 
 import copy
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 RetrievalMode = Literal["dense", "sparse", "hybrid"]
 
+
+def normalize_document_fields(
+    doc_id: str = "",
+    document_id: str = "",
+    title: str = "",
+    source: str = "",
+    filename: str = "",
+) -> tuple[str, str, str]:
+    """
+    Honor explicit document_id/id, title, and source fields.
+    Only fall back to filename-derived values when they are empty.
+    """
+    raw_id = (doc_id or "").strip() or (document_id or "").strip()
+    raw_title = (title or "").strip()
+    raw_source = (source or "").strip()
+    raw_file = (filename or "").strip() or raw_source or "document.md"
+
+    stem = Path(raw_file).stem or "document"
+    slug_fallback = "doc_" + "".join(
+        ch if ch.isalnum() else "_" for ch in stem.lower()
+    ).strip("_")
+    title_fallback = stem.replace("_", " ").replace("-", " ").strip() or "Untitled Document"
+    source_fallback = raw_file if raw_file else f"{slug_fallback}.md"
+
+    return (
+        raw_id if raw_id else slug_fallback,
+        raw_title if raw_title else title_fallback,
+        raw_source if raw_source else source_fallback,
+    )
+
+
 try:
-    from pydantic import BaseModel, Field
+    from pydantic import BaseModel, Field, model_validator
 
     class _BaseSchema(BaseModel):
         def clone(self) -> Any:
@@ -19,11 +51,28 @@ try:
     class DocumentInput(_BaseSchema):
         """Input document payload for ingestion."""
 
-        id: str = Field(..., description="Unique deterministic slug for the document")
-        title: str = Field(..., description="Human-readable document title")
-        source: str = Field(..., description="Source path or URL")
+        id: str = Field(default="", description="Unique deterministic slug for the document")
+        document_id: str = Field(default="", description="Alias for id")
+        title: str = Field(default="", description="Human-readable document title")
+        source: str = Field(default="", description="Source path or URL")
         content: str = Field(..., description="Full markdown or text content")
         metadata: Dict[str, Any] = Field(default_factory=dict)
+
+        @model_validator(mode="after")
+        def _resolve_fallbacks(self) -> "DocumentInput":
+            fname = str((self.metadata or {}).get("filename", ""))
+            norm_id, norm_title, norm_source = normalize_document_fields(
+                doc_id=self.id,
+                document_id=self.document_id,
+                title=self.title,
+                source=self.source,
+                filename=fname,
+            )
+            self.id = norm_id
+            self.document_id = norm_id
+            self.title = norm_title
+            self.source = norm_source
+            return self
 
     class IngestRequest(_BaseSchema):
         """Batch document ingestion request."""
@@ -38,7 +87,7 @@ try:
         document_ids: List[str]
 
     class RetrievedChunk(_BaseSchema):
-        """A retrieved chunk with dense, sparse, RRF, and reranker scores."""
+        """A retrieved chunk with dense, sparse, RRF, reranker, and selection metadata."""
 
         chunk_id: str
         document_id: str
@@ -55,6 +104,10 @@ try:
         rrf_score: float = 0.0
         rerank_score: Optional[float] = None
         final_score: float = 0.0
+        selected: bool = False
+        selection_status: str = "dropped"
+        selection_reason: str = ""
+        context_index: Optional[int] = None
 
     class SearchRequest(_BaseSchema):
         """Hybrid search request parameters."""
@@ -75,14 +128,17 @@ try:
         latency_ms: float
 
     class Citation(_BaseSchema):
-        """A verified inline citation referencing a specific retrieved chunk."""
+        """A claim-level verified inline citation referencing a selected chunk."""
 
         citation_number: int = Field(..., description="1-based index matching [n] in the answer")
         chunk_id: str
         document_id: str
         document_title: str
         source: str
-        quote: str = Field(..., description="Key supporting span from the cited chunk")
+        claim: str = Field(default="", description="Answer sentence containing the [n] citation")
+        quote: str = Field(..., description="Best-supporting sentence from chunk n")
+        similarity_score: float = Field(default=0.0, description="Claim-to-sentence support score")
+        verified: bool = Field(default=True, description="True if similarity >= threshold")
 
     class AskRequest(_BaseSchema):
         """RAG question-answering request."""
@@ -94,7 +150,7 @@ try:
         use_reranker: bool = Field(default=True)
 
     class AskResponse(_BaseSchema):
-        """Grounded answer with verified inline citations and retrieved context."""
+        """Grounded answer with claim-verified inline citations and retrieved context."""
 
         question: str
         answer: str
@@ -102,11 +158,21 @@ try:
             default=False,
             description="True when retrieved chunks do not contain enough evidence to answer",
         )
+        error: Optional[str] = Field(
+            default=None,
+            description="Explicit LLM error message when generation fails",
+        )
         citations: List[Citation] = Field(default_factory=list)
+        verified_citations_count: int = 0
+        total_citations_count: int = 0
+        citation_summary: str = "Verified 0/0 citations"
         retrieved_chunks: List[RetrievedChunk] = Field(default_factory=list)
         retrieval_latency_ms: float = 0.0
         generation_latency_ms: float = 0.0
         total_latency_ms: float = 0.0
+        prompt_tokens: int = 0
+        completion_tokens: int = 0
+        total_tokens: int = 0
 
 except ImportError:
 
@@ -119,11 +185,26 @@ except ImportError:
 
     @dataclass
     class DocumentInput(_FallbackSchema):  # type: ignore[no-redef]
-        id: str
-        title: str
-        source: str
-        content: str
+        id: str = ""
+        title: str = ""
+        source: str = ""
+        content: str = ""
         metadata: Dict[str, Any] = field(default_factory=dict)
+        document_id: str = ""
+
+        def __post_init__(self) -> None:
+            fname = str((self.metadata or {}).get("filename", ""))
+            norm_id, norm_title, norm_source = normalize_document_fields(
+                doc_id=self.id,
+                document_id=self.document_id,
+                title=self.title,
+                source=self.source,
+                filename=fname,
+            )
+            self.id = norm_id
+            self.document_id = norm_id
+            self.title = norm_title
+            self.source = norm_source
 
     @dataclass
     class IngestRequest(_FallbackSchema):  # type: ignore[no-redef]
@@ -152,6 +233,10 @@ except ImportError:
         rrf_score: float = 0.0
         rerank_score: Optional[float] = None
         final_score: float = 0.0
+        selected: bool = False
+        selection_status: str = "dropped"
+        selection_reason: str = ""
+        context_index: Optional[int] = None
 
     @dataclass
     class SearchRequest(_FallbackSchema):  # type: ignore[no-redef]
@@ -177,6 +262,9 @@ except ImportError:
         document_title: str
         source: str
         quote: str
+        claim: str = ""
+        similarity_score: float = 0.0
+        verified: bool = True
 
     @dataclass
     class AskRequest(_FallbackSchema):  # type: ignore[no-redef]
@@ -191,8 +279,15 @@ except ImportError:
         question: str
         answer: str
         abstained: bool = False
+        error: Optional[str] = None
         citations: List[Citation] = field(default_factory=list)
+        verified_citations_count: int = 0
+        total_citations_count: int = 0
+        citation_summary: str = "Verified 0/0 citations"
         retrieved_chunks: List[RetrievedChunk] = field(default_factory=list)
         retrieval_latency_ms: float = 0.0
         generation_latency_ms: float = 0.0
         total_latency_ms: float = 0.0
+        prompt_tokens: int = 0
+        completion_tokens: int = 0
+        total_tokens: int = 0
