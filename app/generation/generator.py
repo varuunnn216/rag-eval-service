@@ -172,44 +172,54 @@ def _synthesize_grounded_extractive_answer(
     Deterministic grounded synthesis from top retrieved chunks with inline [n] citations.
     Used when GEMINI_API_KEY is not configured or during offline evaluation runs.
     """
-    q_tokens = [t for t in _TOKEN_RE.findall(question.lower()) if t not in _STOPWORDS and len(t) >= 2]
+    q_tokens = [t for t in _TOKEN_RE.findall(question.lower()) if t not in _STOPWORDS]
     q_stems = {_stem(t) for t in q_tokens}
 
     candidate_sentences: List[Tuple[float, int, str]] = []
     for idx, chunk in enumerate(chunks[:3], start=1):
-        raw_sents = [
+        # Split on newline / bullet / paragraph boundaries to keep bullet definitions intact
+        raw_units = [
             s.strip()
-            for s in re.split(r"(?<=[.!?])\s+|\n\n+", chunk.content)
+            for s in re.split(r"\n+", chunk.content)
             if s.strip() and not s.strip().startswith("#")
         ]
         heading_stems = {_stem(t) for t in _TOKEN_RE.findall(chunk.heading.lower()) if t not in _STOPWORDS}
-        heading_bonus = 0.5 * len(q_stems & heading_stems)
+        heading_bonus = 0.6 * len(q_stems & heading_stems)
 
-        for sent in raw_sents:
-            s_tokens = [t for t in _TOKEN_RE.findall(sent.lower()) if t not in _STOPWORDS]
+        for unit in raw_units:
+            s_tokens = [t for t in _TOKEN_RE.findall(unit.lower()) if t not in _STOPWORDS]
             s_stems = {_stem(t) for t in s_tokens}
             if not s_stems:
                 continue
             overlap = len(q_stems & s_stems)
-            if overlap == 0 and idx > 1:
+            spec_bonus = 0.8 if ("`" in unit or any(ch.isdigit() for ch in unit)) else 0.0
+            if overlap == 0 and idx > 1 and heading_bonus == 0:
                 continue
-            rank_bonus = 1.0 / idx
-            score = overlap * 2.0 + heading_bonus + rank_bonus
-            candidate_sentences.append((score, idx, sent))
+            rank_bonus = 1.5 / idx
+            score = overlap * 2.0 + heading_bonus + rank_bonus + spec_bonus
+            candidate_sentences.append((score, idx, unit))
 
     if not candidate_sentences:
         return f"{chunks[0].content.strip()} [1]"
 
     candidate_sentences.sort(key=lambda item: (-item[0], item[1]))
 
+    # Ensure coverage across top relevant chunks for multi-hop questions
     selected: List[str] = []
     seen_text = set()
-    for _, cite_num, sent in candidate_sentences[:3]:
+    per_chunk_count: dict[int, int] = {}
+
+    for score, cite_num, sent in candidate_sentences:
+        if len(selected) >= 6:
+            break
+        max_for_chunk = 4 if cite_num == 1 else 3
+        if per_chunk_count.get(cite_num, 0) >= max_for_chunk:
+            continue
         norm = sent.lower()
         if norm in seen_text:
             continue
         seen_text.add(norm)
-        # Ensure clean punctuation before [n]
+        per_chunk_count[cite_num] = per_chunk_count.get(cite_num, 0) + 1
         if sent[-1] in ".!?":
             formatted = f"{sent[:-1]} [{cite_num}]{sent[-1]}"
         else:

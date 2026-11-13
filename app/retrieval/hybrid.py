@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import logging
 import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import get_settings
 from app.db import get_db_connection
-from app.ingestion.embedder import EmbeddingService
+from app.ingestion.embedder import EmbeddingService, _stem_token
 from app.retrieval.reranker import rerank_chunks
 from app.schemas import RetrievalMode, RetrievedChunk
+
+logger = logging.getLogger(__name__)
 
 _QUERY_TOKEN_RE = re.compile(r"[a-zA-Z0-9_]+")
 _SPARSE_STOPWORDS = {
@@ -17,6 +20,8 @@ _SPARSE_STOPWORDS = {
     "that", "the", "their", "there", "these", "this", "to", "was", "were",
     "what", "when", "where", "which", "who", "why", "with", "would",
 }
+
+_in_memory_cache: Optional[List[Tuple[RetrievedChunk, List[float]]]] = None
 
 
 def build_or_tsquery(query: str) -> str:
@@ -153,6 +158,96 @@ def sparse_search(
     return results
 
 
+def _get_in_memory_corpus_index() -> List[Tuple[RetrievedChunk, List[float]]]:
+    """Build or return an in-memory index of the bundled corpus when PostgreSQL is not active."""
+    global _in_memory_cache
+    if _in_memory_cache is not None:
+        return _in_memory_cache
+
+    from app.ingestion.seed import load_corpus_documents, preview_corpus_chunks
+
+    docs_by_id = {d.id: d for d in load_corpus_documents()}
+    raw_chunks = preview_corpus_chunks()
+    embedder = EmbeddingService()
+    texts = [f"{c.heading}\n{c.content}" if c.heading else c.content for c in raw_chunks]
+    vectors = embedder.embed_documents(texts)
+
+    entries: List[Tuple[RetrievedChunk, List[float]]] = []
+    for c, vec in zip(raw_chunks, vectors):
+        doc = docs_by_id[c.document_id]
+        rc = RetrievedChunk(
+            chunk_id=c.id,
+            document_id=c.document_id,
+            document_title=doc.title,
+            source=doc.source,
+            chunk_index=c.chunk_index,
+            heading=c.heading,
+            content=c.content,
+            token_count=c.token_count,
+        )
+        entries.append((rc, vec))
+
+    _in_memory_cache = entries
+    return _in_memory_cache
+
+
+def _in_memory_dense_search(query_embedding: List[float], limit: int = 20) -> List[RetrievedChunk]:
+    """Exact cosine similarity search mirroring pgvector `<=>`."""
+    entries = _get_in_memory_corpus_index()
+    scored: List[Tuple[float, RetrievedChunk]] = []
+    for base_chunk, vec in entries:
+        cos_sim = sum(a * b for a, b in zip(query_embedding, vec))
+        scored.append((cos_sim, base_chunk))
+
+    scored.sort(key=lambda item: (-item[0], item[1].chunk_id))
+    results: List[RetrievedChunk] = []
+    for rank, (score, base_chunk) in enumerate(scored[:limit], start=1):
+        c = base_chunk.clone()
+        c.dense_rank = rank
+        c.dense_score = round(float(score), 6)
+        c.final_score = c.dense_score
+        results.append(c)
+    return results
+
+
+def _in_memory_sparse_search(query: str, limit: int = 20) -> List[RetrievedChunk]:
+    """Cover-density lexical search mirroring PostgreSQL `ts_rank_cd(..., 32)` with A/B weights."""
+    entries = _get_in_memory_corpus_index()
+    ts_terms = [t.strip() for t in build_or_tsquery(query).split("|") if t.strip()]
+    query_stems = [(_stem_token(t), t) for t in ts_terms]
+
+    scored: List[Tuple[float, RetrievedChunk]] = []
+    for base_chunk, _ in entries:
+        h_tokens = _QUERY_TOKEN_RE.findall(base_chunk.heading.lower())
+        b_tokens = _QUERY_TOKEN_RE.findall(base_chunk.content.lower())
+        h_stems = {_stem_token(t) for t in h_tokens} | set(h_tokens)
+        b_stems = {_stem_token(t) for t in b_tokens} | set(b_tokens)
+
+        raw_rank = 0.0
+        for q_stem, q_raw in query_stems:
+            # Boost exact technical tokens (with underscore or digits)
+            specificity = 1.6 if ("_" in q_raw or any(ch.isdigit() for ch in q_raw)) else 1.0
+            if q_raw in h_stems or q_stem in h_stems:
+                raw_rank += 1.0 * specificity  # Weight 'A' = 1.0
+            if q_raw in b_stems or q_stem in b_stems:
+                raw_rank += 0.4 * specificity  # Weight 'B' = 0.4
+
+        if raw_rank > 0.0:
+            # Normalization 32 in PostgreSQL ts_rank_cd: rank / (1 + rank)
+            norm_score = raw_rank / (1.0 + raw_rank)
+            scored.append((norm_score, base_chunk))
+
+    scored.sort(key=lambda item: (-item[0], item[1].chunk_id))
+    results: List[RetrievedChunk] = []
+    for rank, (score, base_chunk) in enumerate(scored[:limit], start=1):
+        c = base_chunk.clone()
+        c.sparse_rank = rank
+        c.sparse_score = round(float(score), 6)
+        c.final_score = c.sparse_score
+        results.append(c)
+    return results
+
+
 def reciprocal_rank_fusion(
     dense_results: List[RetrievedChunk],
     sparse_results: List[RetrievedChunk],
@@ -224,16 +319,36 @@ def retrieve_candidates(
     pool_size = max(top_k, candidate_pool)
     embedder = EmbeddingService()
 
-    with get_db_connection() as conn:
+    try:
+        with get_db_connection() as conn:
+            if mode == "dense":
+                q_vec = embedder.embed_query(query)
+                candidates = dense_search(conn, q_vec, limit=pool_size)
+            elif mode == "sparse":
+                candidates = sparse_search(conn, query, limit=pool_size)
+            else:
+                q_vec = embedder.embed_query(query)
+                dense_list = dense_search(conn, q_vec, limit=pool_size)
+                sparse_list = sparse_search(conn, query, limit=pool_size)
+                candidates = reciprocal_rank_fusion(
+                    dense_results=dense_list,
+                    sparse_results=sparse_list,
+                    k=settings.rrf_k,
+                    dense_weight=settings.dense_weight,
+                    sparse_weight=settings.sparse_weight,
+                    top_n=pool_size,
+                )
+    except Exception:
+        # Automatic fallback to in-memory pgvector/tsvector mirror when Postgres is offline
         if mode == "dense":
             q_vec = embedder.embed_query(query)
-            candidates = dense_search(conn, q_vec, limit=pool_size)
+            candidates = _in_memory_dense_search(q_vec, limit=pool_size)
         elif mode == "sparse":
-            candidates = sparse_search(conn, query, limit=pool_size)
+            candidates = _in_memory_sparse_search(query, limit=pool_size)
         else:
             q_vec = embedder.embed_query(query)
-            dense_list = dense_search(conn, q_vec, limit=pool_size)
-            sparse_list = sparse_search(conn, query, limit=pool_size)
+            dense_list = _in_memory_dense_search(q_vec, limit=pool_size)
+            sparse_list = _in_memory_sparse_search(query, limit=pool_size)
             candidates = reciprocal_rank_fusion(
                 dense_results=dense_list,
                 sparse_results=sparse_list,

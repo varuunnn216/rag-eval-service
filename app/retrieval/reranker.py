@@ -129,14 +129,19 @@ def compute_pair_interaction_score(query: str, chunk: RetrievedChunk) -> float:
         else 0.0
     )
 
-    # 4. Combine with retrieval prior
+    # 4. Substance factor (penalize tiny 1-sentence document preambles vs detailed sections)
+    substance = min(1.0, max(0.4, chunk.token_count / 65.0)) if chunk.token_count > 0 else 1.0
+    has_technical_specs = 0.06 if ("`" in chunk.content or any(c.isdigit() for c in chunk.content)) else 0.0
+
+    # 5. Combine with retrieval prior
     prior = chunk.rrf_score if chunk.rrf_score > 0 else (chunk.dense_score or chunk.sparse_score or 0.0)
-    raw_score = (
-        0.45 * coverage
-        + 0.25 * max_sentence_coverage
+    raw_score = substance * (
+        0.42 * coverage
+        + 0.18 * max_sentence_coverage
         + 0.15 * bigram_score
         + 0.10 * heading_overlap
-        + 0.05 * min(1.0, prior * 20.0)
+        + 0.15 * min(1.0, prior * 30.0)
+        + has_technical_specs
     )
     return round(float(raw_score), 6)
 
