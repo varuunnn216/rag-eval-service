@@ -103,12 +103,43 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
         try:
             body = self._read_json_body()
             if path == "/api/v1/ask":
+                doc_ids = body.get("document_ids")
+                if isinstance(doc_ids, list):
+                    doc_ids = [str(x) for x in doc_ids if x]
+                else:
+                    doc_ids = None
                 req = AskRequest(
                     question=str(body.get("question", "")),
                     mode=body.get("mode", "hybrid"),
                     top_k=int(body.get("top_k", 5)),
                     candidate_pool=int(body.get("candidate_pool", 20)),
                     use_reranker=bool(body.get("use_reranker", True)),
+                    document_ids=doc_ids,
+                    rerank_min_score=(
+                        float(body["rerank_min_score"])
+                        if body.get("rerank_min_score") is not None
+                        else None
+                    ),
+                    rerank_relative_factor=(
+                        float(body["rerank_relative_factor"])
+                        if body.get("rerank_relative_factor") is not None
+                        else None
+                    ),
+                    rerank_max_chunks=(
+                        int(body["rerank_max_chunks"])
+                        if body.get("rerank_max_chunks") is not None
+                        else None
+                    ),
+                    llm_model=(
+                        str(body["llm_model"]).strip()
+                        if body.get("llm_model")
+                        else None
+                    ),
+                    temperature=(
+                        float(body["temperature"])
+                        if body.get("temperature") is not None
+                        else None
+                    ),
                 )
                 resp = answer_question(req)
                 self._send_json(resp.to_dict())
@@ -120,12 +151,24 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                 top_k = int(body.get("top_k", 5))
                 candidate_pool = int(body.get("candidate_pool", 20))
                 use_reranker = bool(body.get("use_reranker", True))
+                doc_ids = body.get("document_ids")
+                if isinstance(doc_ids, list):
+                    doc_ids = [str(x) for x in doc_ids if x]
+                else:
+                    doc_ids = None
+                min_sparse = (
+                    float(body["min_sparse_score"])
+                    if body.get("min_sparse_score") is not None
+                    else None
+                )
                 results, latency_ms = retrieve_candidates(
                     query=query,
                     mode=mode,
                     top_k=top_k,
                     candidate_pool=candidate_pool,
                     use_reranker=use_reranker,
+                    document_ids=doc_ids,
+                    min_sparse_score=min_sparse,
                 )
                 self._send_json(
                     {

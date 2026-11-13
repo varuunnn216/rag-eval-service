@@ -114,9 +114,9 @@ class TestBluebirdCafeRAGPipeline(unittest.TestCase):
         self.assertFalse(resp.abstained)
         self.assertIn("shift manager", resp.answer.lower())
 
-        # Must cite the Refund Policy chunk (chunk_004) only
+        # Must cite the Refund Policy chunk (chunk_002 after Staff Roles <80-token subsections merge) only
         self.assertEqual(len(resp.citations), 1)
-        self.assertEqual(resp.citations[0].chunk_id, "doc_08_bluebird_cafe::chunk_004")
+        self.assertEqual(resp.citations[0].chunk_id, "doc_08_bluebird_cafe::chunk_002")
         self.assertTrue(resp.citations[0].verified)
         self.assertIn("shift manager", resp.citations[0].quote.lower())
         self.assertEqual(resp.citation_summary, "Verified 1/1 citations")
@@ -190,17 +190,29 @@ class TestBluebirdCafeRAGPipeline(unittest.TestCase):
         self.assertEqual(doc.title, "Custom Cafe Title")
         self.assertEqual(doc.source, "handbook/custom.md")
 
-        # Empty fields fall back to filename
-        doc_fallback = DocumentInput(
+        # Empty title with # H1 heading falls back to H1 first, then filename
+        doc_h1_fallback = DocumentInput(
             id="",
             title="",
             source="",
-            content="# Opening\n\nOpen daily at 8:00 AM.",
+            content="# Golden Tea House\n\nOpen daily at 8:00 AM.",
             metadata={"filename": "09_tea_house.md"},
         )
-        self.assertEqual(doc_fallback.id, "doc_09_tea_house")
-        self.assertEqual(doc_fallback.title, "09 tea house")
-        self.assertEqual(doc_fallback.source, "09_tea_house.md")
+        self.assertEqual(doc_h1_fallback.id, "doc_09_tea_house")
+        self.assertEqual(doc_h1_fallback.title, "Golden Tea House")
+        self.assertEqual(doc_h1_fallback.source, "09_tea_house.md")
+
+        # Empty title without # H1 falls back to filename stem
+        doc_filename_fallback = DocumentInput(
+            id="",
+            title="",
+            source="",
+            content="## Hours\n\nOpen daily at 8:00 AM.",
+            metadata={"filename": "09_tea_house.md"},
+        )
+        self.assertEqual(doc_filename_fallback.id, "doc_09_tea_house")
+        self.assertEqual(doc_filename_fallback.title, "09 tea house")
+        self.assertEqual(doc_filename_fallback.source, "09_tea_house.md")
 
         # Re-ingesting the same document_id replaces chunks (upsert), never duplicates
         ingest_documents([doc])
@@ -213,6 +225,35 @@ class TestBluebirdCafeRAGPipeline(unittest.TestCase):
         matching_docs = [d for d in list_documents() if d["id"] == "custom_cafe_id"]
         self.assertEqual(len(matching_docs), 1)
         self.assertEqual(matching_docs[0]["chunk_count"], 1)
+
+    def test_7_small_chunks_merge_into_parent_and_sparse_stopword_filtering(self) -> None:
+        from app.ingestion.chunker import chunk_document
+        from app.ingestion.embedder import _deterministic_feature_embedding, cosine_similarity, is_l2_normalized
+        from app.retrieval.hybrid import _in_memory_sparse_search, extract_sparse_terms
+
+        # E.3: Baristas (31 tok), Cashiers (34 tok), Shift Manager (23 tok) under Staff Roles (<80 tok)
+        # merge into a single 'Bluebird Cafe Staff Handbook > Staff Roles' chunk
+        content = BLUEBIRD_PATH.read_text(encoding="utf-8")
+        chunks = chunk_document("doc_08_bluebird_cafe", content)
+        self.assertEqual(chunks[0].heading, "Bluebird Cafe Staff Handbook > Opening Hours")
+        self.assertEqual(chunks[1].heading, "Bluebird Cafe Staff Handbook > Staff Roles")
+        self.assertIn("Baristas:", chunks[1].content)
+        self.assertIn("Cashiers:", chunks[1].content)
+        self.assertIn("Shift Manager:", chunks[1].content)
+        self.assertGreaterEqual(chunks[1].token_count, 80)
+
+        # E.2: Stopwords produce zero sparse terms and zero sparse results
+        self.assertEqual(extract_sparse_terms("What is the a does on who must it?"), [])
+        self.assertEqual(_in_memory_sparse_search("What is the a does on who must it?"), [])
+
+        # E.4: Embeddings are unit L2-normalized and cosine similarity is bounded in [-1, 1]
+        vec_q = _deterministic_feature_embedding("Bluebird Cafe Sunday opening hours")
+        vec_d = _deterministic_feature_embedding("On Saturday and Sunday it opens at 9:00 AM")
+        self.assertTrue(is_l2_normalized(vec_q))
+        self.assertTrue(is_l2_normalized(vec_d))
+        sim = cosine_similarity(vec_q, vec_d)
+        self.assertGreater(sim, 0.2)
+        self.assertLessEqual(sim, 1.0)
 
     def test_6_context_selection_dedupes_identical_content_and_drops_unselected_citations(self) -> None:
         chunks = [

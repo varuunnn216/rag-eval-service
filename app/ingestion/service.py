@@ -32,6 +32,7 @@ def ingest_documents(documents: List[DocumentInput]) -> IngestResponse:
             max_tokens=settings.chunk_size_tokens,
             overlap_tokens=settings.chunk_overlap_tokens,
             base_metadata=doc.metadata,
+            min_chunk_tokens=settings.min_chunk_tokens,
         )
         all_chunks.extend(doc_chunks)
 

@@ -3,9 +3,22 @@ from __future__ import annotations
 import copy
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+import re
 from typing import Any, Dict, List, Literal, Optional
 
 RetrievalMode = Literal["dense", "sparse", "hybrid"]
+
+_H1_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
+
+
+def extract_h1_title(content: str) -> str:
+    """Extract the first top-level Markdown H1 (`# Heading`) from content, if present."""
+    if not content:
+        return ""
+    m = _H1_RE.search(content)
+    if not m:
+        return ""
+    return m.group(1).strip()
 
 
 def normalize_document_fields(
@@ -14,10 +27,14 @@ def normalize_document_fields(
     title: str = "",
     source: str = "",
     filename: str = "",
+    content: str = "",
 ) -> tuple[str, str, str]:
     """
     Honor explicit document_id/id, title, and source fields.
-    Only fall back to filename-derived values when they are empty.
+    Title fallback priority:
+      1. Explicit `title` field from request/form
+      2. First Markdown `# H1` heading in `content`
+      3. Filename-derived stem (with underscores/hyphens replaced by spaces)
     """
     raw_id = (doc_id or "").strip() or (document_id or "").strip()
     raw_title = (title or "").strip()
@@ -28,12 +45,14 @@ def normalize_document_fields(
     slug_fallback = "doc_" + "".join(
         ch if ch.isalnum() else "_" for ch in stem.lower()
     ).strip("_")
-    title_fallback = stem.replace("_", " ").replace("-", " ").strip() or "Untitled Document"
+    h1_title = extract_h1_title(content)
+    filename_title = stem.replace("_", " ").replace("-", " ").strip() or "Untitled Document"
+    resolved_title = raw_title or h1_title or filename_title
     source_fallback = raw_file if raw_file else f"{slug_fallback}.md"
 
     return (
         raw_id if raw_id else slug_fallback,
-        raw_title if raw_title else title_fallback,
+        resolved_title,
         raw_source if raw_source else source_fallback,
     )
 
@@ -67,6 +86,7 @@ try:
                 title=self.title,
                 source=self.source,
                 filename=fname,
+                content=self.content,
             )
             self.id = norm_id
             self.document_id = norm_id
@@ -117,6 +137,8 @@ try:
         top_k: int = Field(default=5, ge=1, le=50)
         candidate_pool: int = Field(default=20, ge=1, le=100)
         use_reranker: bool = Field(default=True, description="Whether to apply cross-encoder reranking")
+        document_ids: Optional[List[str]] = Field(default=None, description="Optional document ID filter")
+        min_sparse_score: Optional[float] = Field(default=None, description="Optional minimum sparse score")
 
     class SearchResponse(_BaseSchema):
         """Search response containing ranked chunks and latency breakdown."""
@@ -141,13 +163,19 @@ try:
         verified: bool = Field(default=True, description="True if similarity >= threshold")
 
     class AskRequest(_BaseSchema):
-        """RAG question-answering request."""
+        """RAG question-answering request with optional pipeline overrides."""
 
         question: str = Field(..., min_length=2)
         mode: RetrievalMode = Field(default="hybrid")
         top_k: int = Field(default=5, ge=1, le=20)
         candidate_pool: int = Field(default=20, ge=1, le=100)
         use_reranker: bool = Field(default=True)
+        document_ids: Optional[List[str]] = Field(default=None)
+        rerank_min_score: Optional[float] = Field(default=None)
+        rerank_relative_factor: Optional[float] = Field(default=None)
+        rerank_max_chunks: Optional[int] = Field(default=None)
+        llm_model: Optional[str] = Field(default=None)
+        temperature: Optional[float] = Field(default=None)
 
     class AskResponse(_BaseSchema):
         """Grounded answer with claim-verified inline citations and retrieved context."""
@@ -168,11 +196,14 @@ try:
         citation_summary: str = "Verified 0/0 citations"
         retrieved_chunks: List[RetrievedChunk] = Field(default_factory=list)
         retrieval_latency_ms: float = 0.0
+        rerank_latency_ms: float = 0.0
         generation_latency_ms: float = 0.0
         total_latency_ms: float = 0.0
         prompt_tokens: int = 0
         completion_tokens: int = 0
         total_tokens: int = 0
+        prompt_sent: str = ""
+        effective_settings: Dict[str, Any] = Field(default_factory=dict)
 
 except ImportError:
 
@@ -200,6 +231,7 @@ except ImportError:
                 title=self.title,
                 source=self.source,
                 filename=fname,
+                content=self.content,
             )
             self.id = norm_id
             self.document_id = norm_id
@@ -245,6 +277,8 @@ except ImportError:
         top_k: int = 5
         candidate_pool: int = 20
         use_reranker: bool = True
+        document_ids: Optional[List[str]] = None
+        min_sparse_score: Optional[float] = None
 
     @dataclass
     class SearchResponse(_FallbackSchema):  # type: ignore[no-redef]
@@ -273,6 +307,12 @@ except ImportError:
         top_k: int = 5
         candidate_pool: int = 20
         use_reranker: bool = True
+        document_ids: Optional[List[str]] = None
+        rerank_min_score: Optional[float] = None
+        rerank_relative_factor: Optional[float] = None
+        rerank_max_chunks: Optional[int] = None
+        llm_model: Optional[str] = None
+        temperature: Optional[float] = None
 
     @dataclass
     class AskResponse(_FallbackSchema):  # type: ignore[no-redef]
@@ -286,8 +326,11 @@ except ImportError:
         citation_summary: str = "Verified 0/0 citations"
         retrieved_chunks: List[RetrievedChunk] = field(default_factory=list)
         retrieval_latency_ms: float = 0.0
+        rerank_latency_ms: float = 0.0
         generation_latency_ms: float = 0.0
         total_latency_ms: float = 0.0
         prompt_tokens: int = 0
         completion_tokens: int = 0
         total_tokens: int = 0
+        prompt_sent: str = ""
+        effective_settings: Dict[str, Any] = field(default_factory=dict)

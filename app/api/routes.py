@@ -40,6 +40,8 @@ def search_endpoint(payload: SearchRequest) -> SearchResponse:
         top_k=payload.top_k,
         candidate_pool=payload.candidate_pool,
         use_reranker=payload.use_reranker,
+        document_ids=payload.document_ids,
+        min_sparse_score=payload.min_sparse_score,
     )
     return SearchResponse(
         query=payload.query,

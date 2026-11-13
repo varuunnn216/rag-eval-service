@@ -15,6 +15,8 @@ _STOPWORDS = {
     "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "by",
     "is", "are", "was", "were", "be", "been", "as", "at", "from", "that", "this",
     "it", "what", "how", "when", "which", "does", "do", "can", "into", "using",
+    "who", "where", "why", "must", "want", "wants", "should", "would", "could",
+    "have", "has", "had", "will", "shall", "may", "might", "if", "then", "than",
 }
 
 
@@ -31,10 +33,42 @@ def _stem_token(tok: str) -> str:
     return tok
 
 
+def _normalize_vector(values: List[float]) -> List[float]:
+    """L2-normalize a vector to unit length (||v||_2 = 1.0) for cosine similarity."""
+    norm = math.sqrt(sum(v * v for v in values))
+    if norm <= 1e-12:
+        return [0.0 for _ in values]
+    return [v / norm for v in values]
+
+
+def is_l2_normalized(values: List[float], tol: float = 1e-3) -> bool:
+    """Verify that an embedding vector has unit L2 norm within tolerance."""
+    if not values:
+        return False
+    norm = math.sqrt(sum(v * v for v in values))
+    return abs(norm - 1.0) <= tol
+
+
+def cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
+    """
+    Compute cosine similarity (1.0 - cosine_distance) matching pgvector `1 - (a <=> b)`.
+    Both vectors are normalized to unit L2 norm so dot product == cosine similarity in [-1.0, 1.0].
+    """
+    if not vec_a or not vec_b or len(vec_a) != len(vec_b):
+        return 0.0
+    dot = sum(a * b for a, b in zip(vec_a, vec_b))
+    norm_a = math.sqrt(sum(a * a for a in vec_a))
+    norm_b = math.sqrt(sum(b * b for b in vec_b))
+    if norm_a <= 1e-12 or norm_b <= 1e-12:
+        return 0.0
+    sim = dot / (norm_a * norm_b)
+    return max(-1.0, min(1.0, sim))
+
+
 def _deterministic_feature_embedding(text: str, dim: int = 768) -> List[float]:
     """
     Compute a deterministic L2-normalized feature-hashed vector (stems + bigrams + char n-grams).
-    Used as an offline fallback when GEMINI_API_KEY is not configured.
+    Used as an offline fallback when GEMINI_API_KEY is not configured or network is unavailable.
     """
     vec = [0.0] * dim
     raw_tokens = [t for t in _TOKEN_RE.findall(text.lower()) if t not in _STOPWORDS]
@@ -59,17 +93,11 @@ def _deterministic_feature_embedding(text: str, dim: int = 768) -> List[float]:
         sign = 1.0 if ((h >> 32) & 1) == 0 else -1.0
         vec[idx] += sign * weight
 
-    norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-    return [round(v / norm, 6) for v in vec]
-
-
-def _normalize_vector(values: List[float]) -> List[float]:
-    norm = math.sqrt(sum(v * v for v in values)) or 1.0
-    return [v / norm for v in values]
+    return _normalize_vector(vec)
 
 
 class EmbeddingService:
-    """Generates document and query embeddings using Gemini API with offline fallback."""
+    """Generates L2-normalized document and query embeddings using Gemini API with offline fallback."""
 
     def __init__(self) -> None:
         self.settings = get_settings()
@@ -81,15 +109,11 @@ class EmbeddingService:
         return bool(key and key != "your_gemini_api_key_here")
 
     def embed_documents(self, texts: List[str], batch_size: int = 50) -> List[List[float]]:
-        """Embed a batch of document chunks for indexing."""
+        """Embed a batch of document chunks for indexing (L2-normalized)."""
         if not texts:
             return []
 
         if not self._has_real_api_key():
-            logger.info(
-                "GEMINI_API_KEY not configured; using deterministic local feature embeddings (%d dims).",
-                self.dim,
-            )
             return [_deterministic_feature_embedding(t, self.dim) for t in texts]
 
         try:
@@ -113,16 +137,11 @@ class EmbeddingService:
                     all_embeddings.append(_normalize_vector(list(emb.values)))
 
             return all_embeddings
-        except Exception as exc:
-            logger.info(
-                "Using deterministic local feature embeddings (%d dims) (%s).",
-                self.dim,
-                exc,
-            )
+        except Exception:
             return [_deterministic_feature_embedding(t, self.dim) for t in texts]
 
     def embed_query(self, query: str) -> List[float]:
-        """Embed a single search query."""
+        """Embed a single search query (L2-normalized)."""
         if not self._has_real_api_key():
             return _deterministic_feature_embedding(query, self.dim)
 

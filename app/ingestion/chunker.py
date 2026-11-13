@@ -86,15 +86,92 @@ def _split_paragraphs_with_spans(text: str, base_offset: int) -> List[Tuple[str,
     return results
 
 
+def _parent_heading(breadcrumb: str) -> str:
+    """Return the parent section breadcrumb (e.g. 'H1 > H2 > H3' -> 'H1 > H2')."""
+    parts = [p.strip() for p in breadcrumb.split(">") if p.strip()]
+    if len(parts) >= 3:
+        return " > ".join(parts[:-1])
+    return breadcrumb
+
+
+def _format_chunk_for_parent_merge(chunk: ChunkData, parent_hd: str) -> str:
+    """Prefix subsection leaf title if needed when merging into parent section."""
+    parts = [p.strip() for p in chunk.heading.split(">") if p.strip()]
+    if len(parts) >= 3 and chunk.heading != parent_hd:
+        leaf = parts[-1]
+        if not chunk.content.startswith(f"{leaf}:"):
+            return f"{leaf}: {chunk.content}"
+    return chunk.content
+
+
+def _merge_small_chunks_into_parent(
+    raw_chunks: List[ChunkData],
+    document_id: str,
+    max_tokens: int = 350,
+    min_chunk_tokens: int = 80,
+) -> List[ChunkData]:
+    """
+    Merge chunks under ~`min_chunk_tokens` (default 80) into their parent section:
+    1. When a small subsection (`H1 > H2 > H3+`, `< min_chunk_tokens`) follows its parent
+       section (`H1 > H2`) or a sibling subsection sharing the same parent (`H1 > H2`),
+       merge them into a single parent-section chunk (`H1 > H2`) up to `max_tokens`.
+    2. When a multi-chunk section splits into a trailing chunk `< min_chunk_tokens` with the
+       same heading, merge it back into the preceding chunk.
+    3. A standalone single subsection with no parent/sibling chunk to merge with keeps its
+       full `H1 > H2 > H3` breadcrumb.
+    """
+    if not raw_chunks or min_chunk_tokens <= 0:
+        return raw_chunks
+
+    merged: List[ChunkData] = []
+    for chunk in raw_chunks:
+        if merged:
+            prev = merged[-1]
+            prev_parent = _parent_heading(prev.heading)
+            curr_parent = _parent_heading(chunk.heading)
+            same_exact_heading = prev.heading == chunk.heading and bool(chunk.heading)
+            shares_parent_section = (
+                bool(curr_parent)
+                and prev_parent == curr_parent
+                and (len(chunk.heading.split(">")) >= 3 or len(prev.heading.split(">")) >= 3)
+            )
+            is_small = chunk.token_count < min_chunk_tokens or prev.token_count < min_chunk_tokens
+
+            if (same_exact_heading or shares_parent_section) and is_small:
+                target_heading = curr_parent if shares_parent_section else prev.heading
+                prev_body = _format_chunk_for_parent_merge(prev, target_heading)
+                curr_body = _format_chunk_for_parent_merge(chunk, target_heading)
+                combined_text = f"{prev_body}\n\n{curr_body}"
+                combined_tokens = estimate_token_count(combined_text)
+                if combined_tokens <= max_tokens + min_chunk_tokens:
+                    prev.heading = target_heading
+                    prev.content = combined_text
+                    prev.token_count = combined_tokens
+                    prev.char_end = chunk.char_end
+                    prev.metadata = {**prev.metadata, "section_heading": target_heading}
+                    continue
+
+        merged.append(chunk)
+
+    # Re-number deterministic chunk IDs sequentially
+    for idx, c in enumerate(merged):
+        c.chunk_index = idx
+        c.id = f"{document_id}::chunk_{idx:03d}"
+
+    return merged
+
+
 def chunk_document(
     document_id: str,
     content: str,
     max_tokens: int = 350,
     overlap_tokens: int = 50,
     base_metadata: Optional[Dict[str, Any]] = None,
+    min_chunk_tokens: int = 80,
 ) -> List[ChunkData]:
     """
-    Split a document into deterministic, heading-aware chunks with token windowing and overlap.
+    Split a document into deterministic, heading-aware chunks with token windowing,
+    overlap, and parent-section merging for small chunks (< ~80 tokens).
 
     Assigns stable IDs of the form `{document_id}::chunk_{index:03d}` so evaluation datasets
     can reliably reference ground-truth chunks across runs.
@@ -187,4 +264,10 @@ def chunk_document(
             )
             chunk_idx += 1
 
-    return chunks
+    eff_min = min_chunk_tokens if max_tokens >= min_chunk_tokens else 0
+    return _merge_small_chunks_into_parent(
+        chunks,
+        document_id=document_id,
+        max_tokens=max_tokens,
+        min_chunk_tokens=eff_min,
+    )

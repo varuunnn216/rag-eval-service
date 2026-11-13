@@ -1,25 +1,53 @@
-let currentEvalReport = null;
+const STORAGE_KEY = "rag_pipeline_settings_v1";
 
-document.addEventListener("DOMContentLoaded", () => {
+const DEFAULT_SETTINGS = {
+  mode: "hybrid",
+  useReranker: true,
+  topK: 5,
+  candidatePool: 20,
+  documentIds: [], // empty = All documents
+  rerankMinScore: 0.25,
+  rerankRelativeFactor: 0.6,
+  rerankMaxChunks: 3,
+  llmModel: "gemini-3.5-flash-lite",
+  temperature: 0.0,
+};
+
+let currentSettings = { ...DEFAULT_SETTINGS, documentIds: [] };
+let lastAskResponse = null;
+let currentChunkSort = "final_rank";
+let indexedDocuments = [];
+let currentEvalReport = null;
+let lastUploadedFilename = "";
+
+document.addEventListener("DOMContentLoaded", async () => {
   initTabs();
+  loadSettingsFromStorage();
   initPlaygroundControls();
   initEvalControls();
   initCorpusControls();
 
-  fetchHealth();
+  await Promise.all([fetchHealth(), loadDocuments()]);
+  syncSettingsToUI();
   runAskQuery();
   loadEvalReport();
-  loadDocuments();
 });
 
+/* =====================================================================
+   TABS & SYSTEM HEALTH
+   ===================================================================== */
 function initTabs() {
   const buttons = document.querySelectorAll(".tab-btn");
   const panels = document.querySelectorAll(".tab-panel");
   buttons.forEach((btn) => {
     btn.addEventListener("click", () => {
-      buttons.forEach((b) => b.classList.remove("active"));
+      buttons.forEach((b) => {
+        b.classList.remove("active");
+        b.setAttribute("aria-selected", "false");
+      });
       panels.forEach((p) => p.classList.remove("active"));
       btn.classList.add("active");
+      btn.setAttribute("aria-selected", "true");
       const target = document.getElementById(btn.dataset.tab);
       if (target) target.classList.add("active");
     });
@@ -36,198 +64,712 @@ async function fetchHealth() {
       docsPill.textContent = `${data.documents_count} Docs / ${data.chunks_count} Chunks`;
     }
     if (modelsPill) {
-      modelsPill.textContent = `${data.generation_model} • ${data.reranker_model.split("/").pop()}`;
+      const rerankShort = (data.reranker_model || "").split("/").pop();
+      modelsPill.textContent = `${data.generation_model} • ${rerankShort}`;
+    }
+    const helper = document.getElementById("reranker-model-helper");
+    if (helper && data.reranker_model) {
+      helper.innerHTML = `Model: <code>${escapeHtml(data.reranker_model)}</code>`;
     }
   } catch (err) {
     console.error("Failed to fetch health:", err);
   }
 }
 
-function initPlaygroundControls() {
+/* =====================================================================
+   SETTINGS PERSISTENCE (localStorage) & DIFF DETECTION
+   ===================================================================== */
+function loadSettingsFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    currentSettings = {
+      mode: parsed.mode || DEFAULT_SETTINGS.mode,
+      useReranker:
+        typeof parsed.useReranker === "boolean"
+          ? parsed.useReranker
+          : DEFAULT_SETTINGS.useReranker,
+      topK: clampInt(parsed.topK, 1, 10, DEFAULT_SETTINGS.topK),
+      candidatePool: clampInt(parsed.candidatePool, 5, 50, DEFAULT_SETTINGS.candidatePool),
+      documentIds: Array.isArray(parsed.documentIds) ? parsed.documentIds : [],
+      rerankMinScore: clampFloat(parsed.rerankMinScore, 0.05, 0.7, DEFAULT_SETTINGS.rerankMinScore),
+      rerankRelativeFactor: clampFloat(
+        parsed.rerankRelativeFactor,
+        0.2,
+        0.95,
+        DEFAULT_SETTINGS.rerankRelativeFactor
+      ),
+      rerankMaxChunks: clampInt(parsed.rerankMaxChunks, 1, 6, DEFAULT_SETTINGS.rerankMaxChunks),
+      llmModel: parsed.llmModel || DEFAULT_SETTINGS.llmModel,
+      temperature: clampFloat(parsed.temperature, 0.0, 1.0, DEFAULT_SETTINGS.temperature),
+    };
+    if (currentSettings.candidatePool < currentSettings.topK) {
+      currentSettings.candidatePool = Math.max(5, currentSettings.topK);
+    }
+  } catch (err) {
+    currentSettings = { ...DEFAULT_SETTINGS, documentIds: [] };
+  }
+}
+
+function saveSettingsToStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSettings));
+  } catch (err) {
+    console.warn("Unable to persist settings in localStorage:", err);
+  }
+}
+
+function clampInt(val, min, max, fallback) {
+  const n = parseInt(val, 10);
+  if (Number.isNaN(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function clampFloat(val, min, max, fallback) {
+  const n = parseFloat(val);
+  if (Number.isNaN(n)) return fallback;
+  return Math.max(min, Math.min(max, Number(n.toFixed(2))));
+}
+
+function syncSettingsToUI() {
+  document.getElementById("mode-select").value = currentSettings.mode;
+
+  const rerankToggle = document.getElementById("reranker-toggle");
+  rerankToggle.checked = currentSettings.useReranker;
+  document.getElementById("reranker-state-label").textContent = currentSettings.useReranker
+    ? "Enabled"
+    : "Disabled (Raw Rank)";
+
   const topkSlider = document.getElementById("topk-slider");
-  const topkVal = document.getElementById("topk-val");
+  topkSlider.value = String(currentSettings.topK);
+  document.getElementById("topk-val").textContent = String(currentSettings.topK);
+
   const poolSlider = document.getElementById("pool-slider");
-  const poolVal = document.getElementById("pool-val");
+  poolSlider.min = String(Math.max(5, currentSettings.topK));
+  poolSlider.value = String(currentSettings.candidatePool);
+  document.getElementById("pool-val").textContent = String(currentSettings.candidatePool);
 
-  topkSlider.addEventListener("input", () => {
-    topkVal.textContent = topkSlider.value;
-  });
-  poolSlider.addEventListener("input", () => {
-    poolVal.textContent = poolSlider.value;
-  });
+  document.getElementById("rerank-min-slider").value = String(currentSettings.rerankMinScore);
+  document.getElementById("rerank-min-val").textContent = currentSettings.rerankMinScore.toFixed(2);
 
-  document.querySelectorAll(".chip-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      document.getElementById("question-input").value = btn.dataset.preset;
+  document.getElementById("rerank-ratio-slider").value = String(
+    currentSettings.rerankRelativeFactor
+  );
+  document.getElementById("rerank-ratio-val").textContent =
+    currentSettings.rerankRelativeFactor.toFixed(2);
+
+  document.getElementById("rerank-max-slider").value = String(currentSettings.rerankMaxChunks);
+  document.getElementById("rerank-max-val").textContent = String(currentSettings.rerankMaxChunks);
+
+  document.getElementById("llm-model-select").value = currentSettings.llmModel;
+  document.getElementById("temperature-slider").value = String(currentSettings.temperature);
+  document.getElementById("temp-val").textContent = currentSettings.temperature.toFixed(2);
+
+  renderDocScopeMenu();
+  updateSettingsDiffIndicators();
+}
+
+function updateSettingsDiffIndicators() {
+  const diffs = [];
+
+  const checkDiff = (key, isDiff, label) => {
+    const badge = document.getElementById(`diff-${key}`);
+    const card = document.querySelector(`[data-setting-card="${key}"]`);
+    if (badge) badge.classList.toggle("hidden", !isDiff);
+    if (card) card.classList.toggle("is-modified", isDiff);
+    if (isDiff) diffs.push(label);
+  };
+
+  checkDiff(
+    "mode",
+    currentSettings.mode !== DEFAULT_SETTINGS.mode,
+    `Mode (${currentSettings.mode})`
+  );
+  checkDiff(
+    "useReranker",
+    currentSettings.useReranker !== DEFAULT_SETTINGS.useReranker,
+    `Reranker (Off)`
+  );
+  checkDiff(
+    "documentIds",
+    currentSettings.documentIds.length > 0,
+    `Scope (${currentSettings.documentIds.length} docs)`
+  );
+  checkDiff(
+    "topK",
+    currentSettings.topK !== DEFAULT_SETTINGS.topK,
+    `Top-K (${currentSettings.topK})`
+  );
+  checkDiff(
+    "candidatePool",
+    currentSettings.candidatePool !== DEFAULT_SETTINGS.candidatePool,
+    `Pool (${currentSettings.candidatePool})`
+  );
+  checkDiff(
+    "rerankMinScore",
+    Math.abs(currentSettings.rerankMinScore - DEFAULT_SETTINGS.rerankMinScore) > 1e-4,
+    `Min Score (${currentSettings.rerankMinScore.toFixed(2)})`
+  );
+  checkDiff(
+    "rerankRelativeFactor",
+    Math.abs(currentSettings.rerankRelativeFactor - DEFAULT_SETTINGS.rerankRelativeFactor) > 1e-4,
+    `Ratio vs Top (${currentSettings.rerankRelativeFactor.toFixed(2)})`
+  );
+  checkDiff(
+    "rerankMaxChunks",
+    currentSettings.rerankMaxChunks !== DEFAULT_SETTINGS.rerankMaxChunks,
+    `Max Chunks (${currentSettings.rerankMaxChunks})`
+  );
+
+  const llmOrTempDiff =
+    currentSettings.llmModel !== DEFAULT_SETTINGS.llmModel ||
+    Math.abs(currentSettings.temperature - DEFAULT_SETTINGS.temperature) > 1e-4;
+  checkDiff(
+    "llmModelTemp",
+    llmOrTempDiff,
+    `LLM (${currentSettings.llmModel}, temp=${currentSettings.temperature.toFixed(2)})`
+  );
+
+  const summaryPill = document.getElementById("settings-diff-summary");
+  const listText = document.getElementById("modified-settings-list");
+  if (diffs.length === 0) {
+    summaryPill.textContent = "Defaults active";
+    summaryPill.classList.remove("has-diff");
+    listText.textContent = "All pipeline parameters match calibrated defaults.";
+  } else {
+    summaryPill.textContent = `${diffs.length} modified`;
+    summaryPill.classList.add("has-diff");
+    listText.innerHTML = `<strong>Modified from defaults:</strong> ${diffs
+      .map((d) => `<code>${escapeHtml(d)}</code>`)
+      .join(" ")}`;
+  }
+}
+
+/* =====================================================================
+   PLAYGROUND CONTROLS & MULTI-SELECT DOCUMENT SCOPE
+   ===================================================================== */
+function initPlaygroundControls() {
+  const questionInput = document.getElementById("question-input");
+  questionInput.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
       runAskQuery();
-    });
+    }
   });
 
   document.getElementById("ask-form").addEventListener("submit", (e) => {
     e.preventDefault();
     runAskQuery();
   });
-}
 
-function escapeHtml(str) {
-  return String(str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
+  document.querySelectorAll(".sample-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      questionInput.value = chip.dataset.preset;
+      runAskQuery();
+    });
+  });
 
-function formatAnswerWithClickableCitations(answerText) {
-  const escaped = escapeHtml(answerText);
-  return escaped.replace(/\[(\d+)\]/g, (match, num) => {
-    return `<button type="button" class="cite-badge" onclick="highlightCitation(${num})">[${num}]</button>`;
+  // Mode
+  document.getElementById("mode-select").addEventListener("change", (e) => {
+    currentSettings.mode = e.target.value;
+    saveSettingsToStorage();
+    updateSettingsDiffIndicators();
+  });
+
+  // Reranker switch
+  document.getElementById("reranker-toggle").addEventListener("change", (e) => {
+    currentSettings.useReranker = e.target.checked;
+    document.getElementById("reranker-state-label").textContent = currentSettings.useReranker
+      ? "Enabled"
+      : "Disabled (Raw Rank)";
+    saveSettingsToStorage();
+    updateSettingsDiffIndicators();
+  });
+
+  // Top-K & Candidate Pool (enforce candidatePool >= topK)
+  const topkSlider = document.getElementById("topk-slider");
+  const poolSlider = document.getElementById("pool-slider");
+
+  topkSlider.addEventListener("input", () => {
+    const newTopK = parseInt(topkSlider.value, 10);
+    currentSettings.topK = newTopK;
+    document.getElementById("topk-val").textContent = String(newTopK);
+    poolSlider.min = String(Math.max(5, newTopK));
+    if (currentSettings.candidatePool < newTopK) {
+      currentSettings.candidatePool = newTopK;
+      poolSlider.value = String(newTopK);
+      document.getElementById("pool-val").textContent = String(newTopK);
+    }
+    saveSettingsToStorage();
+    updateSettingsDiffIndicators();
+  });
+
+  poolSlider.addEventListener("input", () => {
+    let newPool = parseInt(poolSlider.value, 10);
+    if (newPool < currentSettings.topK) {
+      newPool = currentSettings.topK;
+      poolSlider.value = String(newPool);
+    }
+    currentSettings.candidatePool = newPool;
+    document.getElementById("pool-val").textContent = String(newPool);
+    saveSettingsToStorage();
+    updateSettingsDiffIndicators();
+  });
+
+  // Rerank threshold sliders
+  const minSlider = document.getElementById("rerank-min-slider");
+  minSlider.addEventListener("input", () => {
+    currentSettings.rerankMinScore = parseFloat(minSlider.value);
+    document.getElementById("rerank-min-val").textContent =
+      currentSettings.rerankMinScore.toFixed(2);
+    saveSettingsToStorage();
+    updateSettingsDiffIndicators();
+  });
+
+  const ratioSlider = document.getElementById("rerank-ratio-slider");
+  ratioSlider.addEventListener("input", () => {
+    currentSettings.rerankRelativeFactor = parseFloat(ratioSlider.value);
+    document.getElementById("rerank-ratio-val").textContent =
+      currentSettings.rerankRelativeFactor.toFixed(2);
+    saveSettingsToStorage();
+    updateSettingsDiffIndicators();
+  });
+
+  const maxSlider = document.getElementById("rerank-max-slider");
+  maxSlider.addEventListener("input", () => {
+    currentSettings.rerankMaxChunks = parseInt(maxSlider.value, 10);
+    document.getElementById("rerank-max-val").textContent = String(
+      currentSettings.rerankMaxChunks
+    );
+    saveSettingsToStorage();
+    updateSettingsDiffIndicators();
+  });
+
+  // LLM Model & Temperature
+  document.getElementById("llm-model-select").addEventListener("change", (e) => {
+    currentSettings.llmModel = e.target.value;
+    saveSettingsToStorage();
+    updateSettingsDiffIndicators();
+  });
+
+  const tempSlider = document.getElementById("temperature-slider");
+  tempSlider.addEventListener("input", () => {
+    currentSettings.temperature = parseFloat(tempSlider.value);
+    document.getElementById("temp-val").textContent = currentSettings.temperature.toFixed(2);
+    saveSettingsToStorage();
+    updateSettingsDiffIndicators();
+  });
+
+  // Reset to defaults button
+  document.getElementById("reset-settings-btn").addEventListener("click", () => {
+    currentSettings = { ...DEFAULT_SETTINGS, documentIds: [] };
+    saveSettingsToStorage();
+    syncSettingsToUI();
+  });
+
+  // Multi-select Document Scope dropdown toggle
+  const scopeBtn = document.getElementById("doc-scope-btn");
+  const scopeMenu = document.getElementById("doc-scope-menu");
+  scopeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isHidden = scopeMenu.classList.toggle("hidden");
+    scopeBtn.setAttribute("aria-expanded", String(!isHidden));
+  });
+  document.addEventListener("click", (e) => {
+    if (!document.getElementById("doc-scope-multiselect").contains(e.target)) {
+      scopeMenu.classList.add("hidden");
+      scopeBtn.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  // Copy buttons
+  document.getElementById("copy-answer-btn").addEventListener("click", async () => {
+    if (!lastAskResponse) return;
+    await copyTextWithFeedback("copy-answer-btn", lastAskResponse.answer || "", "Copy answer");
+  });
+
+  document.getElementById("copy-json-btn").addEventListener("click", async () => {
+    if (!lastAskResponse) return;
+    await copyTextWithFeedback(
+      "copy-json-btn",
+      JSON.stringify(lastAskResponse, null, 2),
+      "Copy as JSON"
+    );
+  });
+
+  // Sort toggle for Retrieved Context
+  document.querySelectorAll(".sort-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".sort-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentChunkSort = btn.dataset.sort;
+      if (lastAskResponse) {
+        renderChunksSection(lastAskResponse);
+      }
+    });
   });
 }
 
-window.highlightCitation = function (num) {
-  document.querySelectorAll(".citation-card, .chunk-card").forEach((el) => {
-    el.classList.remove("highlight");
-  });
-  const citCard = document.getElementById(`citation-card-${num}`);
-  const chunkCard = document.getElementById(`chunk-card-${num}`);
-  if (citCard) {
-    citCard.classList.add("highlight");
-    citCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+async function copyTextWithFeedback(btnId, text, originalLabel) {
+  const btn = document.getElementById(btnId);
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = "Copied!";
+    setTimeout(() => {
+      btn.textContent = originalLabel;
+    }, 1400);
+  } catch (err) {
+    console.error("Clipboard copy failed:", err);
   }
-  if (chunkCard) {
-    chunkCard.classList.add("highlight");
-  }
-};
+}
 
+function renderDocScopeMenu() {
+  const menu = document.getElementById("doc-scope-menu");
+  const summary = document.getElementById("doc-scope-summary");
+  if (!menu || !summary) return;
+
+  const validDocIds = new Set(indexedDocuments.map((d) => d.id));
+  currentSettings.documentIds = currentSettings.documentIds.filter((id) => validDocIds.has(id));
+  const allSelected = currentSettings.documentIds.length === 0;
+
+  if (allSelected) {
+    summary.textContent = `All documents (${indexedDocuments.length})`;
+  } else if (currentSettings.documentIds.length === 1) {
+    const match = indexedDocuments.find((d) => d.id === currentSettings.documentIds[0]);
+    summary.textContent = match ? match.title : currentSettings.documentIds[0];
+  } else {
+    summary.textContent = `${currentSettings.documentIds.length} documents selected`;
+  }
+
+  const allOptionHtml = `
+    <label class="multiselect-option">
+      <input type="checkbox" data-doc-scope="all" ${allSelected ? "checked" : ""} />
+      <span><strong>All documents (${indexedDocuments.length})</strong></span>
+    </label>
+  `;
+
+  const docOptionsHtml = indexedDocuments
+    .map((doc) => {
+      const checked = !allSelected && currentSettings.documentIds.includes(doc.id);
+      return `
+        <label class="multiselect-option">
+          <input type="checkbox" data-doc-scope="${escapeHtml(doc.id)}" ${checked ? "checked" : ""} />
+          <span>${escapeHtml(doc.title)} <small class="muted-text">(${doc.chunk_count} chunks)</small></span>
+        </label>
+      `;
+    })
+    .join("");
+
+  menu.innerHTML = allOptionHtml + docOptionsHtml;
+
+  menu.querySelectorAll("input[type='checkbox']").forEach((cb) => {
+    cb.addEventListener("change", (e) => {
+      const val = e.target.dataset.docScope;
+      if (val === "all") {
+        currentSettings.documentIds = [];
+      } else {
+        if (e.target.checked) {
+          if (!currentSettings.documentIds.includes(val)) {
+            currentSettings.documentIds.push(val);
+          }
+        } else {
+          currentSettings.documentIds = currentSettings.documentIds.filter((id) => id !== val);
+        }
+      }
+      saveSettingsToStorage();
+      renderDocScopeMenu();
+      updateSettingsDiffIndicators();
+    });
+  });
+}
+
+/* =====================================================================
+   EXECUTE RAG QUERY & RENDER SECTIONS 3, 4, 5, 6
+   ===================================================================== */
 async function runAskQuery() {
   const question = document.getElementById("question-input").value.trim();
   if (!question) return;
 
-  const mode = document.getElementById("mode-select").value;
-  const useReranker = document.getElementById("reranker-select").value === "true";
-  const topK = parseInt(document.getElementById("topk-slider").value, 10);
-  const candidatePool = parseInt(document.getElementById("pool-slider").value, 10);
-
-  const submitBtn = document.getElementById("ask-submit-btn");
-  submitBtn.disabled = true;
-  submitBtn.textContent = "Running...";
+  setPlaygroundLoadingState(true);
 
   try {
+    const payload = {
+      question,
+      mode: currentSettings.mode,
+      top_k: currentSettings.topK,
+      candidate_pool: currentSettings.candidatePool,
+      use_reranker: currentSettings.useReranker,
+      document_ids: currentSettings.documentIds.length ? currentSettings.documentIds : null,
+      rerank_min_score: currentSettings.rerankMinScore,
+      rerank_relative_factor: currentSettings.rerankRelativeFactor,
+      rerank_max_chunks: currentSettings.rerankMaxChunks,
+      llm_model: currentSettings.llmModel,
+      temperature: currentSettings.temperature,
+    };
+
     const res = await fetch("/api/v1/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        question,
-        mode,
-        top_k: topK,
-        candidate_pool: candidatePool,
-        use_reranker: useReranker,
-      }),
+      body: JSON.stringify(payload),
     });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `HTTP ${res.status}`);
+    }
+
     const data = await res.json();
+    lastAskResponse = data;
+    setPlaygroundLoadingState(false);
     renderAskResponse(data);
   } catch (err) {
-    document.getElementById("answer-output").textContent = `Error: ${err.message}`;
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = "Run RAG Pipeline";
+    setPlaygroundLoadingState(false);
+    renderPlaygroundError(err.message || "Request failed");
   }
 }
 
+function setPlaygroundLoadingState(isLoading) {
+  const submitBtn = document.getElementById("ask-submit-btn");
+  const submitLabel = document.getElementById("ask-submit-label");
+  submitBtn.disabled = isLoading;
+  submitLabel.textContent = isLoading ? "Running..." : "Run";
+
+  document.getElementById("ask-inline-loading").classList.toggle("hidden", !isLoading);
+  document.getElementById("answer-loading").classList.toggle("hidden", !isLoading);
+  document.getElementById("citations-loading").classList.toggle("hidden", !isLoading);
+  document.getElementById("chunks-loading").classList.toggle("hidden", !isLoading);
+  document.getElementById("metrics-loading").classList.toggle("hidden", !isLoading);
+
+  if (isLoading) {
+    document.getElementById("answer-empty").classList.add("hidden");
+    document.getElementById("answer-error").classList.add("hidden");
+    document.getElementById("answer-abstain-box").classList.add("hidden");
+    document.getElementById("answer-output").classList.add("hidden");
+    document.getElementById("citations-error").classList.add("hidden");
+    document.getElementById("chunks-error").classList.add("hidden");
+    document.getElementById("metrics-error").classList.add("hidden");
+    const statePill = document.getElementById("answer-state-pill");
+    statePill.className = "state-pill";
+    statePill.textContent = "Running...";
+  }
+}
+
+function renderPlaygroundError(errorMessage) {
+  const statePill = document.getElementById("answer-state-pill");
+  statePill.className = "state-pill pill-error";
+  statePill.textContent = "Error";
+
+  const ansErr = document.getElementById("answer-error");
+  ansErr.textContent = `Pipeline Error: ${errorMessage}`;
+  ansErr.classList.remove("hidden");
+
+  const citErr = document.getElementById("citations-error");
+  citErr.textContent = `Unable to verify citations: ${errorMessage}`;
+  citErr.classList.remove("hidden");
+
+  const chkErr = document.getElementById("chunks-error");
+  chkErr.textContent = `Retrieval error: ${errorMessage}`;
+  chkErr.classList.remove("hidden");
+}
+
 function renderAskResponse(data) {
-  const banner = document.getElementById("answer-status-banner");
-  banner.classList.remove("hidden", "grounded", "abstained", "error");
-  const citSummary = data.citation_summary || `Verified ${data.verified_citations_count || 0}/${data.total_citations_count || 0} citations`;
+  const statePill = document.getElementById("answer-state-pill");
+  const emptyBox = document.getElementById("answer-empty");
+  const errorBox = document.getElementById("answer-error");
+  const abstainBox = document.getElementById("answer-abstain-box");
+  const answerBox = document.getElementById("answer-output");
+
+  emptyBox.classList.add("hidden");
+  errorBox.classList.add("hidden");
+  abstainBox.classList.add("hidden");
+  answerBox.classList.add("hidden");
+
+  document.getElementById("copy-answer-btn").disabled = false;
+  document.getElementById("copy-json-btn").disabled = false;
+  document.getElementById("prompt-sent-content").textContent =
+    data.prompt_sent || "(No LLM prompt sent)";
+
+  const citSummary =
+    data.citation_summary ||
+    `Verified ${data.verified_citations_count || 0}/${data.total_citations_count || 0} citations`;
 
   if (data.error) {
-    banner.classList.add("error");
-    banner.textContent = `LLM Generation Error: ${data.error}`;
+    statePill.className = "state-pill pill-error";
+    statePill.textContent = "LLM Error";
+    errorBox.innerHTML = `<strong>LLM Generation Error:</strong> ${escapeHtml(data.error)}`;
+    errorBox.classList.remove("hidden");
   } else if (data.abstained) {
-    banner.classList.add("abstained");
-    banner.textContent =
-      `Abstention Guard Triggered • ${citSummary}`;
+    // Distinct Amber "Not found in documents" state
+    statePill.className = "state-pill pill-abstained";
+    statePill.textContent = "Not found in documents";
+    document.getElementById("abstain-message-text").textContent =
+      data.answer || "I don't have enough information in the provided documents.";
+    const topChunk = (data.retrieved_chunks || [])[0];
+    const reasonText = topChunk
+      ? `Reason: ${topChunk.selection_reason || "Context lacked sufficient evidence"}`
+      : "Reason: No matching chunks passed the minimum threshold.";
+    document.getElementById("abstain-reason-detail").textContent = reasonText;
+    abstainBox.classList.remove("hidden");
   } else {
-    banner.classList.add("grounded");
-    banner.textContent = `Grounded Response • ${citSummary}`;
+    statePill.className = "state-pill pill-grounded";
+    statePill.textContent = `Grounded • ${citSummary}`;
+    answerBox.innerHTML = formatAnswerWithClickableCitations(data.answer);
+    answerBox.classList.remove("hidden");
   }
 
-  document.getElementById("latency-badges").innerHTML = `
-    <span class="latency-pill">Retrieval: <strong>${data.retrieval_latency_ms} ms</strong></span>
-    <span class="latency-pill">LLM: <strong>${data.generation_latency_ms} ms</strong></span>
-    <span class="latency-pill">Total: <strong>${data.total_latency_ms} ms</strong></span>
-    <span class="latency-pill">Tokens: <strong>${data.total_tokens || 0}</strong></span>
-  `;
+  renderCitationsSection(data, citSummary);
+  renderChunksSection(data);
+  renderMetricsSection(data);
+}
 
-  document.getElementById("answer-output").innerHTML =
-    formatAnswerWithClickableCitations(data.answer);
-
-  // Render Verified Citations
+function renderCitationsSection(data, citSummary) {
   const citList = document.getElementById("citations-list");
   document.getElementById("citation-count").textContent = citSummary;
-  if (!data.citations || !data.citations.length) {
-    citList.innerHTML = `<div class="muted-text">No citations emitted (${escapeHtml(citSummary)}).</div>`;
-  } else {
-    citList.innerHTML = data.citations
-      .map(
-        (c) => {
-          const statusClass = c.verified ? "used" : "dropped";
-          const statusLabel = c.verified
-            ? `VERIFIED (sim=${Number(c.similarity_score || 0).toFixed(2)})`
-            : `UNVERIFIED (sim=${Number(c.similarity_score || 0).toFixed(2)})`;
-          return `
-        <div class="citation-card" id="citation-card-${c.citation_number}">
-          <div class="citation-header">
-            <div>
-              <span class="cite-badge">[${c.citation_number}]</span>
-              <strong>${escapeHtml(c.document_title)}</strong>
-              <span class="chunk-status-badge ${statusClass}">${statusLabel}</span>
-            </div>
-            <span class="chunk-id-tag">${escapeHtml(c.chunk_id)}</span>
-          </div>
-          ${c.claim ? `<div class="selection-reason">Claim: ${escapeHtml(c.claim)}</div>` : ""}
-          <div class="quote-text">"${escapeHtml(c.quote)}"</div>
-        </div>
-      `;
-        }
-      )
-      .join("");
+
+  if (!data.citations || data.citations.length === 0) {
+    const emptyMsg = data.abstained
+      ? "Abstained (0 citations emitted — query could not be answered from documents)."
+      : `No inline citations emitted (${citSummary}).`;
+    citList.innerHTML = `<div class="empty-state-box">${escapeHtml(emptyMsg)}</div>`;
+    return;
   }
 
-  // Render Retrieved Chunks (marked as USED or DROPPED with reason)
-  const chunksList = document.getElementById("chunks-list");
-  document.getElementById("chunk-count").textContent = (data.retrieved_chunks || []).length;
-  chunksList.innerHTML = (data.retrieved_chunks || [])
-    .map((c, idx) => {
-      const rankNum = c.context_index != null ? c.context_index : idx + 1;
-      const isUsed = Boolean(c.selected) || c.selection_status === "used";
-      const statusBadge = isUsed
-        ? `<span class="chunk-status-badge used">USED [${c.context_index || rankNum}]</span>`
-        : `<span class="chunk-status-badge dropped">DROPPED</span>`;
-      const denseStr =
-        c.dense_rank != null ? `#${c.dense_rank} (${Number(c.dense_score || 0).toFixed(3)})` : "—";
-      const sparseStr =
-        c.sparse_rank != null ? `#${c.sparse_rank} (${Number(c.sparse_score || 0).toFixed(3)})` : "—";
-      const rrfStr = c.rrf_score ? Number(c.rrf_score).toFixed(4) : "—";
-      const rerankStr =
-        c.rerank_score != null ? Number(c.rerank_score).toFixed(4) : "Off";
+  citList.innerHTML = data.citations
+    .map((c) => {
+      const sim = Number(c.similarity_score || 0);
+      let badgeClass = "sim-red";
+      let badgeText = `LOW SIMILARITY • UNVERIFIED (${sim.toFixed(2)})`;
+      if (c.verified && sim >= 0.5) {
+        badgeClass = "sim-green";
+        badgeText = `HIGH SIMILARITY • VERIFIED (${sim.toFixed(2)})`;
+      } else if (c.verified && sim >= 0.25) {
+        badgeClass = "sim-amber";
+        badgeText = `MODERATE SIMILARITY • VERIFIED (${sim.toFixed(2)})`;
+      }
 
       return `
-        <div class="chunk-card" id="chunk-card-${rankNum}" style="${isUsed ? "" : "opacity: 0.72;"}">
-          <div class="chunk-header">
-            <div>
-              ${statusBadge}
+        <div class="citation-card" id="citation-card-${c.citation_number}">
+          <div class="citation-header">
+            <div class="citation-header-left">
+              <button type="button" class="cite-badge" onclick="highlightCitation(${c.citation_number})">[${c.citation_number}]</button>
               <strong>${escapeHtml(c.document_title)}</strong>
+              <span class="sim-badge ${badgeClass}">${badgeText}</span>
             </div>
             <span class="chunk-id-tag">${escapeHtml(c.chunk_id)}</span>
           </div>
-          ${c.selection_reason ? `<div class="selection-reason">${escapeHtml(c.selection_reason)}</div>` : ""}
+          ${
+            c.claim
+              ? `<div class="claim-row"><strong>Claim:</strong> ${escapeHtml(c.claim)}</div>`
+              : ""
+          }
+          <div class="quote-text">&ldquo;${escapeHtml(c.quote)}&rdquo;</div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderChunksSection(data) {
+  const chunksList = document.getElementById("chunks-list");
+  const rawChunks = (data.retrieved_chunks || []).map((c, idx) => ({
+    ...c,
+    _finalRank: idx + 1,
+  }));
+
+  const usedCount = rawChunks.filter((c) => c.selected || c.selection_status === "used").length;
+  document.getElementById("chunk-count").textContent = String(rawChunks.length);
+  document.getElementById("context-used-summary").textContent =
+    `${usedCount} used / ${rawChunks.length} retrieved`;
+
+  if (rawChunks.length === 0) {
+    chunksList.innerHTML = `<div class="empty-state-box">No candidate chunks matched the selected document scope or minimum sparse threshold.</div>`;
+    return;
+  }
+
+  const sortedChunks = [...rawChunks];
+  if (currentChunkSort === "rerank_score") {
+    sortedChunks.sort((a, b) => {
+      const sa = a.rerank_score != null ? Number(a.rerank_score) : Number(a.final_score || 0);
+      const sb = b.rerank_score != null ? Number(b.rerank_score) : Number(b.final_score || 0);
+      return sb - sa;
+    });
+  } else {
+    sortedChunks.sort((a, b) => a._finalRank - b._finalRank);
+  }
+
+  // Compute max RRF score for normalizing the RRF bar visually
+  const maxRrf = Math.max(0.035, ...sortedChunks.map((c) => Number(c.rrf_score || 0)));
+
+  chunksList.innerHTML = sortedChunks
+    .map((c) => {
+      const isUsed = Boolean(c.selected) || c.selection_status === "used";
+      const cardIdNum = c.context_index != null ? c.context_index : `raw-${c._finalRank}`;
+      const statusBadge = isUsed
+        ? `<span class="chunk-status-badge used">USED [${c.context_index || c._finalRank}]</span>`
+        : `<span class="chunk-status-badge dropped">DROPPED</span>`;
+
+      const denseVal = c.dense_score != null ? Math.max(0, Number(c.dense_score)) : 0;
+      const densePct = Math.min(100, Math.round(denseVal * 100));
+      const denseLabel =
+        c.dense_rank != null ? `#${c.dense_rank} (${denseVal.toFixed(3)})` : "—";
+
+      const sparseVal = c.sparse_score != null ? Math.max(0, Number(c.sparse_score)) : 0;
+      const sparsePct = Math.min(100, Math.round(sparseVal * 100));
+      const sparseLabel =
+        c.sparse_rank != null ? `#${c.sparse_rank} (${sparseVal.toFixed(3)})` : "—";
+
+      const rrfVal = Number(c.rrf_score || 0);
+      const rrfPct = rrfVal > 0 ? Math.min(100, Math.round((rrfVal / maxRrf) * 100)) : 0;
+      const rrfLabel = rrfVal > 0 ? `#${c._finalRank} (${rrfVal.toFixed(4)})` : "—";
+
+      const rerankVal = c.rerank_score != null ? Math.max(0, Number(c.rerank_score)) : null;
+      const rerankPct = rerankVal != null ? Math.min(100, Math.round(rerankVal * 100)) : 0;
+      const rerankLabel =
+        rerankVal != null ? `#${c._finalRank} (${rerankVal.toFixed(4)})` : "Disabled";
+
+      const contentId = `chunk-text-${c._finalRank}`;
+      const needsExpand = (c.content || "").length > 160;
+
+      return `
+        <div class="chunk-card" id="chunk-card-${cardIdNum}">
+          <div class="chunk-header">
+            <div class="chunk-header-left">
+              ${statusBadge}
+              <strong>${escapeHtml(c.document_title)}</strong>
+              <span class="muted-text" style="font-size:0.76rem;">Rank #${c._finalRank} &bull; ${c.token_count} tokens</span>
+            </div>
+            <span class="chunk-id-tag">${escapeHtml(c.chunk_id)}</span>
+          </div>
+          ${
+            c.selection_reason
+              ? `<div class="selection-reason">${escapeHtml(c.selection_reason)}</div>`
+              : ""
+          }
           ${c.heading ? `<div class="chunk-heading">${escapeHtml(c.heading)}</div>` : ""}
-          <div class="chunk-content">${escapeHtml(c.content)}</div>
-          <div class="score-row">
-            <span class="score-chip">Dense: <strong>${denseStr}</strong></span>
-            <span class="score-chip">Sparse: <strong>${sparseStr}</strong></span>
-            <span class="score-chip">RRF: <strong>${rrfStr}</strong></span>
-            <span class="score-chip">Reranker: <strong>${rerankStr}</strong></span>
-            <span class="score-chip">Tokens: <strong>${c.token_count}</strong></span>
+          <div class="chunk-content ${needsExpand ? "collapsed" : ""}" id="${contentId}">${escapeHtml(c.content)}</div>
+          ${
+            needsExpand
+              ? `<button type="button" class="expand-text-btn" onclick="toggleChunkText('${contentId}', this)">Show full text</button>`
+              : ""
+          }
+          <div class="score-bars-grid">
+            <div class="score-bar-item">
+              <div class="score-bar-top"><span>Dense Cosine</span><strong>${denseLabel}</strong></div>
+              <div class="score-bar-track"><div class="score-bar-fill fill-dense" style="width:${densePct}%"></div></div>
+            </div>
+            <div class="score-bar-item">
+              <div class="score-bar-top"><span>Sparse tsvector</span><strong>${sparseLabel}</strong></div>
+              <div class="score-bar-track"><div class="score-bar-fill fill-sparse" style="width:${sparsePct}%"></div></div>
+            </div>
+            <div class="score-bar-item">
+              <div class="score-bar-top"><span>RRF Fusion</span><strong>${rrfLabel}</strong></div>
+              <div class="score-bar-track"><div class="score-bar-fill fill-rrf" style="width:${rrfPct}%"></div></div>
+            </div>
+            <div class="score-bar-item">
+              <div class="score-bar-top"><span>Rerank Score</span><strong>${rerankLabel}</strong></div>
+              <div class="score-bar-track"><div class="score-bar-fill fill-rerank" style="width:${rerankPct}%"></div></div>
+            </div>
           </div>
         </div>
       `;
@@ -235,7 +777,73 @@ function renderAskResponse(data) {
     .join("");
 }
 
-/* TAB 2: EVALUATION HARNESS */
+window.toggleChunkText = function (contentId, btnEl) {
+  const el = document.getElementById(contentId);
+  if (!el) return;
+  const isCollapsed = el.classList.toggle("collapsed");
+  btnEl.textContent = isCollapsed ? "Show full text" : "Collapse text";
+};
+
+function renderMetricsSection(data) {
+  const retMs = Number(data.retrieval_latency_ms || 0).toFixed(2);
+  const rerankMs = Number(data.rerank_latency_ms || 0).toFixed(2);
+  const llmMs = Number(data.generation_latency_ms || 0).toFixed(2);
+  const totalMs = Number(data.total_latency_ms || 0).toFixed(2);
+  const pTok = Number(data.prompt_tokens || 0);
+  const cTok = Number(data.completion_tokens || 0);
+  const totTok = Number(data.total_tokens || pTok + cTok);
+
+  document.getElementById("metrics-total-pill").textContent = `${totalMs} ms • ${totTok} tokens`;
+  document.getElementById("metric-retrieval-ms").textContent = `${retMs} ms`;
+  document.getElementById("metric-rerank-sub").textContent = `Rerank stage: ${rerankMs} ms`;
+  document.getElementById("metric-llm-ms").textContent = `${llmMs} ms`;
+  document.getElementById("metric-model-sub").textContent =
+    (data.effective_settings && data.effective_settings.llm_model) || currentSettings.llmModel;
+  document.getElementById("metric-total-ms").textContent = `${totalMs} ms`;
+  document.getElementById("metric-status-sub").textContent = data.abstained
+    ? "Abstained (guard triggered)"
+    : "Grounded generation complete";
+  document.getElementById("metric-tokens-total").textContent = String(totTok);
+  document.getElementById("metric-tokens-sub").textContent =
+    `Prompt: ${pTok} • Completion: ${cTok}`;
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatAnswerWithClickableCitations(answerText) {
+  const escaped = escapeHtml(answerText);
+  return escaped.replace(/\[(\d+)\]/g, (match, num) => {
+    return `<button type="button" class="cite-badge" onclick="highlightCitation(${num})" title="Scroll to Citation [${num}]">[${num}]</button>`;
+  });
+}
+
+window.highlightCitation = function (num) {
+  document.querySelectorAll(".citation-card, .chunk-card").forEach((el) => {
+    el.classList.remove("highlight");
+  });
+  const citSection = document.getElementById("section-citations");
+  if (citSection && !citSection.open) citSection.open = true;
+
+  const citCard = document.getElementById(`citation-card-${num}`);
+  const chunkCard = document.getElementById(`chunk-card-${num}`);
+  if (citCard) {
+    citCard.classList.add("highlight");
+    citCard.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  if (chunkCard) {
+    chunkCard.classList.add("highlight");
+  }
+};
+
+/* =====================================================================
+   TAB 2: 40-QUESTION EVALUATION HARNESS
+   ===================================================================== */
 function initEvalControls() {
   document.getElementById("ablation-config-select").addEventListener("change", () => {
     if (currentEvalReport) renderEvalDashboard(currentEvalReport);
@@ -329,7 +937,7 @@ function renderEvalDashboard(report) {
       const rm = runs[k].metrics;
       const isSelected = k === selectedKey;
       return `
-        <tr style="${isSelected ? "background: rgba(59, 130, 246, 0.10);" : ""}">
+        <tr style="${isSelected ? "background: rgba(59, 130, 246, 0.12);" : ""}">
           <td><strong>${labels[k]}</strong></td>
           <td>${(rm.recall_at_1 * 100).toFixed(1)}%</td>
           <td>${(rm.recall_at_3 * 100).toFixed(1)}%</td>
@@ -419,9 +1027,9 @@ window.tryQuestionInPlayground = function (questionText) {
   runAskQuery();
 };
 
-/* TAB 3: CORPUS & DOCUMENT INGESTION */
-let lastUploadedFilename = "";
-
+/* =====================================================================
+   TAB 3: CORPUS & DOCUMENT INGESTION
+   ===================================================================== */
 function initCorpusControls() {
   document.getElementById("refresh-docs-btn").addEventListener("click", loadDocuments);
 
@@ -433,6 +1041,7 @@ function initCorpusControls() {
       lastUploadedFilename = file.name;
       const reader = new FileReader();
       reader.onload = () => {
+        const contentText = String(reader.result || "");
         const baseName = file.name.replace(/\.[^.]+$/, "");
         const cleanSlug =
           "doc_" +
@@ -441,16 +1050,15 @@ function initCorpusControls() {
             .replace(/[^a-z0-9]+/g, "_")
             .replace(/^_+|_+$/g, "");
         const idEl = document.getElementById("ingest-id");
-        const titleEl = document.getElementById("ingest-title");
         const sourceEl = document.getElementById("ingest-source");
-        // Honor user-entered values; only populate fallback when empty
+        // Only populate id and source fallbacks if empty; leave title blank unless user typed one
+        // so backend honors: Form Title -> Markdown # H1 -> Filename
         if (!idEl.value.trim()) idEl.value = cleanSlug;
-        if (!titleEl.value.trim()) titleEl.value = baseName.replace(/[_-]+/g, " ");
         if (!sourceEl.value.trim()) sourceEl.value = `upload/${file.name}`;
-        document.getElementById("ingest-content").value = String(reader.result || "");
+        document.getElementById("ingest-content").value = contentText;
         const statusEl = document.getElementById("uploaded-file-status");
         if (statusEl) {
-          statusEl.textContent = `Loaded "${file.name}" (${file.size} bytes) — click "Chunk, Embed & Index Document" below to index it!`;
+          statusEl.textContent = `Loaded "${file.name}" (${file.size} bytes) — click "Chunk, Embed & Index Document" below!`;
         }
       };
       reader.readAsText(file);
@@ -505,23 +1113,26 @@ function initCorpusControls() {
 async function loadDocuments() {
   try {
     const res = await fetch("/api/v1/documents");
-    const docs = await res.json();
+    indexedDocuments = await res.json();
     const container = document.getElementById("documents-list");
-    container.innerHTML = docs
-      .map(
-        (d) => `
-        <div class="doc-card">
-          <div class="chunk-header">
-            <strong>${escapeHtml(d.title)}</strong>
-            <span class="chunk-id-tag">${escapeHtml(d.id)}</span>
+    if (container) {
+      container.innerHTML = indexedDocuments
+        .map(
+          (d) => `
+          <div class="doc-card">
+            <div class="chunk-header">
+              <strong>${escapeHtml(d.title)}</strong>
+              <span class="chunk-id-tag">${escapeHtml(d.id)}</span>
+            </div>
+            <div class="muted-text" style="margin: 4px 0 0;">
+              Source: <code>${escapeHtml(d.source)}</code> &bull; Chunks Indexed: <strong>${d.chunk_count}</strong>
+            </div>
           </div>
-          <div class="muted-text" style="margin: 4px 0 0;">
-            Source: <code>${escapeHtml(d.source)}</code> &bull; Chunks Indexed: <strong>${d.chunk_count}</strong>
-          </div>
-        </div>
-      `
-      )
-      .join("");
+        `
+        )
+        .join("");
+    }
+    renderDocScopeMenu();
   } catch (err) {
     console.error("Failed to load documents:", err);
   }

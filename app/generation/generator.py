@@ -12,7 +12,7 @@ import urllib.request
 from app.config import get_settings
 from app.ingestion.chunker import estimate_token_count
 from app.ingestion.embedder import _deterministic_feature_embedding
-from app.retrieval.hybrid import retrieve_candidates
+from app.retrieval.hybrid import retrieve_candidates, retrieve_candidates_with_timing
 from app.schemas import AskRequest, AskResponse, Citation, RetrievedChunk
 
 logger = logging.getLogger(__name__)
@@ -80,22 +80,43 @@ def _token_jaccard(text_a: str, text_b: str) -> float:
 
 def select_context_chunks(
     chunks: List[RetrievedChunk],
+    min_score_override: Optional[float] = None,
+    relative_factor_override: Optional[float] = None,
+    max_chunks_override: Optional[int] = None,
 ) -> Tuple[List[RetrievedChunk], List[RetrievedChunk], bool]:
     """
-    Filter and deduplicate retrieved chunks before LLM generation:
+    Filter and deduplicate retrieved chunks before LLM generation using a unified threshold rule:
+    - `min_score` (default RERANK_MIN_SCORE = 0.20) acts as BOTH the pre-LLM abstain floor
+      on top-1 AND the minimum score threshold for chunks 2..N:
+      * If top-1 score < `min_score`, drop all chunks and return `abstain_pre_llm = True`.
+      * If top-1 score >= `min_score`, keep top-1.
+      * Keep subsequent unique chunks only if score >= `min_score` AND >= `rel_factor * top_score`,
+        capped at `max_chunks` (default 3).
     - Dedupe identical or near-identical chunks (same content hash or Jaccard >= 0.92).
-    - If top-1 score < RERANK_ABSTAIN_SCORE, drop all and return `abstain_pre_llm = True`.
-    - Always keep top-1 when >= RERANK_ABSTAIN_SCORE.
-    - Keep subsequent unique chunks only if score >= RERANK_MIN_SCORE AND >= 0.6 * top_score,
-      capped at RERANK_MAX_CHUNKS (default 3).
     - Annotate every chunk with `selected`, `selection_status` ("used"/"dropped"),
       `selection_reason`, and `context_index`.
     """
     settings = get_settings()
-    min_score = settings.rerank_min_score
-    rel_factor = settings.rerank_relative_factor
-    max_chunks = settings.rerank_max_chunks
-    abstain_floor = settings.rerank_abstain_score
+    min_score = (
+        float(min_score_override)
+        if min_score_override is not None
+        else settings.rerank_min_score
+    )
+    rel_factor = (
+        float(relative_factor_override)
+        if relative_factor_override is not None
+        else settings.rerank_relative_factor
+    )
+    max_chunks = (
+        int(max_chunks_override)
+        if max_chunks_override is not None
+        else settings.rerank_max_chunks
+    )
+    # Honor explicit settings.rerank_abstain_score if a test mutates it directly on settings
+    if min_score_override is None and settings.rerank_abstain_score != settings.rerank_min_score:
+        abstain_floor = settings.rerank_abstain_score
+    else:
+        abstain_floor = min_score
 
     annotated: List[RetrievedChunk] = [c.clone() for c in chunks]
     if not annotated:
@@ -113,7 +134,7 @@ def select_context_chunks(
             c.selected = False
             c.selection_status = "dropped"
             c.selection_reason = (
-                f"dropped: top-1 score ({top_score:.3f}) < abstain floor ({abstain_floor:.3f}); "
+                f"dropped: top-1 score ({top_score:.3f}) < min threshold / abstain floor ({abstain_floor:.3f}); "
                 f"chunk score={s:.3f}"
             )
             c.context_index = None
@@ -149,7 +170,7 @@ def select_context_chunks(
             chunk.selection_status = "used"
             chunk.context_index = 1
             chunk.selection_reason = (
-                f"used: top-1 chunk (score {score:.3f} >= abstain floor {abstain_floor:.3f})"
+                f"used: top-1 chunk (score {score:.3f} >= min threshold {abstain_floor:.3f})"
             )
             selected.append(chunk)
             seen_hashes[chash] = chunk.chunk_id
@@ -174,7 +195,7 @@ def select_context_chunks(
             chunk.context_index = None
             continue
 
-        # 5. Enforce relative cutoff (score >= 0.6 * top_score)
+        # 5. Enforce relative cutoff (score >= rel_factor * top_score)
         if score < rel_cutoff:
             chunk.selected = False
             chunk.selection_status = "dropped"
@@ -215,9 +236,14 @@ def format_context_prompt(question: str, selected_chunks: List[RetrievedChunk]) 
     )
 
 
-def call_gemini_llm(prompt: str, system_prompt: str = SYSTEM_PROMPT) -> Tuple[str, int, int]:
+def call_gemini_llm(
+    prompt: str,
+    system_prompt: str = SYSTEM_PROMPT,
+    model_override: Optional[str] = None,
+    temperature: Optional[float] = None,
+) -> Tuple[str, int, int]:
     """
-    Execute a real Gemini API call (`gemini-2.5-flash`).
+    Execute a real Gemini API call.
     Returns `(answer_text, prompt_tokens, completion_tokens)`.
     Raises `LLMGenerationError` if GEMINI_API_KEY is missing or the API call fails.
     Never silently falls back to pasting chunks.
@@ -230,10 +256,11 @@ def call_gemini_llm(prompt: str, system_prompt: str = SYSTEM_PROMPT) -> Tuple[st
     if not key or key == "your_gemini_api_key_here":
         raise LLMGenerationError(
             "GEMINI_API_KEY is not configured. Set a valid GEMINI_API_KEY in .env or environment "
-            f"to call {settings.generation_model}."
+            f"to call {model_override or settings.generation_model}."
         )
 
-    model_name = settings.generation_model or "gemini-2.5-flash"
+    model_name = (model_override or settings.generation_model or "gemini-3.5-flash-lite").strip()
+    temp_val = float(temperature) if temperature is not None else 0.0
 
     # Try google-genai SDK first if installed, otherwise use direct HTTPS REST call
     try:
@@ -246,7 +273,7 @@ def call_gemini_llm(prompt: str, system_prompt: str = SYSTEM_PROMPT) -> Tuple[st
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
-                temperature=0.0,
+                temperature=temp_val,
             ),
         )
         text = (response.text or "").strip()
@@ -274,7 +301,7 @@ def call_gemini_llm(prompt: str, system_prompt: str = SYSTEM_PROMPT) -> Tuple[st
         payload = {
             "systemInstruction": {"parts": [{"text": system_prompt}]},
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.0},
+            "generationConfig": {"temperature": temp_val},
         }
         req = urllib.request.Request(
             url,
@@ -501,22 +528,54 @@ def verify_answer_citations(
 def answer_question(request: AskRequest) -> AskResponse:
     """
     End-to-end RAG pipeline:
-    1. Retrieve + rerank candidate chunks
-    2. Select context chunks (threshold, 0.6 * top_score cutoff, max 3, content-hash dedupe, abstain floor)
-    3. Call real Gemini LLM (`gemini-2.5-flash`) — never silently fall back to pasting chunks
+    1. Retrieve + rerank candidate chunks (with optional document scope filter)
+    2. Select context chunks (unified min_score/abstain floor, ratio vs top, max chunks, content-hash dedupe)
+    3. Call real Gemini LLM — never silently fall back to pasting chunks
     4. Perform claim-level citation verification ("Verified X/Y citations")
     5. Log full per-request telemetry
     """
     t_start = time.perf_counter()
-    raw_chunks, retrieval_ms = retrieve_candidates(
+    settings = get_settings()
+    raw_chunks, retrieval_ms, rerank_ms = retrieve_candidates_with_timing(
         query=request.question,
         mode=request.mode,
         top_k=request.top_k,
         candidate_pool=request.candidate_pool,
         use_reranker=request.use_reranker,
+        document_ids=request.document_ids,
     )
 
-    annotated_chunks, selected_chunks, abstain_pre_llm = select_context_chunks(raw_chunks)
+    annotated_chunks, selected_chunks, abstain_pre_llm = select_context_chunks(
+        raw_chunks,
+        min_score_override=request.rerank_min_score,
+        relative_factor_override=request.rerank_relative_factor,
+        max_chunks_override=request.rerank_max_chunks,
+    )
+
+    eff_settings = {
+        "mode": request.mode,
+        "top_k": request.top_k,
+        "candidate_pool": max(request.top_k, request.candidate_pool),
+        "use_reranker": request.use_reranker,
+        "document_ids": request.document_ids or [],
+        "rerank_min_score": (
+            request.rerank_min_score
+            if request.rerank_min_score is not None
+            else settings.rerank_min_score
+        ),
+        "rerank_relative_factor": (
+            request.rerank_relative_factor
+            if request.rerank_relative_factor is not None
+            else settings.rerank_relative_factor
+        ),
+        "rerank_max_chunks": (
+            request.rerank_max_chunks
+            if request.rerank_max_chunks is not None
+            else settings.rerank_max_chunks
+        ),
+        "llm_model": request.llm_model or settings.generation_model,
+        "temperature": request.temperature if request.temperature is not None else 0.0,
+    }
 
     if abstain_pre_llm or not selected_chunks:
         total_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
@@ -542,17 +601,26 @@ def answer_question(request: AskRequest) -> AskResponse:
             citation_summary="Verified 0/0 citations",
             retrieved_chunks=annotated_chunks,
             retrieval_latency_ms=retrieval_ms,
+            rerank_latency_ms=rerank_ms,
             generation_latency_ms=0.0,
             total_latency_ms=total_ms,
             prompt_tokens=0,
             completion_tokens=0,
             total_tokens=0,
+            prompt_sent="(Skipped LLM call: top-1 rerank score fell below minimum threshold / abstain floor)",
+            effective_settings=eff_settings,
         )
 
     prompt = format_context_prompt(request.question, selected_chunks)
+    full_prompt_display = f"[System Instruction]\n{SYSTEM_PROMPT}\n\n[User Prompt]\n{prompt}"
     t_gen = time.perf_counter()
     try:
-        raw_answer, prompt_tok, completion_tok = call_gemini_llm(prompt, SYSTEM_PROMPT)
+        raw_answer, prompt_tok, completion_tok = call_gemini_llm(
+            prompt,
+            SYSTEM_PROMPT,
+            model_override=request.llm_model,
+            temperature=request.temperature,
+        )
     except LLMGenerationError as exc:
         gen_ms = round((time.perf_counter() - t_gen) * 1000.0, 2)
         total_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
@@ -579,11 +647,14 @@ def answer_question(request: AskRequest) -> AskResponse:
             citation_summary="Verified 0/0 citations",
             retrieved_chunks=annotated_chunks,
             retrieval_latency_ms=retrieval_ms,
+            rerank_latency_ms=rerank_ms,
             generation_latency_ms=gen_ms,
             total_latency_ms=total_ms,
             prompt_tokens=estimate_token_count(prompt),
             completion_tokens=0,
             total_tokens=estimate_token_count(prompt),
+            prompt_sent=full_prompt_display,
+            effective_settings=eff_settings,
         )
 
     gen_ms = round((time.perf_counter() - t_gen) * 1000.0, 2)
@@ -618,11 +689,14 @@ def answer_question(request: AskRequest) -> AskResponse:
             citation_summary="Verified 0/0 citations",
             retrieved_chunks=annotated_chunks,
             retrieval_latency_ms=retrieval_ms,
+            rerank_latency_ms=rerank_ms,
             generation_latency_ms=gen_ms,
             total_latency_ms=total_ms,
             prompt_tokens=prompt_tok,
             completion_tokens=completion_tok,
             total_tokens=prompt_tok + completion_tok,
+            prompt_sent=full_prompt_display,
+            effective_settings=eff_settings,
         )
 
     cleaned_answer, citations, verified_count, total_cit_count = verify_answer_citations(
@@ -655,11 +729,14 @@ def answer_question(request: AskRequest) -> AskResponse:
         citation_summary=cit_summary,
         retrieved_chunks=annotated_chunks,
         retrieval_latency_ms=retrieval_ms,
+        rerank_latency_ms=rerank_ms,
         generation_latency_ms=gen_ms,
         total_latency_ms=total_ms,
         prompt_tokens=prompt_tok,
         completion_tokens=completion_tok,
         total_tokens=prompt_tok + completion_tok,
+        prompt_sent=full_prompt_display,
+        effective_settings=eff_settings,
     )
 
 

@@ -43,13 +43,16 @@ class Settings:
     rerank_min_score: float = 0.25
     rerank_relative_factor: float = 0.60
     rerank_max_chunks: int = 3
-    rerank_abstain_score: float = 0.15
+    rerank_abstain_score: float = 0.25
     citation_min_similarity: float = 0.25
+    min_sparse_score: float = 0.05
+    min_chunk_tokens: int = 80
 
     @classmethod
     def from_env(cls) -> "Settings":
         root = Path(__file__).resolve().parent.parent
         _load_dotenv_file(root / ".env")
+        min_rerank = float(os.getenv("RERANK_MIN_SCORE", "0.25"))
         return cls(
             gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
             database_url=os.getenv("DATABASE_URL", ""),
@@ -66,11 +69,13 @@ class Settings:
             sparse_weight=float(os.getenv("SPARSE_WEIGHT", "1.0")),
             default_candidate_pool=int(os.getenv("DEFAULT_CANDIDATE_POOL", "20")),
             default_top_k=int(os.getenv("DEFAULT_TOP_K", "5")),
-            rerank_min_score=float(os.getenv("RERANK_MIN_SCORE", "0.25")),
+            rerank_min_score=min_rerank,
             rerank_relative_factor=float(os.getenv("RERANK_RELATIVE_FACTOR", "0.60")),
             rerank_max_chunks=int(os.getenv("RERANK_MAX_CHUNKS", "3")),
-            rerank_abstain_score=float(os.getenv("RERANK_ABSTAIN_SCORE", "0.15")),
+            rerank_abstain_score=float(os.getenv("RERANK_ABSTAIN_SCORE", str(min_rerank))),
             citation_min_similarity=float(os.getenv("CITATION_MIN_SIMILARITY", "0.25")),
+            min_sparse_score=float(os.getenv("MIN_SPARSE_SCORE", "0.05")),
+            min_chunk_tokens=int(os.getenv("MIN_CHUNK_TOKENS", "80")),
         )
 
     @property
