@@ -125,17 +125,26 @@ def select_context_chunks(
     def _effective_score(c: RetrievedChunk) -> float:
         if c.rerank_score is not None:
             return float(c.rerank_score)
+        if c.rrf_score is not None and c.rrf_score > 0:
+            # Normalize RRF score (theoretical max 2 / (rrf_k + 1)) to [0, 1] when reranker is disabled
+            norm_rrf = min(1.0, float(c.rrf_score) * ((settings.rrf_k + 1.0) / 2.0))
+            best_raw = max(float(c.dense_score or 0.0), float(c.sparse_score or 0.0))
+            return round(max(norm_rrf * 0.65, best_raw), 4)
         return float(c.final_score)
+
+    def _score_kind(c: RetrievedChunk) -> str:
+        return "rerank" if c.rerank_score is not None else "score"
 
     top_score = _effective_score(annotated[0])
     if top_score < abstain_floor:
         for c in annotated:
             s = _effective_score(c)
+            kind = _score_kind(c)
             c.selected = False
             c.selection_status = "dropped"
             c.selection_reason = (
-                f"dropped: top-1 score ({top_score:.3f}) < min threshold / abstain floor ({abstain_floor:.3f}); "
-                f"chunk score={s:.3f}"
+                f"dropped: {kind} {s:.2f}, below the {abstain_floor:.2f} minimum "
+                f"(top chunk scored {top_score:.2f})"
             )
             c.context_index = None
         return annotated, [], True
@@ -144,9 +153,11 @@ def select_context_chunks(
     seen_hashes: Dict[str, str] = {}
     seen_texts: List[Tuple[str, str]] = []
     rel_cutoff = rel_factor * top_score
+    rel_pct = int(round(rel_factor * 100))
 
     for idx, chunk in enumerate(annotated):
         score = _effective_score(chunk)
+        kind = _score_kind(chunk)
         chash = _content_hash(chunk.content)
 
         # 1. Deduplicate identical or near-identical content across documents
@@ -170,7 +181,7 @@ def select_context_chunks(
             chunk.selection_status = "used"
             chunk.context_index = 1
             chunk.selection_reason = (
-                f"used: top-1 chunk (score {score:.3f} >= min threshold {abstain_floor:.3f})"
+                f"Used: top-ranked chunk ({kind} {score:.2f}, above the {abstain_floor:.2f} minimum)"
             )
             selected.append(chunk)
             seen_hashes[chash] = chunk.chunk_id
@@ -181,7 +192,7 @@ def select_context_chunks(
         if len(selected) >= max_chunks:
             chunk.selected = False
             chunk.selection_status = "dropped"
-            chunk.selection_reason = f"dropped: exceeded max chunks cap ({max_chunks})"
+            chunk.selection_reason = f"dropped: exceeded maximum of {max_chunks} context chunks"
             chunk.context_index = None
             continue
 
@@ -190,7 +201,7 @@ def select_context_chunks(
             chunk.selected = False
             chunk.selection_status = "dropped"
             chunk.selection_reason = (
-                f"dropped: score {score:.3f} < min threshold {min_score:.3f}"
+                f"dropped: {kind} {score:.2f}, below the {min_score:.2f} minimum"
             )
             chunk.context_index = None
             continue
@@ -200,7 +211,7 @@ def select_context_chunks(
             chunk.selected = False
             chunk.selection_status = "dropped"
             chunk.selection_reason = (
-                f"dropped: score {score:.3f} < {rel_factor:.2f} * top_score ({rel_cutoff:.3f})"
+                f"dropped: {kind} {score:.2f}, below {rel_pct}% of top score ({rel_cutoff:.2f})"
             )
             chunk.context_index = None
             continue
@@ -210,7 +221,7 @@ def select_context_chunks(
         chunk.selection_status = "used"
         chunk.context_index = context_idx
         chunk.selection_reason = (
-            f"used: score {score:.3f} >= min ({min_score:.3f}) and >= {rel_factor:.2f}*top ({rel_cutoff:.3f})"
+            f"Used: {kind} {score:.2f}, above the {min_score:.2f} minimum and {rel_pct}% of top score ({rel_cutoff:.2f})"
         )
         selected.append(chunk)
         seen_hashes[chash] = chunk.chunk_id
@@ -268,14 +279,26 @@ def call_gemini_llm(
         from google.genai import types
 
         client = genai.Client(api_key=key)
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=temp_val,
-            ),
-        )
+        cfg_kwargs = {
+            "system_instruction": system_prompt,
+            "temperature": temp_val,
+            "max_output_tokens": 300,
+        }
+        if hasattr(types, "ThinkingConfig"):
+            cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(**cfg_kwargs),
+            )
+        except Exception:
+            cfg_kwargs.pop("thinking_config", None)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(**cfg_kwargs),
+            )
         text = (response.text or "").strip()
         usage = getattr(response, "usage_metadata", None)
         p_tok = getattr(usage, "prompt_token_count", 0) or estimate_token_count(prompt)
@@ -286,7 +309,7 @@ def call_gemini_llm(
     except Exception as exc:
         raise LLMGenerationError(f"Gemini SDK call failed ({model_name}): {exc}") from exc
 
-    # Direct REST call to Gemini Generative Language API (with automatic model upgrade if 2.5 is deprecated)
+    # Direct REST call to Gemini Generative Language API (with thinkingBudget: 0 for low latency)
     models_to_try = [model_name]
     if "gemini-3.5-flash-lite" not in models_to_try:
         models_to_try.append("gemini-3.5-flash-lite")
@@ -298,39 +321,51 @@ def call_gemini_llm(
             f"https://generativelanguage.googleapis.com/v1beta/models/{candidate_model}:generateContent"
             f"?key={key}"
         )
-        payload = {
-            "systemInstruction": {"parts": [{"text": system_prompt}]},
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": temp_val},
-        }
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "x-goog-api-key": key,
-            },
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                body = json.loads(resp.read().decode("utf-8"))
+        for use_thinking_cfg in (True, False):
+            gen_cfg: Dict[str, Any] = {
+                "temperature": temp_val,
+                "maxOutputTokens": 300,
+            }
+            if use_thinking_cfg:
+                if "2.5" in candidate_model:
+                    gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
+                else:
+                    gen_cfg["thinkingConfig"] = {"thinkingLevel": "MINIMAL"}
+            payload = {
+                "systemInstruction": {"parts": [{"text": system_prompt}]},
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "generationConfig": gen_cfg,
+            }
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": key,
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    body = json.loads(resp.read().decode("utf-8"))
+                break
+            except urllib.error.HTTPError as http_err:
+                err_body = http_err.read().decode("utf-8", errors="replace")
+                if http_err.code == 400 and use_thinking_cfg:
+                    continue
+                last_error = LLMGenerationError(
+                    f"Gemini API HTTP {http_err.code} ({candidate_model}): {err_body[:300]}"
+                )
+                break
+            except Exception as exc:
+                last_error = LLMGenerationError(
+                    f"Gemini API request failed ({candidate_model}): {exc}"
+                )
+                break
+        if body is not None:
             break
-        except urllib.error.HTTPError as http_err:
-            err_body = http_err.read().decode("utf-8", errors="replace")
-            last_error = LLMGenerationError(
-                f"Gemini API HTTP {http_err.code} ({candidate_model}): {err_body[:300]}"
-            )
-            if http_err.code == 404 and candidate_model != models_to_try[-1]:
-                continue
-            raise last_error from http_err
-        except Exception as exc:
-            last_error = LLMGenerationError(
-                f"Gemini API request failed ({candidate_model}): {exc}"
-            )
-            if candidate_model != models_to_try[-1]:
-                continue
-            raise last_error from exc
+        if candidate_model == models_to_try[-1] and last_error is not None:
+            raise last_error
 
     if body is None:
         raise last_error or LLMGenerationError("Gemini API call failed.")
@@ -395,19 +430,29 @@ def compute_claim_sentence_similarity(claim: str, sentence: str) -> float:
     return round(min(1.0, float(combined)), 4)
 
 
+def _clean_extracted_quote(text: str) -> str:
+    """Strip leading Markdown list markers ('- ', '* ', '1. ') and fix double ellipses ('....')."""
+    cleaned = re.sub(r"^\s*(?:[-*+•]|\d+[.)])\s+", "", text.strip())
+    cleaned = re.sub(r"\.{4,}", "...", cleaned)
+    if len(cleaned) > 300:
+        cleaned = cleaned[:297].rstrip(". ") + "..."
+    return cleaned
+
+
 def find_best_supporting_sentence(claim: str, chunk_content: str) -> Tuple[str, float]:
     """
     Find the single sentence inside `chunk_content` that best supports `claim`.
     Returns `(best_sentence, similarity_score)`. Never blindly defaults to sentence 0
     when a later sentence has higher support similarity.
     """
-    sentences = [
-        s.strip()
+    raw_lines = [
+        re.sub(r"^\s*(?:[-*+•]|\d+[.)])\s+", "", s.strip())
         for s in re.split(r"(?<=[.!?])\s+|\n+", chunk_content)
         if s.strip() and not s.strip().startswith("#")
     ]
+    sentences = [s for s in raw_lines if s]
     if not sentences:
-        fallback = chunk_content.strip()[:300]
+        fallback = _clean_extracted_quote(chunk_content)
         return fallback, compute_claim_sentence_similarity(claim, fallback)
 
     best_sent = sentences[0]
@@ -418,7 +463,7 @@ def find_best_supporting_sentence(claim: str, chunk_content: str) -> Tuple[str, 
             best_sim = sim
             best_sent = sent
 
-    return best_sent[:300], max(0.0, round(best_sim, 4))
+    return _clean_extracted_quote(best_sent), max(0.0, round(best_sim, 4))
 
 
 def verify_answer_citations(

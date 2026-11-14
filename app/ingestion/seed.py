@@ -37,6 +37,14 @@ CORPUS_FILE_MAP: Dict[str, tuple[str, str]] = {
         "doc_rag_evaluation",
         "RAG Evaluation Harness, Metrics, and Grounded Citation Verification",
     ),
+    "08_bluebird_cafe.md": (
+        "doc_08_bluebird_cafe",
+        "Bluebird Cafe Staff Handbook",
+    ),
+    "09_nimbus_bikeshare.md": (
+        "doc_09_nimbus_bikeshare",
+        "Nimbus Bike Share Operations & Rider Guide",
+    ),
 }
 
 

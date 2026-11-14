@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RAG Workbench</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
@@ -17,111 +18,182 @@
     <div class="prism-vignette"></div>
   </div>
 
-  <!-- Official React Bits GooeyNav Top Menu Bar (WebGL2 Liquid Metaball Pill + Clipped Ink Overlay) -->
-  <div class="top-nav-shell">
-    <nav
-      class="gooey-nav gooey-nav--md gooey-nav--framed tab-nav"
-      id="rb-gooey-nav"
-      role="tablist"
-      aria-label="Main Navigation"
-    >
-      <span class="gooey-nav__rim" aria-hidden="true"></span>
-      <div class="gooey-nav__stage" id="gooey-nav-stage">
-        <canvas class="gooey-nav__canvas" id="gooey-nav-canvas" aria-hidden="true"></canvas>
-        <span class="gooey-nav__fallback" id="gooey-nav-fallback" aria-hidden="true"></span>
+  <!-- Floating Navigation Header with Brand on Left, GooeyNav Tabs, and Status Strip -->
+  <header class="top-nav-shell" id="top-nav-shell">
+    <div class="floating-nav-bar">
+      <!-- Brand on Left -->
+      <button type="button" class="nav-brand-btn" id="brand-home-link" aria-label="RAG Workbench Home">
+        <span class="nav-brand-logo" aria-hidden="true">
+          <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
+            <path d="m9 10 2 2 4-4"/>
+          </svg>
+        </span>
+        <span class="nav-brand-text">RAG Workbench</span>
+      </button>
 
-        <!-- Interactive Menu List -->
-        <ul class="gooey-nav__list" id="gooey-nav-list">
-          <li class="gooey-nav__item" data-gooey-index="0" data-active>
-            <button
-              type="button"
-              class="gooey-nav__link tab-btn active"
-              role="tab"
-              aria-selected="true"
-              data-tab="tab-home"
-            >
-              <span class="gooey-nav__icon" aria-hidden="true">&#9672;</span>
-              <span class="gooey-nav__label">Home</span>
-            </button>
-          </li>
-          <li class="gooey-nav__item" data-gooey-index="1">
-            <button
-              type="button"
-              class="gooey-nav__link tab-btn"
-              role="tab"
-              aria-selected="false"
-              data-tab="tab-playground"
-            >
-              <span class="gooey-nav__icon" aria-hidden="true">&#10022;</span>
-              <span class="gooey-nav__label">Ask</span>
-            </button>
-          </li>
-          <li class="gooey-nav__item" data-gooey-index="2">
-            <button
-              type="button"
-              class="gooey-nav__link tab-btn"
-              role="tab"
-              aria-selected="false"
-              data-tab="tab-eval"
-            >
-              <span class="gooey-nav__icon" aria-hidden="true">&#9670;</span>
-              <span class="gooey-nav__label">Evaluate</span>
-            </button>
-          </li>
-          <li class="gooey-nav__item" data-gooey-index="3">
-            <button
-              type="button"
-              class="gooey-nav__link tab-btn"
-              role="tab"
-              aria-selected="false"
-              data-tab="tab-corpus"
-            >
-              <span class="gooey-nav__icon" aria-hidden="true">&#9635;</span>
-              <span class="gooey-nav__label">Documents</span>
-            </button>
-          </li>
-        </ul>
+      <!-- Mobile Hamburger Toggle (<= 640px) -->
+      <button
+        type="button"
+        class="mobile-nav-toggle"
+        id="mobile-nav-toggle"
+        aria-expanded="false"
+        aria-controls="rb-gooey-nav"
+        aria-label="Toggle navigation menu"
+      >
+        <svg class="lucide-icon icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" x2="20" y1="6" y2="6"/>
+          <line x1="4" x2="20" y1="12" y2="12"/>
+          <line x1="4" x2="20" y1="18" y2="18"/>
+        </svg>
+      </button>
 
-        <!-- Clipped Active Ink Overlay List -->
-        <ul class="gooey-nav__list gooey-nav__list--active" id="gooey-nav-overlay" aria-hidden="true">
-          <li class="gooey-nav__item">
-            <span class="gooey-nav__link">
-              <span class="gooey-nav__icon">&#9672;</span>
-              <span class="gooey-nav__label">Home</span>
-            </span>
-          </li>
-          <li class="gooey-nav__item">
-            <span class="gooey-nav__link">
-              <span class="gooey-nav__icon">&#10022;</span>
-              <span class="gooey-nav__label">Ask</span>
-            </span>
-          </li>
-          <li class="gooey-nav__item">
-            <span class="gooey-nav__link">
-              <span class="gooey-nav__icon">&#9670;</span>
-              <span class="gooey-nav__label">Evaluate</span>
-            </span>
-          </li>
-          <li class="gooey-nav__item">
-            <span class="gooey-nav__link">
-              <span class="gooey-nav__icon">&#9635;</span>
-              <span class="gooey-nav__label">Documents</span>
-            </span>
-          </li>
-        </ul>
+      <!-- Official React Bits GooeyNav Top Menu Bar -->
+      <nav
+        class="gooey-nav gooey-nav--md gooey-nav--framed tab-nav"
+        id="rb-gooey-nav"
+        role="tablist"
+        aria-label="Main Navigation"
+      >
+        <span class="gooey-nav__rim" aria-hidden="true"></span>
+        <div class="gooey-nav__stage" id="gooey-nav-stage">
+          <canvas class="gooey-nav__canvas" id="gooey-nav-canvas" aria-hidden="true"></canvas>
+          <span class="gooey-nav__fallback" id="gooey-nav-fallback" aria-hidden="true"></span>
+
+          <!-- Interactive Menu List (Lucide SVG Icons) -->
+          <ul class="gooey-nav__list" id="gooey-nav-list">
+            <li class="gooey-nav__item" data-gooey-index="0" data-active>
+              <button
+                type="button"
+                class="gooey-nav__link tab-btn active"
+                role="tab"
+                aria-selected="true"
+                data-tab="tab-home"
+              >
+                <span class="gooey-nav__icon" aria-hidden="true">
+                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                </span>
+                <span class="gooey-nav__label">Home</span>
+              </button>
+            </li>
+            <li class="gooey-nav__item" data-gooey-index="1">
+              <button
+                type="button"
+                class="gooey-nav__link tab-btn"
+                role="tab"
+                aria-selected="false"
+                data-tab="tab-playground"
+              >
+                <span class="gooey-nav__icon" aria-hidden="true">
+                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h6"/></svg>
+                </span>
+                <span class="gooey-nav__label">Ask</span>
+              </button>
+            </li>
+            <li class="gooey-nav__item" data-gooey-index="2">
+              <button
+                type="button"
+                class="gooey-nav__link tab-btn"
+                role="tab"
+                aria-selected="false"
+                data-tab="tab-eval"
+              >
+                <span class="gooey-nav__icon" aria-hidden="true">
+                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                </span>
+                <span class="gooey-nav__label">Evaluate</span>
+              </button>
+            </li>
+            <li class="gooey-nav__item" data-gooey-index="3">
+              <button
+                type="button"
+                class="gooey-nav__link tab-btn"
+                role="tab"
+                aria-selected="false"
+                data-tab="tab-corpus"
+              >
+                <span class="gooey-nav__icon" aria-hidden="true">
+                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                </span>
+                <span class="gooey-nav__label">Documents</span>
+              </button>
+            </li>
+          </ul>
+
+          <!-- Clipped Active Ink Overlay List -->
+          <ul class="gooey-nav__list gooey-nav__list--active" id="gooey-nav-overlay" aria-hidden="true">
+            <li class="gooey-nav__item">
+              <span class="gooey-nav__link">
+                <span class="gooey-nav__icon">
+                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                </span>
+                <span class="gooey-nav__label">Home</span>
+              </span>
+            </li>
+            <li class="gooey-nav__item">
+              <span class="gooey-nav__link">
+                <span class="gooey-nav__icon">
+                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h6"/></svg>
+                </span>
+                <span class="gooey-nav__label">Ask</span>
+              </span>
+            </li>
+            <li class="gooey-nav__item">
+              <span class="gooey-nav__link">
+                <span class="gooey-nav__icon">
+                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                </span>
+                <span class="gooey-nav__label">Evaluate</span>
+              </span>
+            </li>
+            <li class="gooey-nav__item">
+              <span class="gooey-nav__link">
+                <span class="gooey-nav__icon">
+                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+                </span>
+                <span class="gooey-nav__label">Documents</span>
+              </span>
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <!-- Compact System Status Strip (A.9: Online, N docs, N chunks, LLM model, reranker) -->
+      <div class="status-strip" aria-label="System Status">
+        <span class="status-strip-item status-online">
+          <span class="status-online-dot" aria-hidden="true"></span>
+          <span id="status-online-label">Online</span>
+        </span>
+        <span class="status-sep" aria-hidden="true">&middot;</span>
+        <span class="status-strip-item" id="status-docs-count">8 docs</span>
+        <span class="status-sep" aria-hidden="true">&middot;</span>
+        <span class="status-strip-item" id="status-chunks-count">35 chunks</span>
+        <span class="status-sep status-hide-tablet" aria-hidden="true">&middot;</span>
+        <span class="status-strip-item status-mono status-hide-tablet" id="status-llm-model">gemini-3.5-flash-lite</span>
+        <span class="status-sep status-hide-tablet" aria-hidden="true">&middot;</span>
+        <span
+          class="status-strip-item status-mono status-hide-tablet tooltip-wrap"
+          id="status-reranker-chip"
+          tabindex="0"
+          aria-label="Reranker model: cross-encoder/ms-marco-MiniLM-L-6-v2"
+        >
+          <span id="status-reranker-short">MiniLM-L-6-v2</span>
+          <span class="tooltip-popup" role="tooltip">
+            Full reranker ID: <code>cross-encoder/ms-marco-MiniLM-L-6-v2</code>
+          </span>
+        </span>
       </div>
-    </nav>
-  </div>
+    </div>
+  </header>
 
   <main class="container">
     <!-- =====================================================================
          TAB 0: LANDING PAGE / HOME OVERVIEW
          ===================================================================== -->
     <section id="tab-home" class="tab-panel active" role="tabpanel">
-      <!-- Clean Hero Showcase -->
+      <!-- Clean Hero Showcase (No green dot on eyebrow, no duplicate feature pills, compact padding so cards sit above fold) -->
       <div class="home-hero" data-rb-glare>
         <div class="home-hero-badge">
-          <span class="badge-dot"></span>
           <span data-rb-shiny>Grounded Q&amp;A for your documents</span>
         </div>
 
@@ -150,16 +222,9 @@
             </button>
           </div>
         </div>
-
-        <div class="home-pill-row">
-          <span class="home-feature-pill">Hybrid search</span>
-          <span class="home-feature-pill">Reranking</span>
-          <span class="home-feature-pill">Verified citations</span>
-          <span class="home-feature-pill">Says I don't know</span>
-        </div>
       </div>
 
-      <!-- The 3 Main Interactive Workspace Cards (React Bits PixelCard + Magnet + GlareHover) -->
+      <!-- The 3 Main Interactive Workspace Cards (Differentiated by Lucide icon only, no mono tag chips) -->
       <div class="home-section-header">
         <span class="home-eyebrow">WORKSPACES</span>
         <h2>Explore the app</h2>
@@ -179,8 +244,9 @@
           <canvas class="pixel-canvas" aria-hidden="true"></canvas>
           <div class="portal-card-content">
             <div class="portal-top">
-              <span class="portal-step-tag">Ask</span>
-              <span class="portal-icon" aria-hidden="true">&#10022;</span>
+              <span class="portal-icon" aria-hidden="true">
+                <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h6"/></svg>
+              </span>
             </div>
             <h3 class="portal-title">Ask your documents</h3>
             <p class="portal-desc">
@@ -188,7 +254,8 @@
             </p>
             <div class="portal-footer" data-rb-magnet>
               <button type="button" class="secondary-btn home-portal-cta" data-goto-tab="tab-playground">
-                Open Ask <span aria-hidden="true">&rarr;</span>
+                <span>Open Ask</span>
+                <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
               </button>
             </div>
           </div>
@@ -207,8 +274,9 @@
           <canvas class="pixel-canvas" aria-hidden="true"></canvas>
           <div class="portal-card-content">
             <div class="portal-top">
-              <span class="portal-step-tag">Evaluate</span>
-              <span class="portal-icon" aria-hidden="true">&#9670;</span>
+              <span class="portal-icon" aria-hidden="true">
+                <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+              </span>
             </div>
             <h3 class="portal-title">Measure quality</h3>
             <p class="portal-desc">
@@ -216,7 +284,8 @@
             </p>
             <div class="portal-footer" data-rb-magnet>
               <button type="button" class="secondary-btn home-portal-cta" data-goto-tab="tab-eval">
-                Open Evaluate <span aria-hidden="true">&rarr;</span>
+                <span>Open Evaluate</span>
+                <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
               </button>
             </div>
           </div>
@@ -235,8 +304,9 @@
           <canvas class="pixel-canvas" aria-hidden="true"></canvas>
           <div class="portal-card-content">
             <div class="portal-top">
-              <span class="portal-step-tag">Documents</span>
-              <span class="portal-icon" aria-hidden="true">&#9635;</span>
+              <span class="portal-icon" aria-hidden="true">
+                <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
+              </span>
             </div>
             <h3 class="portal-title">Manage your corpus</h3>
             <p class="portal-desc">
@@ -244,7 +314,8 @@
             </p>
             <div class="portal-footer" data-rb-magnet>
               <button type="button" class="secondary-btn home-portal-cta" data-goto-tab="tab-corpus">
-                Open Documents <span aria-hidden="true">&rarr;</span>
+                <span>Open Documents</span>
+                <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
               </button>
             </div>
           </div>
@@ -289,7 +360,7 @@
          ===================================================================== -->
     <section id="tab-playground" class="tab-panel" role="tabpanel">
 
-      <!-- SECTION 1: ASK -->
+      <!-- SECTION 1: ASK (Numbered 1) -->
       <details class="collapsible-section" id="section-ask" open>
         <summary class="section-summary">
           <div class="section-title-group">
@@ -309,8 +380,7 @@
                 placeholder="Ask a question about your documents..."
                 required
               >What time does the cafe open on Sunday?</textarea>
-              <div class="textarea-actions">
-                <span class="shortcut-hint"><kbd>⌘/Ctrl</kbd> + <kbd>Enter</kbd> to run</span>
+              <div class="textarea-actions textarea-actions-end">
                 <button type="submit" id="ask-submit-btn" class="primary-btn">
                   <span id="ask-submit-label">Run</span>
                   <kbd class="btn-kbd">⌘↵</kbd>
@@ -319,7 +389,7 @@
             </div>
           </form>
 
-          <!-- Compact Sample Query Chips -->
+          <!-- Compact Sample Query Chips (Click fills input & focuses, does not auto-run) -->
           <div class="sample-queries-block" aria-label="Sample Queries">
             <div class="sample-chips-grid">
               <button type="button" class="sample-chip" data-preset="What time does the cafe open on Sunday?">
@@ -338,25 +408,41 @@
                 <span class="chip-title">Nut Allergy Handling</span>
                 <span class="chip-tag">Safety Protocol</span>
               </button>
-              <button type="button" class="sample-chip" data-preset="What are the default values of m and ef_construction when creating a pgvector HNSW index?">
-                <span class="chip-title">pgvector HNSW Defaults</span>
-                <span class="chip-tag">Technical Lookup</span>
+              <button type="button" class="sample-chip" data-preset="Under the current 2026 Nimbus tariff (Superseding Tariff v3.2), what is the unlock fee and per-minute rate for a Casual Pass rider on a Nimbus Volt e-bike?">
+                <span class="chip-title">Nimbus 2026 Tariff</span>
+                <span class="chip-tag">Updated Policy</span>
               </button>
-              <button type="button" class="sample-chip" data-preset="Why does Reciprocal Rank Fusion use rank positions rather than adding raw cosine and ts_rank_cd scores directly?">
-                <span class="chip-title">RRF Score Fusion</span>
-                <span class="chip-tag">Conceptual</span>
+              <button type="button" class="sample-chip" data-preset="What exact CLI command and flags must a field technician run to reset a jammed docking bay latch on bay 4?">
+                <span class="chip-title">Dock Latch CLI</span>
+                <span class="chip-tag">Code Lookup</span>
               </button>
             </div>
           </div>
 
-          <div id="ask-inline-loading" class="inline-loading-bar hidden" role="status" aria-live="polite">
-            <div class="spinner"></div>
-            <span>Retrieving context and generating grounded answer...</span>
+          <!-- Progress Stepper While Running (A.8: Retrieving > Reranking > Generating) -->
+          <div id="ask-inline-loading" class="pipeline-stepper hidden" role="status" aria-live="polite">
+            <div class="stepper-track">
+              <div class="stepper-step active" id="step-retrieving">
+                <span class="stepper-dot"></span>
+                <span class="stepper-label">Retrieving</span>
+              </div>
+              <span class="stepper-arrow" aria-hidden="true">&rarr;</span>
+              <div class="stepper-step" id="step-reranking">
+                <span class="stepper-dot"></span>
+                <span class="stepper-label">Reranking</span>
+              </div>
+              <span class="stepper-arrow" aria-hidden="true">&rarr;</span>
+              <div class="stepper-step" id="step-generating">
+                <span class="stepper-dot"></span>
+                <span class="stepper-label">Generating</span>
+              </div>
+            </div>
+            <span class="stepper-status-text" id="stepper-status-text">Searching hybrid index...</span>
           </div>
         </div>
       </details>
 
-      <!-- SECTION 2: PIPELINE SETTINGS (COLLAPSED ADVANCED GROUP) -->
+      <!-- SECTION 2: PIPELINE SETTINGS (Numbered 2, Collapsed Advanced Group, Consistent ? Tooltips on ALL 9 controls, Min/Max only on sliders) -->
       <details class="collapsible-section" id="section-settings">
         <summary class="section-summary">
           <div class="section-title-group">
@@ -364,7 +450,7 @@
             <h2><span data-rb-blur-text>Pipeline Settings</span> <span class="advanced-tag">Advanced</span></h2>
           </div>
           <div class="summary-right">
-            <span id="settings-diff-summary" class="diff-summary-pill">Defaults</span>
+            <span id="settings-diff-summary" class="diff-summary-pill">Defaults active</span>
             <span class="chevron-icon" aria-hidden="true"></span>
           </div>
         </summary>
@@ -372,7 +458,7 @@
         <div class="section-body">
           <div class="settings-toolbar">
             <div id="modified-settings-list" class="modified-list-text">
-              Using default pipeline settings.
+              All pipeline parameters match calibrated defaults.
             </div>
             <button type="button" id="reset-settings-btn" class="secondary-btn">
               Reset to defaults
@@ -384,7 +470,16 @@
             <div class="control-card" data-setting-card="mode">
               <div class="control-header">
                 <label for="mode-select" class="control-label">Retrieval Mode</label>
-                <span class="diff-badge hidden" id="diff-mode">Modified</span>
+                <div class="header-badges">
+                  <span class="diff-badge hidden" id="diff-mode">Modified</span>
+                  <span class="tooltip-wrap" tabindex="0" aria-label="Explanation of Retrieval Mode">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-popup" role="tooltip">
+                      <strong>Retrieval Mode:</strong><br/>
+                      Combines dense pgvector cosine similarity and sparse PostgreSQL tsvector search using Reciprocal Rank Fusion (k=60).
+                    </span>
+                  </span>
+                </div>
               </div>
               <select id="mode-select">
                 <option value="hybrid" selected>Hybrid RRF (Dense + Sparse)</option>
@@ -393,11 +488,20 @@
               </select>
             </div>
 
-            <!-- Control 2: Cross-Encoder Reranker Toggle Switch -->
+            <!-- Control 2: Cross-Encoder Reranker Toggle Switch (Short model name + full ID tooltip, no mid-word wrap) -->
             <div class="control-card" data-setting-card="useReranker">
               <div class="control-header">
                 <label for="reranker-toggle" class="control-label">Reranker</label>
-                <span class="diff-badge hidden" id="diff-useReranker">Modified</span>
+                <div class="header-badges">
+                  <span class="diff-badge hidden" id="diff-useReranker">Modified</span>
+                  <span class="tooltip-wrap" tabindex="0" aria-label="Explanation of Cross-Encoder Reranker">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-popup" role="tooltip">
+                      <strong>Second-Stage Reranker:</strong><br/>
+                      Re-scores candidate chunks with <code>cross-encoder/ms-marco-MiniLM-L-6-v2</code> before context selection.
+                    </span>
+                  </span>
+                </div>
               </div>
               <div class="toggle-row">
                 <label class="switch" aria-label="Toggle Cross-Encoder Reranker">
@@ -406,14 +510,36 @@
                 </label>
                 <span id="reranker-state-label" class="toggle-status-text">Enabled</span>
               </div>
-              <span class="helper-text" id="reranker-model-helper"><code>ms-marco-MiniLM-L-6-v2</code></span>
+              <div class="helper-text reranker-helper-row">
+                <span>Model:</span>
+                <span
+                  class="reranker-short-id tooltip-wrap"
+                  id="reranker-model-helper"
+                  tabindex="0"
+                  aria-label="Full model ID: cross-encoder/ms-marco-MiniLM-L-6-v2"
+                >
+                  <code>MiniLM-L-6-v2</code>
+                  <span class="tooltip-popup" role="tooltip">
+                    Full ID: <code>cross-encoder/ms-marco-MiniLM-L-6-v2</code>
+                  </span>
+                </span>
+              </div>
             </div>
 
             <!-- Control 3: Document Scope Multi-Select Dropdown -->
             <div class="control-card" data-setting-card="documentIds">
               <div class="control-header">
                 <span class="control-label">Document Scope</span>
-                <span class="diff-badge hidden" id="diff-documentIds">Modified</span>
+                <div class="header-badges">
+                  <span class="diff-badge hidden" id="diff-documentIds">Modified</span>
+                  <span class="tooltip-wrap" tabindex="0" aria-label="Explanation of Document Scope">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-popup" role="tooltip">
+                      <strong>Document Scope:</strong><br/>
+                      Restrict retrieval to specific indexed documents or search across all documents in the corpus.
+                    </span>
+                  </span>
+                </div>
               </div>
               <div class="multiselect" id="doc-scope-multiselect">
                 <button
@@ -423,38 +549,56 @@
                   aria-haspopup="listbox"
                   aria-expanded="false"
                 >
-                  <span id="doc-scope-summary">All documents</span>
+                  <span id="doc-scope-summary">All documents (8)</span>
                   <span class="dropdown-caret" aria-hidden="true">&#9662;</span>
                 </button>
                 <div id="doc-scope-menu" class="multiselect-menu hidden" role="listbox" aria-multiselectable="true"></div>
               </div>
             </div>
 
-            <!-- Control 4: Top-K Chunks (1-10) -->
+            <!-- Control 4: Top-K Chunks (1-10, min and max labels only) -->
             <div class="control-card" data-setting-card="topK">
               <div class="control-header">
                 <label for="topk-slider" class="control-label">
                   Top-K: <strong id="topk-val">5</strong>
                 </label>
-                <span class="diff-badge hidden" id="diff-topK">Modified</span>
+                <div class="header-badges">
+                  <span class="diff-badge hidden" id="diff-topK">Modified</span>
+                  <span class="tooltip-wrap" tabindex="0" aria-label="Explanation of Top-K">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-popup" role="tooltip">
+                      <strong>Top-K Candidates:</strong><br/>
+                      Number of top-ranked chunks returned after retrieval and reranking (1 to 10).
+                    </span>
+                  </span>
+                </div>
               </div>
               <input type="range" id="topk-slider" min="1" max="10" step="1" value="5" />
-              <div class="range-scale"><span>1</span><span>5</span><span>10</span></div>
+              <div class="range-scale"><span>1</span><span>10</span></div>
             </div>
 
-            <!-- Control 5: Candidate Pool (5-50, >= Top-K) -->
+            <!-- Control 5: Candidate Pool (5-50, >= Top-K, min and max labels only) -->
             <div class="control-card" data-setting-card="candidatePool">
               <div class="control-header">
                 <label for="pool-slider" class="control-label">
                   Candidate Pool: <strong id="pool-val">20</strong>
                 </label>
-                <span class="diff-badge hidden" id="diff-candidatePool">Modified</span>
+                <div class="header-badges">
+                  <span class="diff-badge hidden" id="diff-candidatePool">Modified</span>
+                  <span class="tooltip-wrap" tabindex="0" aria-label="Explanation of Candidate Pool">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-popup" role="tooltip">
+                      <strong>Candidate Pool:</strong><br/>
+                      Initial number of chunks fetched from dense and sparse indexes before reranking (must be &ge; Top-K).
+                    </span>
+                  </span>
+                </div>
               </div>
               <input type="range" id="pool-slider" min="5" max="50" step="1" value="20" />
-              <div class="range-scale"><span>5</span><span>25</span><span>50</span></div>
+              <div class="range-scale"><span id="pool-min-tick">5</span><span>50</span></div>
             </div>
 
-            <!-- Control 6: Unified Rerank Min Score & Abstain Floor Slider + Tooltip -->
+            <!-- Control 6: Unified Rerank Min Score & Abstain Floor Slider + Tooltip (min and max only) -->
             <div class="control-card" data-setting-card="rerankMinScore">
               <div class="control-header">
                 <label for="rerank-min-slider" class="control-label">
@@ -472,10 +616,10 @@
                 </div>
               </div>
               <input type="range" id="rerank-min-slider" min="0.05" max="0.70" step="0.05" value="0.25" />
-              <div class="range-scale"><span>0.05</span><span>0.25</span><span>0.70</span></div>
+              <div class="range-scale"><span>0.05</span><span>0.70</span></div>
             </div>
 
-            <!-- Control 7: Rerank Ratio vs Top Score Slider + Tooltip -->
+            <!-- Control 7: Rerank Ratio vs Top Score Slider + Tooltip (min and max only) -->
             <div class="control-card" data-setting-card="rerankRelativeFactor">
               <div class="control-header">
                 <label for="rerank-ratio-slider" class="control-label">
@@ -487,16 +631,16 @@
                     <span class="tooltip-icon">?</span>
                     <span class="tooltip-popup" role="tooltip">
                       <strong>Relative Cutoff:</strong><br/>
-                      Chunks 2..N must score &ge; <code>Ratio &times; Top-1 Score</code> to be included.
+                      Chunks 2..N must score &ge; <code>Ratio &times; Top-1 Score</code> to be included in the LLM prompt.
                     </span>
                   </span>
                 </div>
               </div>
               <input type="range" id="rerank-ratio-slider" min="0.20" max="0.95" step="0.05" value="0.60" />
-              <div class="range-scale"><span>0.20</span><span>0.60</span><span>0.95</span></div>
+              <div class="range-scale"><span>0.20</span><span>0.95</span></div>
             </div>
 
-            <!-- Control 8: Max Context Chunks Slider + Tooltip -->
+            <!-- Control 8: Max Context Chunks Slider + Tooltip (min and max only) -->
             <div class="control-card" data-setting-card="rerankMaxChunks">
               <div class="control-header">
                 <label for="rerank-max-slider" class="control-label">
@@ -507,22 +651,32 @@
                   <span class="tooltip-wrap" tabindex="0" aria-label="Explanation of max context chunks cap">
                     <span class="tooltip-icon">?</span>
                     <span class="tooltip-popup" role="tooltip">
-                      Maximum number of chunks passed to the LLM prompt.
+                      <strong>Max Context Chunks:</strong><br/>
+                      Maximum number of chunks passed to the LLM prompt after threshold filtering.
                     </span>
                   </span>
                 </div>
               </div>
               <input type="range" id="rerank-max-slider" min="1" max="6" step="1" value="3" />
-              <div class="range-scale"><span>1</span><span>3</span><span>6</span></div>
+              <div class="range-scale"><span>1</span><span>6</span></div>
             </div>
 
-            <!-- Control 9: LLM Model + Temperature -->
+            <!-- Control 9: LLM Model + Temperature (min and max only + tooltip) -->
             <div class="control-card" data-setting-card="llmModelTemp">
               <div class="control-header">
                 <label for="llm-model-select" class="control-label">
                   LLM &amp; Temp (<strong id="temp-val">0.00</strong>)
                 </label>
-                <span class="diff-badge hidden" id="diff-llmModelTemp">Modified</span>
+                <div class="header-badges">
+                  <span class="diff-badge hidden" id="diff-llmModelTemp">Modified</span>
+                  <span class="tooltip-wrap" tabindex="0" aria-label="Explanation of LLM Model and Temperature">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-popup" role="tooltip">
+                      <strong>Generator Model &amp; Temperature:</strong><br/>
+                      Select the Gemini model and sampling temperature (0.00 = deterministic grounded output).
+                    </span>
+                  </span>
+                </div>
               </div>
               <select id="llm-model-select" class="compact-select">
                 <option value="gemini-3.5-flash-lite" selected>gemini-3.5-flash-lite</option>
@@ -530,16 +684,16 @@
                 <option value="gemini-3.8-flash">gemini-3.8-flash</option>
               </select>
               <input type="range" id="temperature-slider" min="0.0" max="1.0" step="0.05" value="0.0" aria-label="LLM Temperature" />
+              <div class="range-scale"><span>0.00</span><span>1.00</span></div>
             </div>
           </div>
         </div>
       </details>
 
-      <!-- SECTION 3: ANSWER -->
+      <!-- RESULT SECTION: ANSWER (No step number; Verified x/y badge ONLY here; One-line Run Metrics strip + Details expander below answer) -->
       <details class="collapsible-section" id="section-answer" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">3</span>
             <h2 data-rb-blur-text>Answer</h2>
           </div>
           <div class="summary-right">
@@ -561,7 +715,9 @@
           <div id="answer-error" class="error-callout hidden" role="alert"></div>
 
           <div id="answer-abstain-box" class="abstain-callout hidden" role="status">
-            <div class="abstain-icon" aria-hidden="true">&#9888;</div>
+            <div class="abstain-icon" aria-hidden="true">
+              <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+            </div>
             <div>
               <div class="abstain-title">Not found in documents</div>
               <div class="abstain-desc" id="abstain-message-text">
@@ -571,34 +727,80 @@
             </div>
           </div>
 
-          <div id="answer-output" class="answer-box hidden"></div>
+          <div id="answer-output" class="answer-box markdown-body hidden"></div>
 
-          <div class="answer-actions-bar">
-            <div class="action-buttons-left">
-              <button type="button" id="copy-answer-btn" class="secondary-btn" disabled>
-                Copy answer
-              </button>
-              <button type="button" id="copy-json-btn" class="secondary-btn" disabled>
-                Copy as JSON
-              </button>
+          <!-- One-Line Run Metrics Strip Under Answer with "Details" Expander (B) -->
+          <div class="metrics-inline-strip" id="section-metrics">
+            <div class="metrics-strip-summary">
+              <span class="metrics-strip-items" id="metrics-oneline-text">
+                Retrieval: <strong id="metric-retrieval-ms">&mdash;</strong>
+                <span class="status-sep">&middot;</span>
+                Rerank: <strong id="metric-rerank-inline">&mdash;</strong>
+                <span class="status-sep">&middot;</span>
+                LLM: <strong id="metric-llm-ms">&mdash;</strong>
+                <span class="status-sep">&middot;</span>
+                Total: <strong id="metric-total-ms">&mdash;</strong>
+                <span class="status-sep">&middot;</span>
+                Tokens: <strong id="metric-tokens-total">&mdash;</strong>
+              </span>
+              <div class="answer-actions-inline">
+                <button type="button" id="copy-answer-btn" class="secondary-btn btn-xs" disabled>
+                  Copy answer
+                </button>
+                <button type="button" id="copy-json-btn" class="secondary-btn btn-xs" disabled>
+                  Copy JSON
+                </button>
+                <button type="button" id="toggle-metrics-details-btn" class="secondary-btn btn-xs" aria-expanded="false">
+                  Details
+                </button>
+              </div>
             </div>
-            <details id="prompt-drawer" class="prompt-drawer">
-              <summary class="prompt-drawer-summary">Show prompt sent to LLM</summary>
-              <pre id="prompt-sent-content" class="prompt-pre">No prompt sent yet.</pre>
-            </details>
+
+            <div id="metrics-details-panel" class="metrics-details-panel hidden">
+              <div id="metrics-loading" class="skeleton-block hidden" aria-hidden="true">
+                <div class="skeleton-line w-65"></div>
+              </div>
+              <div id="metrics-error" class="error-callout hidden"></div>
+              <div id="metrics-grid" class="metrics-grid">
+                <div class="metric-card">
+                  <div class="metric-label">Retrieval</div>
+                  <div class="metric-value" id="metric-retrieval-card">&mdash;</div>
+                  <div class="metric-sub" id="metric-rerank-sub">Rerank: 0 ms</div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">LLM Generation</div>
+                  <div class="metric-value" id="metric-llm-card">&mdash;</div>
+                  <div class="metric-sub" id="metric-model-sub">gemini-3.5-flash-lite</div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">Total Time</div>
+                  <div class="metric-value" id="metric-total-card">&mdash;</div>
+                  <div class="metric-sub" id="metric-status-sub">End-to-end</div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-label">Tokens</div>
+                  <div class="metric-value" id="metric-tokens-card">&mdash;</div>
+                  <div class="metric-sub" id="metric-tokens-sub">Prompt: 0 &bull; Completion: 0</div>
+                </div>
+              </div>
+
+              <details id="prompt-drawer" class="prompt-drawer">
+                <summary class="prompt-drawer-summary">Show prompt sent to LLM</summary>
+                <pre id="prompt-sent-content" class="prompt-pre">No prompt sent yet.</pre>
+              </details>
+            </div>
           </div>
         </div>
       </details>
 
-      <!-- SECTION 4: CITATIONS -->
+      <!-- RESULT SECTION: CITATIONS (No step number, no duplicate Verified x/y badge) -->
       <details class="collapsible-section" id="section-citations" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">4</span>
             <h2 data-rb-blur-text>Citations</h2>
+            <span id="citation-count" class="count-pill">0</span>
           </div>
           <div class="summary-right">
-            <span id="citation-count" class="state-pill">Verified 0/0 citations</span>
             <span class="chevron-icon" aria-hidden="true"></span>
           </div>
         </summary>
@@ -614,11 +816,10 @@
         </div>
       </details>
 
-      <!-- SECTION 5: RETRIEVED CONTEXT -->
+      <!-- RESULT SECTION: RETRIEVED CONTEXT (No step number, tiny legend, DROPPED chunks collapsed by default) -->
       <details class="collapsible-section" id="section-context" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">5</span>
             <h2><span data-rb-blur-text>Retrieved Context</span> (<span id="chunk-count">0</span>)</h2>
           </div>
           <div class="summary-right">
@@ -629,6 +830,10 @@
 
         <div class="section-body">
           <div class="context-toolbar">
+            <div class="score-legend" aria-label="Score scale legend">
+              <span class="legend-dot"></span>
+              <span><strong>0.00–1.00 scale</strong> for Dense, Sparse &amp; Rerank bars &middot; <strong>RRF</strong> shown as rank &amp; fusion score</span>
+            </div>
             <div class="sort-toggle-group" role="group" aria-label="Sort retrieved chunks">
               <span class="sort-label">Sort by:</span>
               <button type="button" class="sort-btn active" data-sort="final_rank" id="sort-final-btn">
@@ -650,61 +855,18 @@
           </div>
         </div>
       </details>
-
-      <!-- SECTION 6: RUN METRICS -->
-      <details class="collapsible-section" id="section-metrics" open>
-        <summary class="section-summary">
-          <div class="section-title-group">
-            <span class="section-step-num">6</span>
-            <h2 data-rb-blur-text>Run Metrics</h2>
-          </div>
-          <div class="summary-right">
-            <span id="metrics-total-pill" class="state-pill">0 ms</span>
-            <span class="chevron-icon" aria-hidden="true"></span>
-          </div>
-        </summary>
-
-        <div class="section-body">
-          <div id="metrics-loading" class="skeleton-block hidden" aria-hidden="true">
-            <div class="skeleton-line w-65"></div>
-          </div>
-          <div id="metrics-error" class="error-callout hidden"></div>
-          <div id="metrics-grid" class="metrics-grid">
-            <div class="metric-card">
-              <div class="metric-label">Retrieval</div>
-              <div class="metric-value" id="metric-retrieval-ms">&mdash;</div>
-              <div class="metric-sub" id="metric-rerank-sub">Rerank: 0 ms</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">LLM Generation</div>
-              <div class="metric-value" id="metric-llm-ms">&mdash;</div>
-              <div class="metric-sub" id="metric-model-sub">gemini-3.5-flash-lite</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">Total Time</div>
-              <div class="metric-value" id="metric-total-ms">&mdash;</div>
-              <div class="metric-sub" id="metric-status-sub">End-to-end</div>
-            </div>
-            <div class="metric-card">
-              <div class="metric-label">Tokens</div>
-              <div class="metric-value" id="metric-tokens-total">&mdash;</div>
-              <div class="metric-sub" id="metric-tokens-sub">Prompt: 0 &bull; Completion: 0</div>
-            </div>
-          </div>
-        </div>
-      </details>
     </section>
 
     <!-- =====================================================================
-         TAB 2: 40-QUESTION EVALUATION HARNESS
+         TAB 2: EVALUATION HARNESS (Grouped Retrieval & Answer Quality, Sticky Table, Best Highlighted, Failed Questions)
          ===================================================================== -->
     <section id="tab-eval" class="tab-panel" role="tabpanel">
       <div class="card">
         <div class="card-header-row">
           <div>
             <h2 data-rb-blur-text>Measure quality</h2>
-            <p class="muted-text">
-              Run 40 test questions and see retrieval and answer accuracy across 4 ablation configurations.
+            <p class="muted-text" id="eval-subtitle-text">
+              Benchmark retrieval and answer accuracy across 60 test questions and 4 ablation configurations.
             </p>
           </div>
           <div class="eval-actions">
@@ -714,28 +876,48 @@
               <option value="sparse_only">Sparse Only (tsvector)</option>
               <option value="dense_only">Dense Only (pgvector)</option>
             </select>
-            <button id="run-eval-btn" class="primary-btn">Re-Run 40 Questions</button>
+            <button type="button" id="run-selected-eval-btn" class="secondary-btn">
+              Run selected
+            </button>
+            <button type="button" id="run-eval-btn" class="primary-btn">
+              Run all 4
+            </button>
           </div>
         </div>
 
-        <div id="eval-kpi-grid" class="kpi-grid"></div>
+        <div id="eval-loading" class="skeleton-block hidden" aria-hidden="true">
+          <div class="skeleton-card"></div>
+        </div>
+        <div id="eval-error" class="error-callout hidden" role="alert"></div>
+
+        <!-- Grouped Metrics: "Retrieval" (3 cards) and "Answer quality" (4 cards) with NO orphan card (A.4) -->
+        <div id="eval-kpi-groups" class="eval-kpi-groups">
+          <div class="eval-metric-group">
+            <div class="eval-group-title">Retrieval</div>
+            <div class="eval-group-grid eval-grid-3" id="eval-retrieval-kpis"></div>
+          </div>
+          <div class="eval-metric-group">
+            <div class="eval-group-title">Answer quality</div>
+            <div class="eval-group-grid eval-grid-4" id="eval-answer-kpis"></div>
+          </div>
+        </div>
 
         <h3>Ablation Comparison</h3>
-        <div class="table-wrap">
-          <table class="data-table" id="ablation-table">
+        <div class="table-wrap table-scroll-sticky">
+          <table class="data-table ablation-comparison-table" id="ablation-table">
             <thead>
               <tr>
-                <th>Configuration</th>
+                <th class="sticky-col">Configuration</th>
                 <th>Recall@1</th>
                 <th>Recall@3</th>
                 <th>Recall@5</th>
                 <th>MRR@5</th>
-                <th>NDCG@5</th>
+                <th>nDCG@5</th>
                 <th>Answer Acc</th>
                 <th>Faithfulness</th>
                 <th>Citation Recall</th>
                 <th>Abstention Acc</th>
-                <th>Avg Latency</th>
+                <th>Retrieval latency (excl. LLM)</th>
               </tr>
             </thead>
             <tbody id="ablation-tbody"></tbody>
@@ -746,16 +928,47 @@
         <div id="category-cards" class="category-grid"></div>
       </div>
 
+      <!-- Expandable Failed Questions List (A.4: question, expected, got, config) -->
+      <details class="collapsible-section" id="failed-questions-section" open>
+        <summary class="section-summary">
+          <div class="section-title-group">
+            <h3>Failed questions</h3>
+            <span id="failed-questions-count" class="count-pill">0</span>
+          </div>
+          <div class="summary-right">
+            <span class="muted-text" id="failed-config-label">Hybrid (RRF) + Cross-Encoder Rerank</span>
+            <span class="chevron-icon" aria-hidden="true"></span>
+          </div>
+        </summary>
+        <div class="section-body">
+          <div class="table-wrap">
+            <table class="data-table" id="failed-questions-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Question</th>
+                  <th>Expected</th>
+                  <th>Got</th>
+                  <th>Config</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="failed-questions-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
       <div class="card">
         <div class="card-header-row">
           <h3>Per-Question Results</h3>
           <div class="filter-bar">
             <select id="eval-category-filter" aria-label="Filter by Question Category">
-              <option value="all">All Categories (40)</option>
-              <option value="exact_lookup">Exact Lookup (14)</option>
-              <option value="semantic_conceptual">Semantic / Conceptual (14)</option>
-              <option value="multi_hop">Multi-Hop Synthesis (7)</option>
-              <option value="unanswerable">Unanswerable Trap (5)</option>
+              <option value="all">All Categories</option>
+              <option value="exact_lookup">Exact Lookup</option>
+              <option value="semantic_conceptual">Semantic / Conceptual</option>
+              <option value="multi_hop">Multi-Hop Synthesis</option>
+              <option value="unanswerable">Unanswerable Trap</option>
             </select>
             <input type="text" id="eval-search-filter" placeholder="Filter questions..." aria-label="Search Evaluation Questions" />
           </div>
@@ -782,17 +995,33 @@
     </section>
 
     <!-- =====================================================================
-         TAB 3: CORPUS & DOCUMENT INGESTION
+         TAB 3: CORPUS & DOCUMENT INGESTION (A.5: Summary line, search box, identical card layout, View chunks, Delete confirm, Index document + progress + toast)
          ===================================================================== -->
     <section id="tab-corpus" class="tab-panel" role="tabpanel">
       <div class="playground-grid">
         <div class="col-answer">
           <div class="card">
             <div class="card-header-row">
-              <h2 data-rb-blur-text>Manage your corpus</h2>
-              <button id="refresh-docs-btn" class="secondary-btn">Refresh</button>
+              <div>
+                <h2 data-rb-blur-text>Manage your corpus</h2>
+                <p class="corpus-summary-line" id="corpus-summary-line">8 documents &middot; 35 chunks</p>
+              </div>
+              <button type="button" id="refresh-docs-btn" class="secondary-btn">Refresh</button>
             </div>
-            <p class="muted-text">Browse what's indexed across your document collection.</p>
+
+            <div class="doc-search-row">
+              <input
+                type="text"
+                id="doc-search-input"
+                placeholder="Search documents by title, ID, or source..."
+                aria-label="Search indexed documents"
+              />
+            </div>
+
+            <div id="docs-loading" class="skeleton-block hidden" aria-hidden="true">
+              <div class="skeleton-card"></div>
+            </div>
+            <div id="docs-error" class="error-callout hidden" role="alert"></div>
             <div id="documents-list" class="documents-list"></div>
           </div>
         </div>
@@ -813,22 +1042,31 @@
             <form id="ingest-form" class="ingest-form">
               <label>
                 <span>Document ID (optional)</span>
-                <input type="text" id="ingest-id" placeholder="e.g. doc_08_bluebird_cafe" value="" />
+                <input type="text" id="ingest-id" placeholder="e.g. doc_09_nimbus_bikeshare" value="" />
               </label>
               <label>
                 <span>Document Title (optional &mdash; falls back to # H1, then filename)</span>
-                <input type="text" id="ingest-title" placeholder="e.g. Bluebird Cafe Staff Handbook" value="" />
+                <input type="text" id="ingest-title" placeholder="e.g. Nimbus Bike Share Operations & Rider Guide" value="" />
               </label>
               <label>
                 <span>Source (optional)</span>
-                <input type="text" id="ingest-source" placeholder="e.g. upload/08_bluebird_cafe.md" value="" />
+                <input type="text" id="ingest-source" placeholder="e.g. data/corpus/09_nimbus_bikeshare.md" value="" />
               </label>
               <label>
                 <span>Content</span>
                 <textarea id="ingest-content" rows="8" required placeholder="Paste Markdown content or choose a file above..."></textarea>
               </label>
+
+              <!-- Upload Progress Bar (A.5) -->
+              <div id="ingest-progress-box" class="ingest-progress-box hidden" role="status" aria-live="polite">
+                <div class="ingest-progress-label" id="ingest-progress-label">Chunking, embedding &amp; indexing document...</div>
+                <div class="ingest-progress-track">
+                  <div class="ingest-progress-fill" id="ingest-progress-fill"></div>
+                </div>
+              </div>
+
               <button type="submit" id="ingest-submit-btn" class="primary-btn">
-                Upload documents
+                Index document
               </button>
               <div id="ingest-feedback" class="ingest-feedback hidden" role="status"></div>
             </form>
@@ -837,6 +1075,43 @@
       </div>
     </section>
   </main>
+
+  <!-- Modal for "View chunks" per document (A.5) -->
+  <div id="doc-chunks-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="doc-chunks-modal-title">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3 id="doc-chunks-modal-title">Document Chunks</h3>
+          <p class="muted-text" id="doc-chunks-modal-sub"></p>
+        </div>
+        <button type="button" class="secondary-btn btn-xs" id="close-chunks-modal-btn" aria-label="Close chunks viewer">
+          Close
+        </button>
+      </div>
+      <div class="modal-body" id="doc-chunks-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Confirmation Dialog Modal for "Delete" document (A.5) -->
+  <div id="delete-confirm-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <h3 id="delete-modal-title">Delete document?</h3>
+      </div>
+      <div class="modal-body">
+        <p id="delete-modal-desc" class="muted-text">
+          Are you sure you want to remove this document and all of its indexed chunks from the corpus?
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="secondary-btn" id="cancel-delete-btn">Cancel</button>
+        <button type="button" class="danger-btn" id="confirm-delete-btn">Delete document</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container (A.5) -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
   <script src="/static/reactbits_fx.js"></script>
   <script src="/static/app.js"></script>

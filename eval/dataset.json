@@ -420,5 +420,214 @@
     "expected_answer": "ABSTAIN",
     "key_facts": [],
     "should_abstain": true
+  },
+  {
+    "id": "q41",
+    "category": "exact_lookup",
+    "question": "Under the current 2026 Nimbus tariff (Superseding Tariff v3.2), what is the unlock fee and per-minute rate for a Casual Pass rider on a Nimbus Volt e-bike, as opposed to the legacy 2024 launch rate?",
+    "expected_document_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_000"],
+    "expected_answer": "Under the 2026 Superseding Tariff v3.2, the Casual Pass unlock fee is ₹0 and Nimbus Volt e-bikes cost ₹6.00 per minute from the start (replacing the 2024 rate of ₹15 unlock and ₹2.50/min after 10 minutes).",
+    "key_facts": ["₹0", "₹6.00", "2026"],
+    "should_abstain": false
+  },
+  {
+    "id": "q42",
+    "category": "multi_hop",
+    "question": "At Bluebird Cafe, a customer asks for a cash refund on a stale croissant bought 15 minutes ago and a 650 rupee refund on an incorrectly made latte. How must staff handle both items?",
+    "expected_document_id": "doc_08_bluebird_cafe",
+    "expected_chunk_ids": ["doc_08_bluebird_cafe::chunk_002"],
+    "expected_answer": "Bakery items like a stale croissant cannot be refunded (only replaced), while the 650 rupee drink refund is above 500 rupees and must be approved by the shift manager.",
+    "key_facts": ["cannot be refunded", "replaced", "shift manager"],
+    "should_abstain": false
+  },
+  {
+    "id": "q43",
+    "category": "semantic_conceptual",
+    "question": "How did the Casual Pass free ride window and pedal-bike per-minute billing change when Nimbus Tariff v3.2 replaced the 2024 launch tariff?",
+    "expected_document_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_000"],
+    "expected_answer": "The 10-minute free window and ₹15 unlock fee were eliminated (0 minutes included, ₹0 unlock), and pedal-bike billing changed from ₹2.50/min after 10 minutes to ₹3.50/min immediately.",
+    "key_facts": ["0 minutes", "₹3.50", "10 minutes"],
+    "should_abstain": false
+  },
+  {
+    "id": "q44",
+    "category": "exact_lookup",
+    "question": "According to the Nimbus Bike Share plan comparison table, what is the monthly fee, included free ride window, and maximum daily cap for the Campus Annual tier?",
+    "expected_document_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_000"],
+    "expected_answer": "In the plan table, Campus Annual costs ₹399 / mo, includes the first 45 minutes per trip free, and has a max daily cap of ₹180.",
+    "key_facts": ["₹399", "45 minutes", "₹180"],
+    "should_abstain": false
+  },
+  {
+    "id": "q45",
+    "category": "exact_lookup",
+    "question": "In the Nimbus pricing table, compare the e-bike per-minute rate after the free window and the max daily cap between Commuter Plus and Casual Pass.",
+    "expected_document_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_000"],
+    "expected_answer": "Commuter Plus charges ₹2.00 / min after 30 minutes with a ₹250 daily cap, whereas Casual Pass charges ₹6.00 / min immediately with a ₹480 daily cap.",
+    "key_facts": ["₹2.00", "₹250", "₹6.00", "₹480"],
+    "should_abstain": false
+  },
+  {
+    "id": "q46",
+    "category": "exact_lookup",
+    "question": "At Bluebird Cafe, how many loyalty points are required for a free drink, how much must a customer spend to earn them, and when do points expire?",
+    "expected_document_id": "doc_08_bluebird_cafe",
+    "expected_chunk_ids": ["doc_08_bluebird_cafe::chunk_003"],
+    "expected_answer": "Customers earn 1 point per 50 rupees spent and need 10 points (500 rupees spent) for a free drink; points expire after 6 months without a purchase.",
+    "key_facts": ["50 rupees", "10 points", "6 months"],
+    "should_abstain": false
+  },
+  {
+    "id": "q47",
+    "category": "exact_lookup",
+    "question": "What exact CLI command and flags must a field technician run to reset a jammed docking bay latch on bay 4, and what fault code triggers MAINTENANCE_LOCK?",
+    "expected_document_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_001"],
+    "expected_answer": "Run `nimbus-ctl dock --bay-id=4 --reset-latch --solenoid-pulse-ms=4500 --verify-hall`; if fault code E_LATCH_STUCK_09 persists after two pulses, the bay enters MAINTENANCE_LOCK.",
+    "key_facts": ["nimbus-ctl", "--solenoid-pulse-ms=4500", "E_LATCH_STUCK_09", "MAINTENANCE_LOCK"],
+    "should_abstain": false
+  },
+  {
+    "id": "q48",
+    "category": "exact_lookup",
+    "question": "What exact SQL statement is used inside a transaction to raise the HNSW dynamic candidate list size to 100 at query time?",
+    "expected_document_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_003"],
+    "expected_answer": "Execute `SET LOCAL hnsw.ef_search = 100;` inside a transaction to increase the HNSW dynamic candidate list size from its default of 40.",
+    "key_facts": ["SET LOCAL hnsw.ef_search = 100", "40"],
+    "should_abstain": false
+  },
+  {
+    "id": "q49",
+    "category": "exact_lookup",
+    "question": "What steps must a Bluebird Cafe barista take when a customer reports a nut or dairy allergy?",
+    "expected_document_id": "doc_08_bluebird_cafe",
+    "expected_chunk_ids": ["doc_08_bluebird_cafe::chunk_005"],
+    "expected_answer": "The barista must wash their hands and use a clean steaming pitcher (oat milk and almond milk also use separate steaming pitchers).",
+    "key_facts": ["washes their hands", "clean pitcher", "separate"],
+    "should_abstain": false
+  },
+  {
+    "id": "q50",
+    "category": "semantic_conceptual",
+    "question": "When freezing weather makes the two-wheeler's power cell too cold, at what exact sub-zero Celsius readings does energy recovery during deceleration shut off, and when does the main power switch disconnect completely?",
+    "expected_document_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_002"],
+    "expected_answer": "Regenerative braking is disabled below -4°C to prevent lithium plating, and at -12°C the BMS opens the main discharge contactor completely until the pack warms above -8°C.",
+    "key_facts": ["-4°C", "-12°C", "-8°C"],
+    "should_abstain": false
+  },
+  {
+    "id": "q51",
+    "category": "semantic_conceptual",
+    "question": "How many days must a newly hired coffee maker spend observing an experienced colleague before operating the espresso bar solo?",
+    "expected_document_id": "doc_08_bluebird_cafe",
+    "expected_chunk_ids": ["doc_08_bluebird_cafe::chunk_001"],
+    "expected_answer": "A new barista shadows a senior barista for 5 days before working a shift alone.",
+    "key_facts": ["5 days", "senior barista"],
+    "should_abstain": false
+  },
+  {
+    "id": "q52",
+    "category": "semantic_conceptual",
+    "question": "What financial penalty is charged if a renter abandons an electric two-wheeler beyond the municipal boundary for over four hours, or never returns it after two full days without a police report?",
+    "expected_document_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_003"],
+    "expected_answer": "Leaving a bike outside the municipal geofence incurs a ₹1,200 field-retrieval fee after 4 hours, and an unreturned Nimbus Volt e-bike after 48 hours incurs a ₹42,000 replacement liability cap (₹18,500 for a pedal bike).",
+    "key_facts": ["₹1,200", "₹42,000", "48"],
+    "should_abstain": false
+  },
+  {
+    "id": "q53",
+    "category": "multi_hop",
+    "question": "If a Commuter Plus subscriber rides a Nimbus Volt e-bike whose battery drops below 18% state of charge and docks it at an uphill Boost Hub within 25 minutes, what top assist speed limit applies and what wallet credit do they earn?",
+    "expected_document_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": [
+      "doc_09_nimbus_bikeshare::chunk_000",
+      "doc_09_nimbus_bikeshare::chunk_002"
+    ],
+    "expected_answer": "Below 18% SoC, motor assist is restricted to Eco mode with a 15 km/h top speed; the 25-minute trip falls within the Commuter Plus 30-minute free window, and docking at a Boost Hub earns a ₹25 ride credit.",
+    "key_facts": ["15 km/h", "Eco", "₹25", "30 minutes"],
+    "should_abstain": false
+  },
+  {
+    "id": "q54",
+    "category": "multi_hop",
+    "question": "On a Sunday shift at Bluebird Cafe, at what times is the floor mopped and what time is the espresso machine cleaned with a backflush?",
+    "expected_document_id": "doc_08_bluebird_cafe",
+    "expected_chunk_ids": [
+      "doc_08_bluebird_cafe::chunk_000",
+      "doc_08_bluebird_cafe::chunk_004"
+    ],
+    "expected_answer": "On Sunday Bluebird Cafe closes at 4:00 PM, so the floor is mopped at 12:00 PM and at 4:00 PM (closing), and the espresso machine is backflushed at 4:00 PM closing time.",
+    "key_facts": ["12:00 PM", "4:00 PM", "backflush"],
+    "should_abstain": false
+  },
+  {
+    "id": "q55",
+    "category": "multi_hop",
+    "question": "How does Nimbus handle a docking bay whose Hall sensor fails with E_LATCH_STUCK_09 after two reset pulses compared to a rider who ends a trip outside a painted virtual corral?",
+    "expected_document_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": [
+      "doc_09_nimbus_bikeshare::chunk_001",
+      "doc_09_nimbus_bikeshare::chunk_003"
+    ],
+    "expected_answer": "A bay with persistent E_LATCH_STUCK_09 is placed in MAINTENANCE_LOCK and hidden from app availability, whereas ending a trip outside an approved corral charges the rider a ₹150 improper parking surcharge.",
+    "key_facts": ["MAINTENANCE_LOCK", "₹150", "corral"],
+    "should_abstain": false
+  },
+  {
+    "id": "q56",
+    "category": "unanswerable",
+    "question": "What is the helmet rental fee and maximum front cargo basket weight limit in kilograms on a Nimbus Volt e-bike?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
+  },
+  {
+    "id": "q57",
+    "category": "unanswerable",
+    "question": "What is the guest Wi-Fi password and customer restroom PIN code at Bluebird Cafe?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
+  },
+  {
+    "id": "q58",
+    "category": "unanswerable",
+    "question": "How many solar panels and what wattage MPPT charge controller are installed on each Nimbus docking station bollard?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
+  },
+  {
+    "id": "q59",
+    "category": "unanswerable",
+    "question": "What discount percentage do senior citizens or corporate bulk accounts receive on the Nimbus Commuter Plus monthly plan?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
+  },
+  {
+    "id": "q60",
+    "category": "unanswerable",
+    "question": "How do you configure pgvector GPU CUDA acceleration using pgvector.cuda_device_id in PostgreSQL 17?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
   }
 ]

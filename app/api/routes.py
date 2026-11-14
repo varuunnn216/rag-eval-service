@@ -1,10 +1,15 @@
 import json
-from typing import Any, Dict, List
-from fastapi import APIRouter
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Body
 
 from app.config import get_settings
 from app.generation.generator import answer_question
-from app.ingestion.service import ingest_documents, list_documents
+from app.ingestion.service import (
+    delete_document,
+    get_document_chunks,
+    ingest_documents,
+    list_documents,
+)
 from app.retrieval.hybrid import retrieve_candidates
 from app.schemas import (
     AskRequest,
@@ -29,6 +34,18 @@ def ingest_endpoint(payload: IngestRequest) -> IngestResponse:
 def list_documents_endpoint() -> List[Dict[str, Any]]:
     """List all indexed documents and their chunk counts."""
     return list_documents()
+
+
+@router.get("/documents/{document_id}/chunks")
+def get_document_chunks_endpoint(document_id: str) -> List[Dict[str, Any]]:
+    """Return all indexed chunks for a specific document."""
+    return get_document_chunks(document_id)
+
+
+@router.delete("/documents/{document_id}")
+def delete_document_endpoint(document_id: str) -> Dict[str, Any]:
+    """Delete a document and its indexed chunks."""
+    return delete_document(document_id)
 
 
 @router.post("/search", response_model=SearchResponse)
@@ -60,7 +77,7 @@ def ask_endpoint(payload: AskRequest) -> AskResponse:
 
 @router.get("/eval/report")
 def get_eval_report_endpoint() -> Dict[str, Any]:
-    """Return the latest 40-question evaluation benchmark report."""
+    """Return the latest evaluation benchmark report."""
     settings = get_settings()
     report_path = settings.project_root / "eval" / "reports" / "latest_eval_report.json"
     if not report_path.exists():
@@ -69,6 +86,9 @@ def get_eval_report_endpoint() -> Dict[str, Any]:
 
 
 @router.post("/eval/run")
-def trigger_eval_run_endpoint() -> Dict[str, Any]:
-    """Re-run the 40-question evaluation suite across all ablation configurations."""
-    return run_evaluation_suite()
+def trigger_eval_run_endpoint(
+    payload: Optional[Dict[str, Any]] = Body(default=None),
+) -> Dict[str, Any]:
+    """Re-run the evaluation suite across all 4 ablation configs or a single selected config."""
+    selected = (payload or {}).get("config")
+    return run_evaluation_suite(selected_config=selected)

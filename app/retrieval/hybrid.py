@@ -38,15 +38,17 @@ _SPARSE_STOPWORDS: Set[str] = {
 
 _in_memory_cache: Optional[List[Tuple[RetrievedChunk, List[float]]]] = None
 _extra_ingested_docs: List[Any] = []
+_deleted_doc_ids: Set[str] = set()
 
 
 def register_in_memory_documents(documents: List[Any]) -> int:
     """Add dynamically ingested documents to the in-memory index mirror and return total new chunks."""
-    global _in_memory_cache, _extra_ingested_docs
+    global _in_memory_cache, _extra_ingested_docs, _deleted_doc_ids
     from app.ingestion.chunker import chunk_document
 
     settings = get_settings()
     new_ids = {d.id for d in documents}
+    _deleted_doc_ids -= new_ids
     _extra_ingested_docs = [d for d in _extra_ingested_docs if d.id not in new_ids]
     _extra_ingested_docs.extend(documents)
     _in_memory_cache = None
@@ -64,6 +66,16 @@ def register_in_memory_documents(documents: List[Any]) -> int:
         )
     _get_in_memory_corpus_index()
     return total_chunks
+
+
+def delete_in_memory_document(document_id: str) -> bool:
+    """Remove a document from the in-memory index mirror."""
+    global _in_memory_cache, _extra_ingested_docs, _deleted_doc_ids
+    _extra_ingested_docs = [d for d in _extra_ingested_docs if d.id != document_id]
+    _deleted_doc_ids.add(document_id)
+    _in_memory_cache = None
+    _get_in_memory_corpus_index()
+    return True
 
 
 def extract_sparse_terms(query: str) -> List[str]:
@@ -292,9 +304,11 @@ def _get_in_memory_corpus_index() -> List[Tuple[RetrievedChunk, List[float]]]:
     settings = get_settings()
     docs_by_id: Dict[str, Any] = {}
     for d in load_corpus_documents():
-        docs_by_id[d.id] = d
+        if d.id not in _deleted_doc_ids:
+            docs_by_id[d.id] = d
     for d in _extra_ingested_docs:
-        docs_by_id[d.id] = d
+        if d.id not in _deleted_doc_ids:
+            docs_by_id[d.id] = d
 
     raw_chunks = []
     for d in docs_by_id.values():

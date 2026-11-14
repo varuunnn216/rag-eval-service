@@ -13,28 +13,291 @@ const DEFAULT_SETTINGS = {
   temperature: 0.0,
 };
 
+const ABLATION_LABELS = {
+  dense_only: "Dense Only (pgvector)",
+  sparse_only: "Sparse Only (tsvector)",
+  hybrid_rrf: "Hybrid Search (RRF)",
+  hybrid_rrf_rerank: "Hybrid (RRF) + Cross-Encoder Rerank",
+};
+
+const ABLATION_SHORT_LABELS = {
+  dense_only: "Dense Only",
+  sparse_only: "Sparse Only",
+  hybrid_rrf: "Hybrid RRF",
+  hybrid_rrf_rerank: "Hybrid + Rerank",
+};
+
 let currentSettings = { ...DEFAULT_SETTINGS, documentIds: [] };
 let lastAskResponse = null;
 let currentChunkSort = "final_rank";
+let showDroppedChunks = false;
 let indexedDocuments = [];
 let currentEvalReport = null;
 let lastUploadedFilename = "";
+let pendingDeleteDocId = null;
+
+function syncRequestJson(method, url, payload = null) {
+  const xhr = new XMLHttpRequest();
+  xhr.open(method, url, false);
+  if (payload) {
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.send(JSON.stringify(payload));
+  } else {
+    xhr.send(null);
+  }
+  if (xhr.status >= 200 && xhr.status < 300) {
+    return JSON.parse(xhr.responseText);
+  }
+  throw new Error(`HTTP ${xhr.status}`);
+}
 
 document.addEventListener("DOMContentLoaded", async () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const isScreenshot = urlParams.get("screenshot") === "1";
+  const vwParam = urlParams.get("vw");
+  if (isScreenshot) {
+    document.documentElement.dataset.screenshot = "1";
+  }
+  if (vwParam) {
+    document.documentElement.dataset.vw = vwParam;
+  }
+
   initTabs();
   loadSettingsFromStorage();
   initPlaygroundControls();
   initEvalControls();
   initCorpusControls();
+  initModals();
+
+  const initialTab = urlParams.get("tab");
+  const initialQuery = urlParams.get("q");
+  const openSettings = urlParams.get("settings") === "open";
+  const openFailed = urlParams.get("failed") === "open";
+  const openMobileNav = urlParams.get("mobilenav") === "open";
+
+  if (initialQuery) {
+    const qInput = document.getElementById("question-input");
+    if (qInput) qInput.value = initialQuery;
+  }
+  if (openSettings) {
+    const sSec = document.getElementById("sec-settings");
+    if (sSec) sSec.open = true;
+  }
+  if (openFailed) {
+    const fSec = document.getElementById("failed-questions-expander");
+    if (fSec) fSec.open = true;
+  }
+  if (initialTab) {
+    switchToTab(initialTab);
+  }
+  if (openMobileNav) {
+    document.getElementById("top-nav-shell")?.classList.add("mobile-nav-open");
+  }
+
+  if (isScreenshot) {
+    try {
+      indexedDocuments = syncRequestJson("GET", "/api/v1/documents");
+      updateCorpusSummaryLine();
+      renderDocumentsList();
+      renderDocScopeMenu();
+    } catch (_) {}
+    syncSettingsToUI();
+    try {
+      currentEvalReport = syncRequestJson("GET", "/api/v1/eval/report");
+      renderEvalDashboard(currentEvalReport);
+    } catch (_) {}
+    try {
+      const question = document.getElementById("question-input").value.trim();
+      const askPayload = {
+        question,
+        mode: currentSettings.mode,
+        top_k: currentSettings.topK,
+        candidate_pool: currentSettings.candidatePool,
+        use_reranker: currentSettings.useReranker,
+        document_ids: currentSettings.documentIds.length > 0 ? currentSettings.documentIds : null,
+        rerank_min_score: currentSettings.rerankMinScore,
+        rerank_abstain_score: currentSettings.rerankMinScore,
+        rerank_relative_factor: currentSettings.rerankRelativeFactor,
+        rerank_max_chunks: currentSettings.rerankMaxChunks,
+        llm_model: currentSettings.llmModel,
+        temperature: currentSettings.temperature,
+      };
+      lastAskResponse = syncRequestJson("POST", "/api/v1/ask", askPayload);
+      renderAskResponse(lastAskResponse);
+    } catch (_) {}
+    return;
+  }
 
   await Promise.all([fetchHealth(), loadDocuments()]);
   syncSettingsToUI();
-  runAskQuery();
-  loadEvalReport();
+  await Promise.all([runAskQuery(), loadEvalReport()]);
 });
 
 /* =====================================================================
-   TABS & SYSTEM HEALTH
+   SAFE SANITIZED MARKDOWN RENDERER (A.1)
+   ===================================================================== */
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function normalizeEllipsis(str) {
+  return String(str || "").replace(/\.{4,}/g, "...");
+}
+
+function cleanQuoteText(quote) {
+  let q = normalizeEllipsis(String(quote || "").trim());
+  q = q.replace(/^\s*(?:[-*+•]|\d+[.)])\s+/, "");
+  return q;
+}
+
+function renderInlineMarkdown(escapedLine, allowCitations = false) {
+  // 1. Inline triple-backtick code ```lang ... ``` or inline code `...`
+  const codePlaceholders = [];
+  let out = escapedLine.replace(/```(?:[a-zA-Z0-9_-]+\s+)?([^`]+?)```/g, (_, codeContent) => {
+    const token = `\u0000CODE_${codePlaceholders.length}\u0000`;
+    codePlaceholders.push(`<code>${codeContent.trim()}</code>`);
+    return token;
+  });
+  out = out.replace(/`([^`\n]+)`/g, (_, codeContent) => {
+    const token = `\u0000CODE_${codePlaceholders.length}\u0000`;
+    codePlaceholders.push(`<code>${codeContent}</code>`);
+    return token;
+  });
+
+  // 2. Bold **...**
+  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+
+  // 3. Clickable [n] citations if enabled
+  if (allowCitations) {
+    out = out.replace(/\[(\d+)\]/g, (_, num) => {
+      return `<button type="button" class="cite-badge" onclick="highlightCitation(${num})" title="Jump to Citation [${num}]">[${num}]</button>`;
+    });
+  }
+
+  // Restore inline code
+  out = out.replace(/\u0000CODE_(\d+)\u0000/g, (_, idx) => codePlaceholders[Number(idx)] || "");
+  return out;
+}
+
+function renderSafeMarkdown(rawText, options = {}) {
+  const allowCitations = Boolean(options.allowCitations);
+  const normalized = normalizeEllipsis(String(rawText || "").trim());
+  if (!normalized) return "";
+
+  // Extract fenced code blocks ```lang ... ``` first
+  const fencePlaceholders = [];
+  const withoutFences = normalized.replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+    const idx = fencePlaceholders.length;
+    const langTag = lang ? `<span class="md-code-lang">${escapeHtml(lang)}</span>` : "";
+    fencePlaceholders.push(
+      `<div class="md-code-wrap">${langTag}<pre class="md-code-block"><code>${escapeHtml(code.replace(/\n$/, ""))}</code></pre></div>`
+    );
+    return `\n@@FENCE_${idx}@@\n`;
+  });
+
+  const lines = withoutFences.split("\n");
+  const htmlBlocks = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const rawLine = lines[i];
+    const trimmed = rawLine.trim();
+
+    if (!trimmed) {
+      i++;
+      continue;
+    }
+
+    // Fenced code placeholder
+    const fenceMatch = trimmed.match(/^@@FENCE_(\d+)@@$/);
+    if (fenceMatch) {
+      htmlBlocks.push(fencePlaceholders[Number(fenceMatch[1])] || "");
+      i++;
+      continue;
+    }
+
+    // Markdown Table block
+    if (trimmed.startsWith("|") && trimmed.endsWith("|") && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+      const headerCells = trimmed
+        .slice(1, -1)
+        .split("|")
+        .map((c) => renderInlineMarkdown(escapeHtml(c.trim()), allowCitations));
+      i += 2; // skip header + separator
+      const bodyRows = [];
+      while (i < lines.length && lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|")) {
+        const rowCells = lines[i]
+          .trim()
+          .slice(1, -1)
+          .split("|")
+          .map((c) => renderInlineMarkdown(escapeHtml(c.trim()), allowCitations));
+        bodyRows.push(`<tr>${rowCells.map((c) => `<td>${c}</td>`).join("")}</tr>`);
+        i++;
+      }
+      htmlBlocks.push(
+        `<div class="md-table-wrap"><table class="md-table"><thead><tr>${headerCells
+          .map((c) => `<th>${c}</th>`)
+          .join("")}</tr></thead><tbody>${bodyRows.join("")}</tbody></table></div>`
+      );
+      continue;
+    }
+
+    // Unordered list (- or * or •)
+    if (/^\s*[-*•]\s+/.test(rawLine)) {
+      const items = [];
+      while (i < lines.length && /^\s*[-*•]\s+/.test(lines[i])) {
+        const itemText = lines[i].replace(/^\s*[-*•]\s+/, "").trim();
+        items.push(`<li>${renderInlineMarkdown(escapeHtml(itemText), allowCitations)}</li>`);
+        i++;
+      }
+      htmlBlocks.push(`<ul class="md-list">${items.join("")}</ul>`);
+      continue;
+    }
+
+    // Ordered list (1. )
+    if (/^\s*\d+[.)]\s+/.test(rawLine)) {
+      const items = [];
+      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
+        const itemText = lines[i].replace(/^\s*\d+[.)]\s+/, "").trim();
+        items.push(`<li>${renderInlineMarkdown(escapeHtml(itemText), allowCitations)}</li>`);
+        i++;
+      }
+      htmlBlocks.push(`<ol class="md-list">${items.join("")}</ol>`);
+      continue;
+    }
+
+    // Subheading inside chunk
+    if (/^#{1,4}\s+/.test(trimmed)) {
+      const hText = trimmed.replace(/^#{1,4}\s+/, "");
+      htmlBlocks.push(`<div class="md-subheading">${renderInlineMarkdown(escapeHtml(hText), allowCitations)}</div>`);
+      i++;
+      continue;
+    }
+
+    // Standard paragraph (collect consecutive normal lines)
+    const paraLines = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !/^@@FENCE_\d+@@$/.test(lines[i].trim()) &&
+      !/^\s*[-*•]\s+/.test(lines[i]) &&
+      !/^\s*\d+[.)]\s+/.test(lines[i]) &&
+      !(lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|"))
+    ) {
+      paraLines.push(renderInlineMarkdown(escapeHtml(lines[i].trim()), allowCitations));
+      i++;
+    }
+    htmlBlocks.push(`<p class="md-para">${paraLines.join(" ")}</p>`);
+  }
+
+  return htmlBlocks.join("");
+}
+
+/* =====================================================================
+   TABS, MOBILE NAV & SYSTEM HEALTH
    ===================================================================== */
 function switchToTab(tabId) {
   const buttons = document.querySelectorAll(".tab-btn");
@@ -60,6 +323,14 @@ function switchToTab(tabId) {
     p.classList.toggle("active", p.id === tabId);
   });
 
+  // Close mobile menu if open
+  const navShell = document.getElementById("top-nav-shell");
+  const mobileBtn = document.getElementById("mobile-nav-toggle");
+  if (navShell && navShell.classList.contains("mobile-nav-open")) {
+    navShell.classList.remove("mobile-nav-open");
+    if (mobileBtn) mobileBtn.setAttribute("aria-expanded", "false");
+  }
+
   window.ReactBitsFX?.syncGooeyIndex?.(activeIndex);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -72,7 +343,15 @@ function initTabs() {
     });
   });
 
-  // Home landing page 3 main portal cards & CTA buttons
+  const mobileToggle = document.getElementById("mobile-nav-toggle");
+  const navShell = document.getElementById("top-nav-shell");
+  if (mobileToggle && navShell) {
+    mobileToggle.addEventListener("click", () => {
+      const isOpen = navShell.classList.toggle("mobile-nav-open");
+      mobileToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+  }
+
   document.querySelectorAll("[data-goto-tab]").forEach((el) => {
     el.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -88,34 +367,45 @@ function initTabs() {
     });
   });
 
-  // Clicking top-left brand returns to Home landing page
   const brandHome = document.getElementById("brand-home-link");
   if (brandHome) {
     brandHome.addEventListener("click", () => switchToTab("tab-home"));
-    brandHome.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        switchToTab("tab-home");
-      }
-    });
   }
+}
+
+function shortModelName(fullId) {
+  if (!fullId) return "MiniLM-L-6-v2";
+  const parts = String(fullId).split("/");
+  const last = parts[parts.length - 1];
+  return last.replace(/^ms-marco-/, "");
 }
 
 async function fetchHealth() {
   try {
     const res = await fetch("/health");
     const data = await res.json();
-    const docsPill = document.getElementById("pill-docs");
-    const modelsPill = document.getElementById("pill-models");
-    if (docsPill) {
-      docsPill.textContent = `${data.documents_count} Docs`;
-    }
-    if (modelsPill) {
-      modelsPill.textContent = `${data.generation_model}`;
-    }
+    const docsEl = document.getElementById("status-docs-count");
+    const chunksEl = document.getElementById("status-chunks-count");
+    const llmEl = document.getElementById("status-llm-model");
+    const rerankShortEl = document.getElementById("status-reranker-short");
+
+    if (docsEl) docsEl.textContent = `${data.documents_count} docs`;
+    if (chunksEl) chunksEl.textContent = `${data.chunks_count} chunks`;
+    if (llmEl && data.generation_model) llmEl.textContent = data.generation_model;
+
+    const fullReranker = data.reranker_model || "cross-encoder/ms-marco-MiniLM-L-6-v2";
+    const shortReranker = shortModelName(fullReranker);
+    if (rerankShortEl) rerankShortEl.textContent = shortReranker;
+
     const helper = document.getElementById("reranker-model-helper");
-    if (helper && data.reranker_model) {
-      helper.innerHTML = `Model: <code>${escapeHtml(data.reranker_model)}</code>`;
+    if (helper) {
+      helper.setAttribute("aria-label", `Full model ID: ${fullReranker}`);
+      helper.innerHTML = `
+        <code>${escapeHtml(shortReranker)}</code>
+        <span class="tooltip-popup" role="tooltip">
+          Full ID: <code>${escapeHtml(fullReranker)}</code>
+        </span>
+      `;
     }
   } catch (err) {
     console.error("Failed to fetch health:", err);
@@ -185,16 +475,19 @@ function syncSettingsToUI() {
   rerankToggle.checked = currentSettings.useReranker;
   document.getElementById("reranker-state-label").textContent = currentSettings.useReranker
     ? "Enabled"
-    : "Disabled (Raw Rank)";
+    : "Disabled";
 
   const topkSlider = document.getElementById("topk-slider");
   topkSlider.value = String(currentSettings.topK);
   document.getElementById("topk-val").textContent = String(currentSettings.topK);
 
   const poolSlider = document.getElementById("pool-slider");
-  poolSlider.min = String(Math.max(5, currentSettings.topK));
+  const poolMin = Math.max(5, currentSettings.topK);
+  poolSlider.min = String(poolMin);
   poolSlider.value = String(currentSettings.candidatePool);
   document.getElementById("pool-val").textContent = String(currentSettings.candidatePool);
+  const poolMinTick = document.getElementById("pool-min-tick");
+  if (poolMinTick) poolMinTick.textContent = String(poolMin);
 
   document.getElementById("rerank-min-slider").value = String(currentSettings.rerankMinScore);
   document.getElementById("rerank-min-val").textContent = currentSettings.rerankMinScore.toFixed(2);
@@ -212,6 +505,9 @@ function syncSettingsToUI() {
   document.getElementById("temperature-slider").value = String(currentSettings.temperature);
   document.getElementById("temp-val").textContent = currentSettings.temperature.toFixed(2);
 
+  const statusLlm = document.getElementById("status-llm-model");
+  if (statusLlm) statusLlm.textContent = currentSettings.llmModel;
+
   renderDocScopeMenu();
   updateSettingsDiffIndicators();
 }
@@ -223,7 +519,7 @@ function updateSettingsDiffIndicators() {
     const badge = document.getElementById(`diff-${key}`);
     const card = document.querySelector(`[data-setting-card="${key}"]`);
     if (badge) badge.classList.toggle("hidden", !isDiff);
-    if (card) card.classList.toggle("is-modified", isDiff);
+    if (card) card.classList.toggle("modified", isDiff);
     if (isDiff) diffs.push(label);
   };
 
@@ -281,11 +577,11 @@ function updateSettingsDiffIndicators() {
   const listText = document.getElementById("modified-settings-list");
   if (diffs.length === 0) {
     summaryPill.textContent = "Defaults active";
-    summaryPill.classList.remove("has-diff");
+    summaryPill.classList.remove("has-diffs");
     listText.textContent = "All pipeline parameters match calibrated defaults.";
   } else {
     summaryPill.textContent = `${diffs.length} modified`;
-    summaryPill.classList.add("has-diff");
+    summaryPill.classList.add("has-diffs");
     listText.innerHTML = `<strong>Modified from defaults:</strong> ${diffs
       .map((d) => `<code>${escapeHtml(d)}</code>`)
       .join(" ")}`;
@@ -309,10 +605,12 @@ function initPlaygroundControls() {
     runAskQuery();
   });
 
+  // B: Clicking a sample chip fills the query box and focuses it (does NOT auto-run)
   document.querySelectorAll(".sample-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
       questionInput.value = chip.dataset.preset;
-      runAskQuery();
+      questionInput.focus();
+      questionInput.setSelectionRange(questionInput.value.length, questionInput.value.length);
     });
   });
 
@@ -328,12 +626,12 @@ function initPlaygroundControls() {
     currentSettings.useReranker = e.target.checked;
     document.getElementById("reranker-state-label").textContent = currentSettings.useReranker
       ? "Enabled"
-      : "Disabled (Raw Rank)";
+      : "Disabled";
     saveSettingsToStorage();
     updateSettingsDiffIndicators();
   });
 
-  // Top-K & Candidate Pool (enforce candidatePool >= topK)
+  // Top-K & Candidate Pool
   const topkSlider = document.getElementById("topk-slider");
   const poolSlider = document.getElementById("pool-slider");
 
@@ -341,7 +639,10 @@ function initPlaygroundControls() {
     const newTopK = parseInt(topkSlider.value, 10);
     currentSettings.topK = newTopK;
     document.getElementById("topk-val").textContent = String(newTopK);
-    poolSlider.min = String(Math.max(5, newTopK));
+    const newMin = Math.max(5, newTopK);
+    poolSlider.min = String(newMin);
+    const poolMinTick = document.getElementById("pool-min-tick");
+    if (poolMinTick) poolMinTick.textContent = String(newMin);
     if (currentSettings.candidatePool < newTopK) {
       currentSettings.candidatePool = newTopK;
       poolSlider.value = String(newTopK);
@@ -395,6 +696,8 @@ function initPlaygroundControls() {
   // LLM Model & Temperature
   document.getElementById("llm-model-select").addEventListener("change", (e) => {
     currentSettings.llmModel = e.target.value;
+    const statusLlm = document.getElementById("status-llm-model");
+    if (statusLlm) statusLlm.textContent = currentSettings.llmModel;
     saveSettingsToStorage();
     updateSettingsDiffIndicators();
   });
@@ -423,13 +726,14 @@ function initPlaygroundControls() {
     scopeBtn.setAttribute("aria-expanded", String(!isHidden));
   });
   document.addEventListener("click", (e) => {
-    if (!document.getElementById("doc-scope-multiselect").contains(e.target)) {
+    const ms = document.getElementById("doc-scope-multiselect");
+    if (ms && !ms.contains(e.target)) {
       scopeMenu.classList.add("hidden");
       scopeBtn.setAttribute("aria-expanded", "false");
     }
   });
 
-  // Copy buttons
+  // Copy buttons & Metrics Details expander
   document.getElementById("copy-answer-btn").addEventListener("click", async () => {
     if (!lastAskResponse) return;
     await copyTextWithFeedback("copy-answer-btn", lastAskResponse.answer || "", "Copy answer");
@@ -440,9 +744,19 @@ function initPlaygroundControls() {
     await copyTextWithFeedback(
       "copy-json-btn",
       JSON.stringify(lastAskResponse, null, 2),
-      "Copy as JSON"
+      "Copy JSON"
     );
   });
+
+  const detailsBtn = document.getElementById("toggle-metrics-details-btn");
+  const detailsPanel = document.getElementById("metrics-details-panel");
+  if (detailsBtn && detailsPanel) {
+    detailsBtn.addEventListener("click", () => {
+      const isHidden = detailsPanel.classList.toggle("hidden");
+      detailsBtn.setAttribute("aria-expanded", String(!isHidden));
+      detailsBtn.textContent = isHidden ? "Details" : "Hide details";
+    });
+  }
 
   // Sort toggle for Retrieved Context
   document.querySelectorAll(".sort-btn").forEach((btn) => {
@@ -531,41 +845,117 @@ function renderDocScopeMenu() {
 }
 
 /* =====================================================================
-   EXECUTE RAG QUERY & RENDER SECTIONS 3, 4, 5, 6
+   EXECUTE RAG QUERY WITH PROGRESS STEPS & STREAMING (A.8)
    ===================================================================== */
+function updateStepperStage(stage) {
+  const stepRet = document.getElementById("step-retrieving");
+  const stepRer = document.getElementById("step-reranking");
+  const stepGen = document.getElementById("step-generating");
+  const statusText = document.getElementById("stepper-status-text");
+  if (!stepRet || !stepRer || !stepGen) return;
+
+  stepRet.classList.remove("active", "done");
+  stepRer.classList.remove("active", "done");
+  stepGen.classList.remove("active", "done");
+
+  if (stage === "retrieving") {
+    stepRet.classList.add("active");
+    if (statusText) statusText.textContent = "Searching dense + sparse indexes...";
+  } else if (stage === "reranking") {
+    stepRet.classList.add("done");
+    stepRer.classList.add("active");
+    if (statusText) statusText.textContent = "Scoring candidates with MiniLM-L-6-v2...";
+  } else if (stage === "generating") {
+    stepRet.classList.add("done");
+    stepRer.classList.add("done");
+    stepGen.classList.add("active");
+    if (statusText) statusText.textContent = "Generating grounded answer with citations...";
+  }
+}
+
 async function runAskQuery() {
   const question = document.getElementById("question-input").value.trim();
   if (!question) return;
 
   setPlaygroundLoadingState(true);
+  updateStepperStage("retrieving");
+
+  const payload = {
+    question,
+    mode: currentSettings.mode,
+    top_k: currentSettings.topK,
+    candidate_pool: currentSettings.candidatePool,
+    use_reranker: currentSettings.useReranker,
+    document_ids: currentSettings.documentIds.length ? currentSettings.documentIds : null,
+    rerank_min_score: currentSettings.rerankMinScore,
+    rerank_relative_factor: currentSettings.rerankRelativeFactor,
+    rerank_max_chunks: currentSettings.rerankMaxChunks,
+    llm_model: currentSettings.llmModel,
+    temperature: currentSettings.temperature,
+  };
 
   try {
-    const payload = {
-      question,
-      mode: currentSettings.mode,
-      top_k: currentSettings.topK,
-      candidate_pool: currentSettings.candidatePool,
-      use_reranker: currentSettings.useReranker,
-      document_ids: currentSettings.documentIds.length ? currentSettings.documentIds : null,
-      rerank_min_score: currentSettings.rerankMinScore,
-      rerank_relative_factor: currentSettings.rerankRelativeFactor,
-      rerank_max_chunks: currentSettings.rerankMaxChunks,
-      llm_model: currentSettings.llmModel,
-      temperature: currentSettings.temperature,
-    };
-
-    const res = await fetch("/api/v1/ask", {
+    // Try SSE streaming endpoint first for live step transitions + streamed answer
+    const res = await fetch("/api/v1/ask/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.detail || `HTTP ${res.status}`);
+    if (res.ok && res.headers.get("content-type")?.includes("text/event-stream") && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalData = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+
+        for (const chunkStr of parts) {
+          const line = chunkStr.trim();
+          if (!line.startsWith("data:")) continue;
+          const jsonStr = line.slice(5).trim();
+          if (!jsonStr) continue;
+          const evt = JSON.parse(jsonStr);
+          if (evt.stage === "retrieving" || evt.stage === "reranking" || evt.stage === "generating") {
+            updateStepperStage(evt.stage);
+          } else if (evt.stage === "delta" && evt.text) {
+            const ansBox = document.getElementById("answer-output");
+            document.getElementById("answer-loading").classList.add("hidden");
+            ansBox.classList.remove("hidden");
+            ansBox.innerHTML = renderSafeMarkdown(evt.text, { allowCitations: true });
+          } else if (evt.stage === "done" && evt.response) {
+            finalData = evt.response;
+          }
+        }
+      }
+
+      if (finalData) {
+        lastAskResponse = finalData;
+        setPlaygroundLoadingState(false);
+        renderAskResponse(finalData);
+        return;
+      }
     }
 
-    const data = await res.json();
+    // Fallback to standard JSON POST /api/v1/ask
+    updateStepperStage("reranking");
+    const stdRes = await fetch("/api/v1/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!stdRes.ok) {
+      const errJson = await stdRes.json().catch(() => ({}));
+      throw new Error(errJson.detail || `HTTP ${stdRes.status}`);
+    }
+
+    const data = await stdRes.json();
     lastAskResponse = data;
     setPlaygroundLoadingState(false);
     renderAskResponse(data);
@@ -619,6 +1009,17 @@ function renderPlaygroundError(errorMessage) {
   chkErr.classList.remove("hidden");
 }
 
+function formatPlainSelectionReason(reasonStr) {
+  if (!reasonStr) return "";
+  let s = String(reasonStr).trim();
+  if (s.toLowerCase().startsWith("dropped:")) {
+    s = "Dropped:" + s.slice(8);
+  } else if (s.toLowerCase().startsWith("used:")) {
+    s = "Used:" + s.slice(5);
+  }
+  return s;
+}
+
 function renderAskResponse(data) {
   const statePill = document.getElementById("answer-state-pill");
   const emptyBox = document.getElementById("answer-empty");
@@ -646,42 +1047,44 @@ function renderAskResponse(data) {
     errorBox.innerHTML = `<strong>LLM Generation Error:</strong> ${escapeHtml(data.error)}`;
     errorBox.classList.remove("hidden");
   } else if (data.abstained) {
-    // Distinct Amber "Not found in documents" state
     statePill.className = "state-pill pill-abstained";
     statePill.textContent = "Not found in documents";
     document.getElementById("abstain-message-text").textContent =
       data.answer || "I don't have enough information in the provided documents.";
     const topChunk = (data.retrieved_chunks || [])[0];
     const reasonText = topChunk
-      ? `Reason: ${topChunk.selection_reason || "Context lacked sufficient evidence"}`
-      : "Reason: No matching chunks passed the minimum threshold.";
+      ? formatPlainSelectionReason(topChunk.selection_reason)
+      : "No matching chunks passed the minimum score threshold.";
     document.getElementById("abstain-reason-detail").textContent = reasonText;
     abstainBox.classList.remove("hidden");
   } else {
     statePill.className = "state-pill pill-grounded";
-    statePill.textContent = `Grounded • ${citSummary}`;
-    answerBox.innerHTML = formatAnswerWithClickableCitations(data.answer);
+    statePill.textContent = citSummary;
+    answerBox.innerHTML = renderSafeMarkdown(data.answer, { allowCitations: true });
     answerBox.classList.remove("hidden");
   }
 
-  renderCitationsSection(data, citSummary);
+  renderCitationsSection(data);
+  showDroppedChunks = false;
   renderChunksSection(data);
   renderMetricsSection(data);
 }
 
-function renderCitationsSection(data, citSummary) {
+function renderCitationsSection(data) {
   const citList = document.getElementById("citations-list");
-  document.getElementById("citation-count").textContent = citSummary;
+  const countEl = document.getElementById("citation-count");
+  const citations = data.citations || [];
+  if (countEl) countEl.textContent = String(citations.length);
 
-  if (!data.citations || data.citations.length === 0) {
+  if (citations.length === 0) {
     const emptyMsg = data.abstained
-      ? "Abstained (0 citations emitted — query could not be answered from documents)."
-      : `No inline citations emitted (${citSummary}).`;
+      ? "Abstained — no citations emitted because the answer was not found in the indexed documents."
+      : "No inline citations emitted for this response.";
     citList.innerHTML = `<div class="empty-state-box">${escapeHtml(emptyMsg)}</div>`;
     return;
   }
 
-  citList.innerHTML = data.citations
+  citList.innerHTML = citations
     .map((c) => {
       const sim = Number(c.similarity_score || 0);
       let badgeClass = "sim-red";
@@ -693,6 +1096,8 @@ function renderCitationsSection(data, citSummary) {
         badgeClass = "sim-amber";
         badgeText = `Verified (${sim.toFixed(2)})`;
       }
+
+      const cleanQuote = cleanQuoteText(c.quote);
 
       return `
         <div class="citation-card" id="citation-card-${c.citation_number}">
@@ -706,14 +1111,88 @@ function renderCitationsSection(data, citSummary) {
           </div>
           ${
             c.claim
-              ? `<div class="claim-row"><strong>Claim:</strong> ${escapeHtml(c.claim)}</div>`
+              ? `<div class="claim-row"><strong>Claim:</strong> ${renderInlineMarkdown(escapeHtml(c.claim), false)}</div>`
               : ""
           }
-          <div class="quote-text">&ldquo;${escapeHtml(c.quote)}&rdquo;</div>
+          <div class="quote-text markdown-body">${renderSafeMarkdown(cleanQuote, { allowCitations: false })}</div>
         </div>
       `;
     })
     .join("");
+}
+
+function renderSingleChunkCard(c) {
+  const isUsed = Boolean(c.selected) || c.selection_status === "used";
+  const cardIdNum = c.context_index != null ? c.context_index : `raw-${c._finalRank}`;
+  const statusBadge = isUsed
+    ? `<span class="chunk-status-badge used">USED [${c.context_index || c._finalRank}]</span>`
+    : `<span class="chunk-status-badge dropped">DROPPED</span>`;
+
+  const denseVal = c.dense_score != null ? Math.max(0, Math.min(1, Number(c.dense_score))) : null;
+  const densePct = denseVal != null ? Math.round(denseVal * 100) : 0;
+  const denseLabel =
+    c.dense_rank != null && denseVal != null ? `#${c.dense_rank} · ${denseVal.toFixed(2)}` : "—";
+
+  const sparseVal = c.sparse_score != null ? Math.max(0, Math.min(1, Number(c.sparse_score))) : null;
+  const sparsePct = sparseVal != null ? Math.round(sparseVal * 100) : 0;
+  const sparseLabel =
+    c.sparse_rank != null && sparseVal != null ? `#${c.sparse_rank} · ${sparseVal.toFixed(2)}` : "—";
+
+  const rrfVal = Number(c.rrf_score || 0);
+  const rrfLabel = rrfVal > 0 ? `#${c._finalRank} · ${rrfVal.toFixed(4)}` : "—";
+
+  const rerankVal = c.rerank_score != null ? Math.max(0, Math.min(1, Number(c.rerank_score))) : null;
+  const rerankPct = rerankVal != null ? Math.round(rerankVal * 100) : 0;
+  const rerankLabel =
+    rerankVal != null ? `#${c._finalRank} · ${rerankVal.toFixed(2)}` : "Off";
+
+  const contentId = `chunk-text-${c._finalRank}`;
+  const cleanContent = normalizeEllipsis(c.content || "");
+  const needsExpand = cleanContent.length > 220;
+  const plainReason = formatPlainSelectionReason(c.selection_reason);
+
+  return `
+    <div class="chunk-card ${isUsed ? "chunk-used" : "chunk-dropped"}" id="chunk-card-${cardIdNum}">
+      <div class="chunk-header">
+        <div class="chunk-header-left">
+          ${statusBadge}
+          <strong>${escapeHtml(c.document_title)}</strong>
+          <span class="muted-text">Rank #${c._finalRank} &middot; ${c.token_count || 0} tokens</span>
+        </div>
+        <span class="chunk-id-tag">${escapeHtml(c.chunk_id)}</span>
+      </div>
+      ${
+        plainReason
+          ? `<div class="selection-reason">${escapeHtml(plainReason)}</div>`
+          : ""
+      }
+      ${c.heading ? `<div class="chunk-heading">${escapeHtml(c.heading)}</div>` : ""}
+      <div class="chunk-content markdown-body ${needsExpand ? "collapsed" : ""}" id="${contentId}">${renderSafeMarkdown(cleanContent)}</div>
+      ${
+        needsExpand
+          ? `<button type="button" class="expand-text-btn" onclick="toggleChunkText('${contentId}', this)">Show full text</button>`
+          : ""
+      }
+      <div class="score-bars-grid">
+        <div class="score-bar-item">
+          <div class="score-bar-top"><span>Dense</span><strong>${denseLabel}</strong></div>
+          <div class="score-bar-track"><div class="score-bar-fill fill-dense" style="width:${densePct}%"></div></div>
+        </div>
+        <div class="score-bar-item">
+          <div class="score-bar-top"><span>Sparse</span><strong>${sparseLabel}</strong></div>
+          <div class="score-bar-track"><div class="score-bar-fill fill-sparse" style="width:${sparsePct}%"></div></div>
+        </div>
+        <div class="score-bar-item">
+          <div class="score-bar-top"><span>Rerank</span><strong>${rerankLabel}</strong></div>
+          <div class="score-bar-track"><div class="score-bar-fill fill-rerank" style="width:${rerankPct}%"></div></div>
+        </div>
+        <div class="score-bar-item score-stat-only">
+          <div class="score-bar-top"><span>RRF fusion</span><strong>${rrfLabel}</strong></div>
+          <div class="rrf-stat-note">Rank fusion score (k=60)</div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderChunksSection(data) {
@@ -744,83 +1223,50 @@ function renderChunksSection(data) {
     sortedChunks.sort((a, b) => a._finalRank - b._finalRank);
   }
 
-  // Compute max RRF score for normalizing the RRF bar visually
-  const maxRrf = Math.max(0.035, ...sortedChunks.map((c) => Number(c.rrf_score || 0)));
+  const usedChunks = sortedChunks.filter((c) => Boolean(c.selected) || c.selection_status === "used");
+  const droppedChunks = sortedChunks.filter((c) => !(Boolean(c.selected) || c.selection_status === "used"));
 
-  chunksList.innerHTML = sortedChunks
-    .map((c) => {
-      const isUsed = Boolean(c.selected) || c.selection_status === "used";
-      const cardIdNum = c.context_index != null ? c.context_index : `raw-${c._finalRank}`;
-      const statusBadge = isUsed
-        ? `<span class="chunk-status-badge used">USED [${c.context_index || c._finalRank}]</span>`
-        : `<span class="chunk-status-badge dropped">DROPPED</span>`;
+  let html = "";
+  if (usedChunks.length > 0) {
+    html += usedChunks.map(renderSingleChunkCard).join("");
+  } else {
+    html += `<div class="empty-state-box">0 chunks passed the minimum rerank score threshold (${currentSettings.rerankMinScore.toFixed(2)}).</div>`;
+  }
 
-      const denseVal = c.dense_score != null ? Math.max(0, Number(c.dense_score)) : 0;
-      const densePct = Math.min(100, Math.round(denseVal * 100));
-      const denseLabel =
-        c.dense_rank != null ? `#${c.dense_rank} (${denseVal.toFixed(2)})` : "—";
-
-      const sparseVal = c.sparse_score != null ? Math.max(0, Number(c.sparse_score)) : 0;
-      const sparsePct = Math.min(100, Math.round(sparseVal * 100));
-      const sparseLabel =
-        c.sparse_rank != null ? `#${c.sparse_rank} (${sparseVal.toFixed(2)})` : "—";
-
-      const rrfVal = Number(c.rrf_score || 0);
-      const rrfPct = rrfVal > 0 ? Math.min(100, Math.round((rrfVal / maxRrf) * 100)) : 0;
-      const rrfLabel = rrfVal > 0 ? `#${c._finalRank} (${rrfVal.toFixed(3)})` : "—";
-
-      const rerankVal = c.rerank_score != null ? Math.max(0, Number(c.rerank_score)) : null;
-      const rerankPct = rerankVal != null ? Math.min(100, Math.round(rerankVal * 100)) : 0;
-      const rerankLabel =
-        rerankVal != null ? `#${c._finalRank} (${rerankVal.toFixed(3)})` : "Off";
-
-      const contentId = `chunk-text-${c._finalRank}`;
-      const needsExpand = (c.content || "").length > 180;
-
-      return `
-        <div class="chunk-card" id="chunk-card-${cardIdNum}">
-          <div class="chunk-header">
-            <div class="chunk-header-left">
-              ${statusBadge}
-              <strong>${escapeHtml(c.document_title)}</strong>
-              <span class="muted-text" style="font-size:0.78rem;">Rank #${c._finalRank}</span>
-            </div>
-            <span class="chunk-id-tag">${escapeHtml(c.chunk_id)}</span>
-          </div>
-          ${
-            c.selection_reason
-              ? `<div class="selection-reason">${escapeHtml(c.selection_reason)}</div>`
-              : ""
-          }
-          ${c.heading ? `<div class="chunk-heading">${escapeHtml(c.heading)}</div>` : ""}
-          <div class="chunk-content ${needsExpand ? "collapsed" : ""}" id="${contentId}">${escapeHtml(c.content)}</div>
-          ${
-            needsExpand
-              ? `<button type="button" class="expand-text-btn" onclick="toggleChunkText('${contentId}', this)">Show full text</button>`
-              : ""
-          }
-          <div class="score-bars-grid">
-            <div class="score-bar-item">
-              <div class="score-bar-top"><span>Dense</span><strong>${denseLabel}</strong></div>
-              <div class="score-bar-track"><div class="score-bar-fill fill-dense" style="width:${densePct}%"></div></div>
-            </div>
-            <div class="score-bar-item">
-              <div class="score-bar-top"><span>Sparse</span><strong>${sparseLabel}</strong></div>
-              <div class="score-bar-track"><div class="score-bar-fill fill-sparse" style="width:${sparsePct}%"></div></div>
-            </div>
-            <div class="score-bar-item">
-              <div class="score-bar-top"><span>RRF</span><strong>${rrfLabel}</strong></div>
-              <div class="score-bar-track"><div class="score-bar-fill fill-rrf" style="width:${rrfPct}%"></div></div>
-            </div>
-            <div class="score-bar-item">
-              <div class="score-bar-top"><span>Rerank</span><strong>${rerankLabel}</strong></div>
-              <div class="score-bar-track"><div class="score-bar-fill fill-rerank" style="width:${rerankPct}%"></div></div>
-            </div>
-          </div>
+  if (droppedChunks.length > 0) {
+    html += `
+      <div class="dropped-chunks-collapsible">
+        <button
+          type="button"
+          class="secondary-btn dropped-toggle-btn"
+          id="toggle-dropped-chunks-btn"
+          aria-expanded="${showDroppedChunks ? "true" : "false"}"
+        >
+          <span>${showDroppedChunks ? `Hide ${droppedChunks.length} dropped chunks` : `Show ${droppedChunks.length} dropped chunks`}</span>
+        </button>
+        <div id="dropped-chunks-container" class="chunks-list ${showDroppedChunks ? "" : "hidden"}">
+          ${droppedChunks.map(renderSingleChunkCard).join("")}
         </div>
-      `;
-    })
-    .join("");
+      </div>
+    `;
+  }
+
+  chunksList.innerHTML = html;
+
+  const toggleBtn = document.getElementById("toggle-dropped-chunks-btn");
+  const droppedContainer = document.getElementById("dropped-chunks-container");
+  if (toggleBtn && droppedContainer) {
+    toggleBtn.addEventListener("click", () => {
+      showDroppedChunks = !showDroppedChunks;
+      droppedContainer.classList.toggle("hidden", !showDroppedChunks);
+      toggleBtn.setAttribute("aria-expanded", String(showDroppedChunks));
+      toggleBtn.innerHTML = `<span>${
+        showDroppedChunks
+          ? `Hide ${droppedChunks.length} dropped chunks`
+          : `Show ${droppedChunks.length} dropped chunks`
+      }</span>`;
+    });
+  }
 }
 
 window.toggleChunkText = function (contentId, btnEl) {
@@ -832,26 +1278,29 @@ window.toggleChunkText = function (contentId, btnEl) {
 
 function renderMetricsSection(data) {
   const retMs = Number(data.retrieval_latency_ms || 0);
-  const rerankMs = Number(data.rerank_latency_ms || 0).toFixed(1);
+  const rerankMs = Number(data.rerank_latency_ms || 0);
   const llmMs = Number(data.generation_latency_ms || 0);
   const totalMs = Number(data.total_latency_ms || 0);
   const pTok = Number(data.prompt_tokens || 0);
   const cTok = Number(data.completion_tokens || 0);
   const totTok = Number(data.total_tokens || pTok + cTok);
 
-  document.getElementById("metrics-total-pill").textContent = `${totalMs.toFixed(0)} ms • ${totTok} tokens`;
-  if (window.animateCountUp) {
-    window.animateCountUp("metric-retrieval-ms", retMs, " ms", 1);
-    window.animateCountUp("metric-llm-ms", llmMs, " ms", 0);
-    window.animateCountUp("metric-total-ms", totalMs, " ms", 0);
-    window.animateCountUp("metric-tokens-total", totTok, "", 0);
-  } else {
-    document.getElementById("metric-retrieval-ms").textContent = `${retMs.toFixed(1)} ms`;
-    document.getElementById("metric-llm-ms").textContent = `${llmMs.toFixed(0)} ms`;
-    document.getElementById("metric-total-ms").textContent = `${totalMs.toFixed(0)} ms`;
-    document.getElementById("metric-tokens-total").textContent = String(totTok);
-  }
-  document.getElementById("metric-rerank-sub").textContent = `Rerank: ${rerankMs} ms`;
+  document.getElementById("metric-retrieval-ms").textContent = `${retMs.toFixed(1)} ms`;
+  document.getElementById("metric-rerank-inline").textContent = `${rerankMs.toFixed(1)} ms`;
+  document.getElementById("metric-llm-ms").textContent = `${llmMs.toFixed(0)} ms`;
+  document.getElementById("metric-total-ms").textContent = `${totalMs.toFixed(0)} ms`;
+  document.getElementById("metric-tokens-total").textContent = String(totTok);
+
+  const retCard = document.getElementById("metric-retrieval-card");
+  const llmCard = document.getElementById("metric-llm-card");
+  const totCard = document.getElementById("metric-total-card");
+  const tokCard = document.getElementById("metric-tokens-card");
+  if (retCard) retCard.textContent = `${retMs.toFixed(1)} ms`;
+  if (llmCard) llmCard.textContent = `${llmMs.toFixed(0)} ms`;
+  if (totCard) totCard.textContent = `${totalMs.toFixed(0)} ms`;
+  if (tokCard) tokCard.textContent = String(totTok);
+
+  document.getElementById("metric-rerank-sub").textContent = `Rerank: ${rerankMs.toFixed(1)} ms`;
   document.getElementById("metric-model-sub").textContent =
     (data.effective_settings && data.effective_settings.llm_model) || currentSettings.llmModel;
   document.getElementById("metric-status-sub").textContent = data.abstained
@@ -859,21 +1308,6 @@ function renderMetricsSection(data) {
     : "Grounded";
   document.getElementById("metric-tokens-sub").textContent =
     `${pTok} prompt / ${cTok} out`;
-}
-
-function escapeHtml(str) {
-  return String(str || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function formatAnswerWithClickableCitations(answerText) {
-  const escaped = escapeHtml(answerText);
-  return escaped.replace(/\[(\d+)\]/g, (match, num) => {
-    return `<button type="button" class="cite-badge" onclick="highlightCitation(${num})" title="Scroll to Citation [${num}]">[${num}]</button>`;
-  });
 }
 
 window.highlightCitation = function (num) {
@@ -895,40 +1329,103 @@ window.highlightCitation = function (num) {
 };
 
 /* =====================================================================
-   TAB 2: 40-QUESTION EVALUATION HARNESS
+   TAB 2: EVALUATION HARNESS (A.4 & D)
    ===================================================================== */
+function updateEvalRunButtonLabels() {
+  const selectEl = document.getElementById("ablation-config-select");
+  const runSelectedBtn = document.getElementById("run-selected-eval-btn");
+  if (!selectEl || !runSelectedBtn) return;
+  const shortName = ABLATION_SHORT_LABELS[selectEl.value] || selectEl.value;
+  runSelectedBtn.textContent = `Run selected (${shortName})`;
+}
+
 function initEvalControls() {
-  document.getElementById("ablation-config-select").addEventListener("change", () => {
+  const selectEl = document.getElementById("ablation-config-select");
+  selectEl.addEventListener("change", () => {
+    updateEvalRunButtonLabels();
     if (currentEvalReport) renderEvalDashboard(currentEvalReport);
   });
+  updateEvalRunButtonLabels();
+
   document.getElementById("eval-category-filter").addEventListener("change", () => {
     if (currentEvalReport) renderQuestionsTable(currentEvalReport);
   });
   document.getElementById("eval-search-filter").addEventListener("input", () => {
     if (currentEvalReport) renderQuestionsTable(currentEvalReport);
   });
+
+  // Run selected configuration only
+  document.getElementById("run-selected-eval-btn").addEventListener("click", async () => {
+    await triggerEvaluationRun(selectEl.value);
+  });
+
+  // Run all 4 configurations
   document.getElementById("run-eval-btn").addEventListener("click", async () => {
-    const btn = document.getElementById("run-eval-btn");
-    btn.disabled = true;
-    btn.textContent = "Evaluating 40 QA Pairs...";
-    try {
-      const res = await fetch("/api/v1/eval/run", { method: "POST" });
-      currentEvalReport = await res.json();
-      renderEvalDashboard(currentEvalReport);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "Re-Run All 40 Questions";
-    }
+    await triggerEvaluationRun(null);
   });
 }
 
-async function loadEvalReport() {
+async function triggerEvaluationRun(selectedConfig) {
+  const runAllBtn = document.getElementById("run-eval-btn");
+  const runSelBtn = document.getElementById("run-selected-eval-btn");
+  const evalLoading = document.getElementById("eval-loading");
+  const evalError = document.getElementById("eval-error");
+
+  runAllBtn.disabled = true;
+  runSelBtn.disabled = true;
+  evalError.classList.add("hidden");
+  evalLoading.classList.remove("hidden");
+
+  if (selectedConfig) {
+    runSelBtn.textContent = `Running ${ABLATION_SHORT_LABELS[selectedConfig] || selectedConfig}...`;
+  } else {
+    runAllBtn.textContent = "Running all 4...";
+  }
+
   try {
+    const res = await fetch("/api/v1/eval/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(selectedConfig ? { config: selectedConfig } : {}),
+    });
+    if (!res.ok) {
+      throw new Error(`Evaluation HTTP ${res.status}`);
+    }
+    currentEvalReport = await res.json();
+    renderEvalDashboard(currentEvalReport);
+    showToast(
+      selectedConfig
+        ? `Completed evaluation for ${ABLATION_LABELS[selectedConfig]}`
+        : `Completed evaluation across all 4 configurations`
+    );
+  } catch (err) {
+    evalError.textContent = `Evaluation failed: ${err.message}`;
+    evalError.classList.remove("hidden");
+  } finally {
+    evalLoading.classList.add("hidden");
+    runAllBtn.disabled = false;
+    runSelBtn.disabled = false;
+    runAllBtn.textContent = "Run all 4";
+    updateEvalRunButtonLabels();
+  }
+}
+
+async function loadEvalReport() {
+  const evalLoading = document.getElementById("eval-loading");
+  const evalError = document.getElementById("eval-error");
+  try {
+    evalLoading.classList.remove("hidden");
     const res = await fetch("/api/v1/eval/report");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     currentEvalReport = await res.json();
     renderEvalDashboard(currentEvalReport);
   } catch (err) {
-    console.error("Failed to load eval report:", err);
+    if (evalError) {
+      evalError.textContent = `Failed to load evaluation report: ${err.message}`;
+      evalError.classList.remove("hidden");
+    }
+  } finally {
+    if (evalLoading) evalLoading.classList.add("hidden");
   }
 }
 
@@ -938,12 +1435,23 @@ function renderEvalDashboard(report) {
   const activeRun = runs[selectedKey] || runs.hybrid_rrf_rerank;
   if (!activeRun) return;
 
+  const totalQs = activeRun.total_questions || report.dataset_size || 60;
+  const ansQs = activeRun.answerable_questions || 50;
+  const trapQs = activeRun.unanswerable_questions || 10;
+
+  const subEl = document.getElementById("eval-subtitle-text");
+  if (subEl) {
+    subEl.textContent = `Benchmark retrieval and answer accuracy across ${totalQs} test questions (${ansQs} answerable, ${trapQs} unanswerable traps) and 4 ablation configurations.`;
+  }
+
   const m = activeRun.metrics;
-  document.getElementById("eval-kpi-grid").innerHTML = `
+
+  // Group 1: Retrieval (Recall@5, MRR@5, nDCG@5) — 3 cards, no orphan
+  document.getElementById("eval-retrieval-kpis").innerHTML = `
     <div class="kpi-box">
       <div class="kpi-label">Recall@5</div>
       <div class="kpi-val">${(m.recall_at_5 * 100).toFixed(1)}%</div>
-      <div class="kpi-sub">35 answerable questions</div>
+      <div class="kpi-sub">${ansQs} answerable questions</div>
     </div>
     <div class="kpi-box">
       <div class="kpi-label">MRR@5</div>
@@ -951,14 +1459,18 @@ function renderEvalDashboard(report) {
       <div class="kpi-sub">Mean Reciprocal Rank</div>
     </div>
     <div class="kpi-box">
-      <div class="kpi-label">NDCG@5</div>
+      <div class="kpi-label">nDCG@5</div>
       <div class="kpi-val">${m.ndcg_at_5.toFixed(3)}</div>
       <div class="kpi-sub">Rank quality discount</div>
     </div>
+  `;
+
+  // Group 2: Answer quality (Accuracy, Faithfulness, Citation recall, Abstention) — 4 cards, no orphan
+  document.getElementById("eval-answer-kpis").innerHTML = `
     <div class="kpi-box">
-      <div class="kpi-label">Answer Accuracy</div>
+      <div class="kpi-label">Accuracy</div>
       <div class="kpi-val">${(m.answer_accuracy * 100).toFixed(1)}%</div>
-      <div class="kpi-sub">Key-fact coverage (40 QA)</div>
+      <div class="kpi-sub">Key-fact coverage (${totalQs} QA)</div>
     </div>
     <div class="kpi-box">
       <div class="kpi-label">Faithfulness</div>
@@ -966,42 +1478,62 @@ function renderEvalDashboard(report) {
       <div class="kpi-sub">Grounded in cited chunks</div>
     </div>
     <div class="kpi-box">
-      <div class="kpi-label">Citation Recall</div>
+      <div class="kpi-label">Citation recall</div>
       <div class="kpi-val">${(m.citation_recall * 100).toFixed(1)}%</div>
       <div class="kpi-sub">Ground-truth chunks cited</div>
     </div>
     <div class="kpi-box">
-      <div class="kpi-label">Abstention Acc</div>
+      <div class="kpi-label">Abstention</div>
       <div class="kpi-val">${(m.abstention_accuracy * 100).toFixed(1)}%</div>
-      <div class="kpi-sub">5 unanswerable trap queries</div>
+      <div class="kpi-sub">${trapQs} unanswerable trap queries</div>
     </div>
   `;
 
-  const labels = {
-    dense_only: "Dense Only (pgvector)",
-    sparse_only: "Sparse Only (tsvector)",
-    hybrid_rrf: "Hybrid Search (RRF)",
-    hybrid_rrf_rerank: "Hybrid (RRF) + Cross-Encoder Rerank",
+  // Compute best values per column across all 4 ablation configs
+  const availKeys = Object.keys(ABLATION_LABELS).filter((k) => runs[k]);
+  const metricKeysHigherBetter = [
+    "recall_at_1",
+    "recall_at_3",
+    "recall_at_5",
+    "mrr_at_5",
+    "ndcg_at_5",
+    "answer_accuracy",
+    "faithfulness",
+    "citation_recall",
+    "abstention_accuracy",
+  ];
+  const bestVals = {};
+  metricKeysHigherBetter.forEach((mk) => {
+    bestVals[mk] = Math.max(...availKeys.map((k) => Number(runs[k].metrics[mk] ?? -1)));
+  });
+  const getLat = (rm) => Number(rm.avg_retrieval_latency_ms ?? rm.avg_latency_ms ?? 9999);
+  const bestLatency = Math.min(...availKeys.map((k) => getLat(runs[k].metrics)));
+
+  const fmtCell = (val, bestVal, text, lowerBetter = false) => {
+    const isBest = lowerBetter
+      ? Math.abs(val - bestVal) <= 0.02
+      : Math.abs(val - bestVal) <= 0.0005;
+    return `<td class="${isBest ? "best-metric-cell" : ""}">${text}</td>`;
   };
 
-  document.getElementById("ablation-tbody").innerHTML = Object.keys(labels)
-    .filter((k) => runs[k])
+  document.getElementById("ablation-tbody").innerHTML = availKeys
     .map((k) => {
       const rm = runs[k].metrics;
       const isSelected = k === selectedKey;
+      const lat = getLat(rm);
       return `
         <tr class="${isSelected ? "row-selected" : ""}">
-          <td><strong>${labels[k]}</strong></td>
-          <td>${(rm.recall_at_1 * 100).toFixed(1)}%</td>
-          <td>${(rm.recall_at_3 * 100).toFixed(1)}%</td>
-          <td><strong>${(rm.recall_at_5 * 100).toFixed(1)}%</strong></td>
-          <td>${rm.mrr_at_5.toFixed(3)}</td>
-          <td>${rm.ndcg_at_5.toFixed(3)}</td>
-          <td><strong>${(rm.answer_accuracy * 100).toFixed(1)}%</strong></td>
-          <td>${(rm.faithfulness * 100).toFixed(1)}%</td>
-          <td>${(rm.citation_recall * 100).toFixed(1)}%</td>
-          <td>${(rm.abstention_accuracy * 100).toFixed(1)}%</td>
-          <td>${rm.avg_latency_ms.toFixed(2)} ms</td>
+          <td class="sticky-col"><strong>${ABLATION_LABELS[k]}</strong></td>
+          ${fmtCell(rm.recall_at_1, bestVals.recall_at_1, `${(rm.recall_at_1 * 100).toFixed(1)}%`)}
+          ${fmtCell(rm.recall_at_3, bestVals.recall_at_3, `${(rm.recall_at_3 * 100).toFixed(1)}%`)}
+          ${fmtCell(rm.recall_at_5, bestVals.recall_at_5, `${(rm.recall_at_5 * 100).toFixed(1)}%`)}
+          ${fmtCell(rm.mrr_at_5, bestVals.mrr_at_5, rm.mrr_at_5.toFixed(3))}
+          ${fmtCell(rm.ndcg_at_5, bestVals.ndcg_at_5, rm.ndcg_at_5.toFixed(3))}
+          ${fmtCell(rm.answer_accuracy, bestVals.answer_accuracy, `${(rm.answer_accuracy * 100).toFixed(1)}%`)}
+          ${fmtCell(rm.faithfulness, bestVals.faithfulness, `${(rm.faithfulness * 100).toFixed(1)}%`)}
+          ${fmtCell(rm.citation_recall, bestVals.citation_recall, `${(rm.citation_recall * 100).toFixed(1)}%`)}
+          ${fmtCell(rm.abstention_accuracy, bestVals.abstention_accuracy, `${(rm.abstention_accuracy * 100).toFixed(1)}%`)}
+          ${fmtCell(lat, bestLatency, `${lat.toFixed(2)} ms`, true)}
         </tr>
       `;
     })
@@ -1016,13 +1548,72 @@ function renderEvalDashboard(report) {
         <div class="kpi-box">
           <div class="kpi-label">${escapeHtml(cat)} (${stats.count} Qs)</div>
           <div class="kpi-val">${(stats.answer_accuracy * 100).toFixed(1)}%</div>
-          <div class="kpi-sub">Answer Acc • Recall@5: ${r5}</div>
+          <div class="kpi-sub">Answer Acc &bull; Recall@5: ${r5}</div>
         </div>
       `;
     })
     .join("");
 
+  renderFailedQuestionsSection(activeRun, selectedKey);
   renderQuestionsTable(report);
+}
+
+function renderFailedQuestionsSection(activeRun, selectedKey) {
+  const tbody = document.getElementById("failed-questions-tbody");
+  const countBadge = document.getElementById("failed-questions-count");
+  const cfgLabel = document.getElementById("failed-config-label");
+  if (!tbody) return;
+
+  const configName = ABLATION_LABELS[selectedKey] || selectedKey;
+  if (cfgLabel) cfgLabel.textContent = configName;
+
+  const questions = activeRun.questions || [];
+  const failed = questions.filter((q) => {
+    if (q.should_abstain) {
+      return !q.abstained || q.answer_accuracy < 1.0;
+    }
+    return q.recall_at_5 < 1.0 || q.answer_accuracy < 1.0;
+  });
+
+  if (countBadge) countBadge.textContent = String(failed.length);
+
+  if (failed.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="empty-table-cell">All questions passed for ${escapeHtml(configName)}.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = failed
+    .map((q) => {
+      const expectedDesc = q.should_abstain
+        ? "Should abstain (unanswerable trap)"
+        : q.expected_answer
+        ? `${q.expected_answer} (Key facts: ${(q.key_facts || []).join(", ")})`
+        : `Chunks: ${(q.expected_chunk_ids || []).join(", ")} | Facts: ${(q.key_facts || []).join(", ")}`;
+
+      const gotDesc = q.abstained
+        ? `Abstained (${(q.answer_accuracy * 100).toFixed(0)}% acc)`
+        : `${q.answer || "—"} (${(q.answer_accuracy * 100).toFixed(0)}% fact match, Recall@5 ${(q.recall_at_5 * 100).toFixed(0)}%)`;
+
+      return `
+        <tr>
+          <td><strong>${escapeHtml(q.id)}</strong></td>
+          <td>${escapeHtml(q.question)}</td>
+          <td><div class="failed-cell-text">${escapeHtml(expectedDesc)}</div></td>
+          <td><div class="failed-cell-text">${escapeHtml(gotDesc)}</div></td>
+          <td><span class="badge-cat">${escapeHtml(ABLATION_SHORT_LABELS[selectedKey] || selectedKey)}</span></td>
+          <td>
+            <button type="button" class="secondary-btn btn-xs" onclick="tryQuestionInPlayground(${JSON.stringify(q.question).replace(/"/g, "&quot;")})">
+              Test Live
+            </button>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
 }
 
 function renderQuestionsTable(report) {
@@ -1060,11 +1651,11 @@ function renderQuestionsTable(report) {
           <td>${escapeHtml(q.question)}</td>
           <td>${expStr}</td>
           <td>${topRet}</td>
-          <td>${(q.recall_at_5 * 100).toFixed(0)}%</td>
-          <td>${q.mrr_at_5.toFixed(2)}</td>
+          <td>${q.should_abstain ? "—" : `${(q.recall_at_5 * 100).toFixed(0)}%`}</td>
+          <td>${q.should_abstain ? "—" : q.mrr_at_5.toFixed(2)}</td>
           <td><strong>${(q.answer_accuracy * 100).toFixed(0)}%</strong></td>
           <td>
-            <button class="secondary-btn" onclick="tryQuestionInPlayground(${JSON.stringify(q.question).replace(/"/g, "&quot;")})">
+            <button type="button" class="secondary-btn btn-xs" onclick="tryQuestionInPlayground(${JSON.stringify(q.question).replace(/"/g, "&quot;")})">
               Test Live
             </button>
           </td>
@@ -1075,16 +1666,24 @@ function renderQuestionsTable(report) {
 }
 
 window.tryQuestionInPlayground = function (questionText) {
-  document.querySelector('[data-tab="tab-playground"]').click();
-  document.getElementById("question-input").value = questionText;
+  switchToTab("tab-playground");
+  const qInput = document.getElementById("question-input");
+  qInput.value = questionText;
   runAskQuery();
 };
 
 /* =====================================================================
-   TAB 3: CORPUS & DOCUMENT INGESTION
+   TAB 3: CORPUS & DOCUMENT INGESTION (A.5)
    ===================================================================== */
 function initCorpusControls() {
   document.getElementById("refresh-docs-btn").addEventListener("click", loadDocuments);
+
+  const searchInput = document.getElementById("doc-search-input");
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      renderDocumentsList();
+    });
+  }
 
   const fileInput = document.getElementById("file-upload-input");
   if (fileInput) {
@@ -1104,14 +1703,12 @@ function initCorpusControls() {
             .replace(/^_+|_+$/g, "");
         const idEl = document.getElementById("ingest-id");
         const sourceEl = document.getElementById("ingest-source");
-        // Only populate id and source fallbacks if empty; leave title blank unless user typed one
-        // so backend honors: Form Title -> Markdown # H1 -> Filename
         if (!idEl.value.trim()) idEl.value = cleanSlug;
         if (!sourceEl.value.trim()) sourceEl.value = `upload/${file.name}`;
         document.getElementById("ingest-content").value = contentText;
         const statusEl = document.getElementById("uploaded-file-status");
         if (statusEl) {
-          statusEl.textContent = `Loaded "${file.name}" (${file.size} bytes) — click "Chunk, Embed & Index Document" below!`;
+          statusEl.textContent = `Loaded "${file.name}" (${file.size} bytes) — click "Index document" below.`;
         }
       };
       reader.readAsText(file);
@@ -1122,9 +1719,16 @@ function initCorpusControls() {
     e.preventDefault();
     const btn = document.getElementById("ingest-submit-btn");
     const feedback = document.getElementById("ingest-feedback");
+    const progBox = document.getElementById("ingest-progress-box");
+    const progFill = document.getElementById("ingest-progress-fill");
+    const progLabel = document.getElementById("ingest-progress-label");
+
     btn.disabled = true;
     btn.textContent = "Indexing...";
     feedback.classList.add("hidden");
+    progBox.classList.remove("hidden");
+    progFill.style.width = "35%";
+    progLabel.textContent = "Chunking & computing 768-d embeddings...";
 
     const rawId = document.getElementById("ingest-id").value.trim();
     const rawTitle = document.getElementById("ingest-title").value.trim();
@@ -1143,50 +1747,251 @@ function initCorpusControls() {
     };
 
     try {
+      setTimeout(() => {
+        progFill.style.width = "75%";
+        progLabel.textContent = "Upserting into hybrid index...";
+      }, 120);
+
       const res = await fetch("/api/v1/ingest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ documents: [doc] }),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || `HTTP ${res.status}`);
+      }
       const data = await res.json();
-      feedback.textContent = `Ingested ${data.documents_ingested} document (${data.chunks_created} chunks created): ${data.document_ids.join(", ")}`;
+      progFill.style.width = "100%";
+      progLabel.textContent = `Indexed ${data.chunks_created} chunks.`;
+
+      feedback.textContent = `Indexed ${data.documents_ingested} document (${data.chunks_created} chunks created): ${data.document_ids.join(", ")}`;
       feedback.classList.remove("hidden");
+      showToast(`Indexed document (${data.chunks_created} chunks created)`);
+
       await loadDocuments();
       await fetchHealth();
     } catch (err) {
       feedback.textContent = `Error: ${err.message}`;
       feedback.classList.remove("hidden");
     } finally {
+      setTimeout(() => {
+        progBox.classList.add("hidden");
+        progFill.style.width = "0%";
+      }, 600);
       btn.disabled = false;
-      btn.textContent = "Chunk, Embed & Index Document";
+      btn.textContent = "Index document";
     }
   });
 }
 
 async function loadDocuments() {
+  const loadingEl = document.getElementById("docs-loading");
+  const errorEl = document.getElementById("docs-error");
   try {
+    if (loadingEl) loadingEl.classList.remove("hidden");
+    if (errorEl) errorEl.classList.add("hidden");
     const res = await fetch("/api/v1/documents");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     indexedDocuments = await res.json();
-    const container = document.getElementById("documents-list");
-    if (container) {
-      container.innerHTML = indexedDocuments
-        .map(
-          (d) => `
-          <div class="doc-card">
-            <div class="chunk-header">
-              <strong>${escapeHtml(d.title)}</strong>
-              <span class="chunk-id-tag">${escapeHtml(d.id)}</span>
-            </div>
-            <div class="muted-text" style="margin: 4px 0 0;">
-              Source: <code>${escapeHtml(d.source)}</code> &bull; Chunks Indexed: <strong>${d.chunk_count}</strong>
-            </div>
-          </div>
-        `
-        )
-        .join("");
-    }
+    updateCorpusSummaryLine();
+    renderDocumentsList();
     renderDocScopeMenu();
   } catch (err) {
-    console.error("Failed to load documents:", err);
+    if (errorEl) {
+      errorEl.textContent = `Failed to load documents: ${err.message}`;
+      errorEl.classList.remove("hidden");
+    }
+  } finally {
+    if (loadingEl) loadingEl.classList.add("hidden");
   }
+}
+
+function updateCorpusSummaryLine() {
+  const totalDocs = indexedDocuments.length;
+  const totalChunks = indexedDocuments.reduce((acc, d) => acc + Number(d.chunk_count || 0), 0);
+  const summaryEl = document.getElementById("corpus-summary-line");
+  if (summaryEl) {
+    summaryEl.textContent = `${totalDocs} document${totalDocs === 1 ? "" : "s"} · ${totalChunks} chunks`;
+  }
+  const statusDocs = document.getElementById("status-docs-count");
+  const statusChunks = document.getElementById("status-chunks-count");
+  if (statusDocs) statusDocs.textContent = `${totalDocs} docs`;
+  if (statusChunks) statusChunks.textContent = `${totalChunks} chunks`;
+}
+
+function renderDocumentsList() {
+  const container = document.getElementById("documents-list");
+  if (!container) return;
+
+  const query = (document.getElementById("doc-search-input")?.value || "").trim().toLowerCase();
+  const filtered = indexedDocuments.filter((d) => {
+    if (!query) return true;
+    const hay = `${d.title} ${d.id} ${d.source}`.toLowerCase();
+    return hay.includes(query);
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="empty-state-box">No documents match "${escapeHtml(query)}".</div>`;
+    return;
+  }
+
+  // Identical card layout for every doc: 1. Title, 2. ID chip, 3. Source & chunk count, 4. Actions
+  container.innerHTML = filtered
+    .map(
+      (d) => `
+      <div class="doc-card" data-doc-id="${escapeHtml(d.id)}">
+        <div class="doc-card-title">${escapeHtml(d.title)}</div>
+        <div class="doc-card-id-row">
+          <span class="chunk-id-tag">${escapeHtml(d.id)}</span>
+        </div>
+        <div class="doc-card-meta">
+          <span>Source: <code>${escapeHtml(d.source)}</code></span>
+          <span class="status-sep">&middot;</span>
+          <span><strong>${d.chunk_count}</strong> chunks</span>
+        </div>
+        <div class="doc-card-actions">
+          <button
+            type="button"
+            class="secondary-btn btn-xs"
+            onclick="openDocumentChunksModal(${JSON.stringify(d.id).replace(/"/g, "&quot;")}, ${JSON.stringify(d.title).replace(/"/g, "&quot;")})"
+          >
+            View chunks
+          </button>
+          <button
+            type="button"
+            class="secondary-btn btn-xs doc-delete-btn"
+            onclick="promptDeleteDocument(${JSON.stringify(d.id).replace(/"/g, "&quot;")}, ${JSON.stringify(d.title).replace(/"/g, "&quot;")})"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    `
+    )
+    .join("");
+}
+
+/* =====================================================================
+   MODALS (VIEW CHUNKS & DELETE CONFIRM) & TOASTS (A.5)
+   ===================================================================== */
+function initModals() {
+  const chunksModal = document.getElementById("doc-chunks-modal");
+  const closeChunksBtn = document.getElementById("close-chunks-modal-btn");
+  if (closeChunksBtn && chunksModal) {
+    closeChunksBtn.addEventListener("click", () => chunksModal.classList.add("hidden"));
+    chunksModal.addEventListener("click", (e) => {
+      if (e.target === chunksModal) chunksModal.classList.add("hidden");
+    });
+  }
+
+  const delModal = document.getElementById("delete-confirm-modal");
+  const cancelDelBtn = document.getElementById("cancel-delete-btn");
+  const confirmDelBtn = document.getElementById("confirm-delete-btn");
+  if (cancelDelBtn && delModal) {
+    cancelDelBtn.addEventListener("click", () => {
+      pendingDeleteDocId = null;
+      delModal.classList.add("hidden");
+    });
+    delModal.addEventListener("click", (e) => {
+      if (e.target === delModal) {
+        pendingDeleteDocId = null;
+        delModal.classList.add("hidden");
+      }
+    });
+  }
+  if (confirmDelBtn && delModal) {
+    confirmDelBtn.addEventListener("click", async () => {
+      if (!pendingDeleteDocId) return;
+      const docId = pendingDeleteDocId;
+      confirmDelBtn.disabled = true;
+      confirmDelBtn.textContent = "Deleting...";
+      try {
+        const res = await fetch(`/api/v1/documents/${encodeURIComponent(docId)}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        delModal.classList.add("hidden");
+        showToast(`Deleted document "${docId}"`);
+        await loadDocuments();
+        await fetchHealth();
+      } catch (err) {
+        showToast(`Failed to delete document: ${err.message}`);
+      } finally {
+        pendingDeleteDocId = null;
+        confirmDelBtn.disabled = false;
+        confirmDelBtn.textContent = "Delete document";
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      chunksModal?.classList.add("hidden");
+      delModal?.classList.add("hidden");
+    }
+  });
+}
+
+window.openDocumentChunksModal = async function (docId, docTitle) {
+  const modal = document.getElementById("doc-chunks-modal");
+  const titleEl = document.getElementById("doc-chunks-modal-title");
+  const subEl = document.getElementById("doc-chunks-modal-sub");
+  const bodyEl = document.getElementById("doc-chunks-modal-body");
+  if (!modal || !bodyEl) return;
+
+  titleEl.textContent = docTitle || docId;
+  subEl.textContent = `ID: ${docId}`;
+  bodyEl.innerHTML = `<div class="skeleton-block"><div class="skeleton-card"></div></div>`;
+  modal.classList.remove("hidden");
+
+  try {
+    const res = await fetch(`/api/v1/documents/${encodeURIComponent(docId)}/chunks`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const chunks = await res.json();
+    subEl.textContent = `ID: ${docId} · ${chunks.length} chunks indexed`;
+    if (chunks.length === 0) {
+      bodyEl.innerHTML = `<div class="empty-state-box">No chunks found for this document.</div>`;
+      return;
+    }
+    bodyEl.innerHTML = chunks
+      .map(
+        (c) => `
+        <div class="chunk-card">
+          <div class="chunk-header">
+            <span class="chunk-id-tag">${escapeHtml(c.chunk_id)}</span>
+            <span class="muted-text">${c.token_count || 0} tokens</span>
+          </div>
+          ${c.heading ? `<div class="chunk-heading">${escapeHtml(c.heading)}</div>` : ""}
+          <div class="chunk-content markdown-body">${renderSafeMarkdown(c.content)}</div>
+        </div>
+      `
+      )
+      .join("");
+  } catch (err) {
+    bodyEl.innerHTML = `<div class="error-callout">Failed to load chunks: ${escapeHtml(err.message)}</div>`;
+  }
+};
+
+window.promptDeleteDocument = function (docId, docTitle) {
+  pendingDeleteDocId = docId;
+  const modal = document.getElementById("delete-confirm-modal");
+  const desc = document.getElementById("delete-modal-desc");
+  if (desc) {
+    desc.innerHTML = `Are you sure you want to delete <strong>${escapeHtml(docTitle)}</strong> (<code>${escapeHtml(docId)}</code>) and all of its indexed chunks?`;
+  }
+  modal?.classList.remove("hidden");
+};
+
+function showToast(message) {
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+  const toast = document.createElement("div");
+  toast.className = "toast-item";
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add("toast-exit");
+    setTimeout(() => toast.remove(), 260);
+  }, 3200);
 }

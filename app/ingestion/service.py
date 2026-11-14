@@ -121,7 +121,11 @@ def list_documents() -> List[Dict[str, Any]]:
             ).fetchall()
         return [dict(r) for r in rows]
     except Exception:
-        from app.retrieval.hybrid import _extra_ingested_docs, _get_in_memory_corpus_index
+        from app.retrieval.hybrid import (
+            _deleted_doc_ids,
+            _extra_ingested_docs,
+            _get_in_memory_corpus_index,
+        )
         from app.ingestion.seed import load_corpus_documents
 
         entries = _get_in_memory_corpus_index()
@@ -131,9 +135,11 @@ def list_documents() -> List[Dict[str, Any]]:
 
         docs_by_id: Dict[str, Any] = {}
         for d in load_corpus_documents():
-            docs_by_id[d.id] = d
+            if d.id not in _deleted_doc_ids:
+                docs_by_id[d.id] = d
         for d in _extra_ingested_docs:
-            docs_by_id[d.id] = d
+            if d.id not in _deleted_doc_ids:
+                docs_by_id[d.id] = d
         return [
             {
                 "id": d.id,
@@ -144,3 +150,61 @@ def list_documents() -> List[Dict[str, Any]]:
             }
             for d in docs_by_id.values()
         ]
+
+
+def get_document_chunks(document_id: str) -> List[Dict[str, Any]]:
+    """Return all indexed chunks for a specific document_id ordered by chunk_index."""
+    try:
+        with get_db_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    c.id AS chunk_id,
+                    c.document_id,
+                    c.chunk_index,
+                    c.heading,
+                    c.content,
+                    c.token_count,
+                    d.title AS document_title,
+                    d.source
+                FROM chunks c
+                JOIN documents d ON d.id = c.document_id
+                WHERE c.document_id = %s
+                ORDER BY c.chunk_index ASC
+                """,
+                (document_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        from app.retrieval.hybrid import _get_in_memory_corpus_index
+
+        entries = _get_in_memory_corpus_index()
+        return [
+            {
+                "chunk_id": chunk.chunk_id,
+                "document_id": chunk.document_id,
+                "chunk_index": chunk.chunk_index,
+                "heading": chunk.heading,
+                "content": chunk.content,
+                "token_count": chunk.token_count,
+                "document_title": chunk.document_title,
+                "source": chunk.source,
+            }
+            for chunk, _ in entries
+            if chunk.document_id == document_id
+        ]
+
+
+def delete_document(document_id: str) -> Dict[str, Any]:
+    """Delete a document and its chunks by document_id."""
+    try:
+        with get_db_connection() as conn:
+            with conn.transaction():
+                conn.execute("DELETE FROM chunks WHERE document_id = %s", (document_id,))
+                conn.execute("DELETE FROM documents WHERE id = %s", (document_id,))
+    except Exception:
+        pass
+    from app.retrieval.hybrid import delete_in_memory_document
+
+    delete_in_memory_document(document_id)
+    return {"deleted": True, "document_id": document_id}

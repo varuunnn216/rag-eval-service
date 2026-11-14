@@ -5,14 +5,31 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import mimetypes
 from pathlib import Path
+import time
 from typing import Any, Dict
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from app.config import get_settings
-from app.generation.generator import answer_question
-from app.ingestion.service import ingest_documents, list_documents
-from app.retrieval.hybrid import retrieve_candidates
-from app.schemas import AskRequest, DocumentInput
+from app.generation.generator import (
+    ABSTENTION_MESSAGE,
+    LLMGenerationError,
+    SYSTEM_PROMPT,
+    answer_question,
+    call_gemini_llm,
+    estimate_token_count,
+    format_context_prompt,
+    select_context_chunks,
+    verify_answer_citations,
+)
+from app.ingestion.seed import load_corpus_documents
+from app.ingestion.service import (
+    delete_document,
+    get_document_chunks,
+    ingest_documents,
+    list_documents,
+)
+from app.retrieval.hybrid import retrieve_candidates, retrieve_candidates_with_timing
+from app.schemas import AskRequest, AskResponse, DocumentInput
 from eval.runner import run_evaluation_suite
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -35,6 +52,47 @@ def _get_health_payload() -> Dict[str, Any]:
     }
 
 
+def _parse_ask_request(body: Dict[str, Any]) -> AskRequest:
+    doc_ids = body.get("document_ids")
+    if isinstance(doc_ids, list):
+        doc_ids = [str(x) for x in doc_ids if x]
+    else:
+        doc_ids = None
+    return AskRequest(
+        question=str(body.get("question", "")),
+        mode=body.get("mode", "hybrid"),
+        top_k=int(body.get("top_k", 5)),
+        candidate_pool=int(body.get("candidate_pool", 20)),
+        use_reranker=bool(body.get("use_reranker", True)),
+        document_ids=doc_ids,
+        rerank_min_score=(
+            float(body["rerank_min_score"])
+            if body.get("rerank_min_score") is not None
+            else None
+        ),
+        rerank_relative_factor=(
+            float(body["rerank_relative_factor"])
+            if body.get("rerank_relative_factor") is not None
+            else None
+        ),
+        rerank_max_chunks=(
+            int(body["rerank_max_chunks"])
+            if body.get("rerank_max_chunks") is not None
+            else None
+        ),
+        llm_model=(
+            str(body["llm_model"]).strip()
+            if body.get("llm_model")
+            else None
+        ),
+        temperature=(
+            float(body["temperature"])
+            if body.get("temperature") is not None
+            else None
+        ),
+    )
+
+
 class RAGWebRequestHandler(BaseHTTPRequestHandler):
     """Zero-dependency HTTP handler serving the Web UI and /api/v1/* endpoints."""
 
@@ -51,6 +109,8 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"detail": "Not found"}, status=404)
             return
         mime, _ = mimetypes.guess_type(str(file_path))
+        if file_path.suffix == ".svg":
+            mime = "image/svg+xml"
         content = file_path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", mime or "application/octet-stream")
@@ -65,12 +125,20 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length).decode("utf-8")
         return json.loads(raw)
 
+    def _send_sse_event(self, payload: Dict[str, Any]) -> None:
+        line = f"data: {json.dumps(payload, default=str)}\n\n".encode("utf-8")
+        self.wfile.write(line)
+        self.wfile.flush()
+
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path
 
         if path == "/" or path == "/index.html":
             self._send_file(STATIC_DIR / "index.html")
+            return
+        if path == "/favicon.ico" or path == "/favicon.svg":
+            self._send_file(STATIC_DIR / "favicon.svg")
             return
         if path.startswith("/static/"):
             rel = path[len("/static/") :]
@@ -86,6 +154,12 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
         if path == "/api/v1/documents":
             self._send_json(list_documents())
             return
+        if path.startswith("/api/v1/documents/") and path.endswith("/chunks"):
+            parts = path.split("/")
+            if len(parts) >= 5:
+                doc_id = unquote(parts[4])
+                self._send_json(get_document_chunks(doc_id))
+                return
         if path == "/api/v1/eval/report":
             settings = get_settings()
             report_path = settings.project_root / "eval" / "reports" / "latest_eval_report.json"
@@ -97,52 +171,72 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
 
         self._send_json({"detail": f"Unknown route: {path}"}, status=404)
 
+    def do_DELETE(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        path = parsed.path
+        if path.startswith("/api/v1/documents/"):
+            doc_id = unquote(path[len("/api/v1/documents/") :].strip("/"))
+            if doc_id:
+                self._send_json(delete_document(doc_id))
+                return
+        self._send_json({"detail": f"Unknown route: {path}"}, status=404)
+
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path
         try:
             body = self._read_json_body()
             if path == "/api/v1/ask":
-                doc_ids = body.get("document_ids")
-                if isinstance(doc_ids, list):
-                    doc_ids = [str(x) for x in doc_ids if x]
-                else:
-                    doc_ids = None
-                req = AskRequest(
-                    question=str(body.get("question", "")),
-                    mode=body.get("mode", "hybrid"),
-                    top_k=int(body.get("top_k", 5)),
-                    candidate_pool=int(body.get("candidate_pool", 20)),
-                    use_reranker=bool(body.get("use_reranker", True)),
-                    document_ids=doc_ids,
-                    rerank_min_score=(
-                        float(body["rerank_min_score"])
-                        if body.get("rerank_min_score") is not None
-                        else None
-                    ),
-                    rerank_relative_factor=(
-                        float(body["rerank_relative_factor"])
-                        if body.get("rerank_relative_factor") is not None
-                        else None
-                    ),
-                    rerank_max_chunks=(
-                        int(body["rerank_max_chunks"])
-                        if body.get("rerank_max_chunks") is not None
-                        else None
-                    ),
-                    llm_model=(
-                        str(body["llm_model"]).strip()
-                        if body.get("llm_model")
-                        else None
-                    ),
-                    temperature=(
-                        float(body["temperature"])
-                        if body.get("temperature") is not None
-                        else None
-                    ),
-                )
+                req = _parse_ask_request(body)
                 resp = answer_question(req)
                 self._send_json(resp.to_dict())
+                return
+
+            if path == "/api/v1/ask/stream":
+                req = _parse_ask_request(body)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "close")
+                self.end_headers()
+
+                self._send_sse_event({"stage": "retrieving"})
+                t_start = time.perf_counter()
+                raw_chunks, retrieval_ms, rerank_ms = retrieve_candidates_with_timing(
+                    query=req.question,
+                    mode=req.mode,
+                    top_k=req.top_k,
+                    candidate_pool=req.candidate_pool,
+                    use_reranker=req.use_reranker,
+                    document_ids=req.document_ids,
+                )
+                self._send_sse_event(
+                    {"stage": "reranking", "retrieval_ms": retrieval_ms, "rerank_ms": rerank_ms}
+                )
+                annotated_chunks, selected_chunks, abstain_pre_llm = select_context_chunks(
+                    raw_chunks,
+                    min_score_override=req.rerank_min_score,
+                    relative_factor_override=req.rerank_relative_factor,
+                    max_chunks_override=req.rerank_max_chunks,
+                )
+                self._send_sse_event(
+                    {
+                        "stage": "generating",
+                        "selected_count": len(selected_chunks),
+                        "abstain_pre_llm": abstain_pre_llm,
+                    }
+                )
+                resp = answer_question(req)
+                # Stream answer tokens progressively for smooth visual feedback
+                if not resp.abstained and not resp.error and resp.answer:
+                    words = resp.answer.split(" ")
+                    accum = []
+                    step = max(2, len(words) // 8)
+                    for i in range(0, len(words), step):
+                        accum.extend(words[i : i + step])
+                        self._send_sse_event({"stage": "delta", "text": " ".join(accum)})
+                        time.sleep(0.018)
+                self._send_sse_event({"stage": "done", "response": resp.to_dict()})
                 return
 
             if path == "/api/v1/search":
@@ -200,8 +294,16 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(res.to_dict())
                 return
 
+            if path.startswith("/api/v1/documents/") and path.endswith("/delete"):
+                parts = path.split("/")
+                if len(parts) >= 5:
+                    doc_id = unquote(parts[4])
+                    self._send_json(delete_document(doc_id))
+                    return
+
             if path == "/api/v1/eval/run":
-                self._send_json(run_evaluation_suite())
+                selected_cfg = body.get("config") if isinstance(body, dict) else None
+                self._send_json(run_evaluation_suite(selected_config=selected_cfg))
                 return
 
             self._send_json({"detail": f"Unknown route: {path}"}, status=404)
@@ -210,19 +312,10 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8000) -> None:
-    bluebird_path = get_settings().project_root / "data" / "corpus" / "08_bluebird_cafe.md"
-    if bluebird_path.exists():
-        ingest_documents(
-            [
-                DocumentInput(
-                    id="doc_08_bluebird_cafe",
-                    title="Bluebird Cafe Staff Handbook",
-                    source="data/corpus/08_bluebird_cafe.md",
-                    content=bluebird_path.read_text(encoding="utf-8"),
-                    metadata={"filename": "08_bluebird_cafe.md"},
-                )
-            ]
-        )
+    try:
+        ingest_documents(load_corpus_documents())
+    except Exception:
+        pass
     server = ThreadingHTTPServer((host, port), RAGWebRequestHandler)
     print(f"RAG Service & Eval Harness Web UI listening at http://{host}:{port}")
     try:
