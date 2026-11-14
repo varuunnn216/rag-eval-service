@@ -10,31 +10,41 @@
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+  <!-- Official React Bits Aurora WebGL2 Backdrop + Ambient Grid -->
+  <div id="reactbits-aurora" class="aurora-backdrop" aria-hidden="true">
+    <canvas class="aurora-canvas"></canvas>
+    <div class="aurora-grid-mask"></div>
+  </div>
+
   <header class="topbar">
     <div class="topbar-brand">
       <div class="logo-badge" aria-hidden="true">RAG</div>
       <div>
-        <h1>RAG Workbench</h1>
-        <p class="subtitle">Grounded QA with Verified Citations</p>
+        <h1>
+          <span data-rb-gradient-text data-colors="#60A5FA,#C084FC,#38BDF8,#34D399,#818CF8" data-speed="6" data-glow="0.45">RAG Workbench</span>
+        </h1>
+        <p class="subtitle" data-rb-shiny>Hybrid Retrieval &bull; Cross-Encoder Reranking &bull; Verified Citations</p>
       </div>
     </div>
     <div class="system-pills" id="health-pills" aria-live="polite">
-      <span class="pill pill-ok"><span class="dot"></span> Online</span>
-      <span class="pill" id="pill-docs">7 Docs</span>
-      <span class="pill" id="pill-models">gemini-3.5-flash-lite</span>
+      <span class="pill pill-ok"><span class="dot"></span> <span data-rb-shiny>Online</span></span>
+      <span class="pill" id="pill-docs" data-rb-decrypt>7 Docs</span>
+      <span class="pill" id="pill-models" data-rb-decrypt>gemini-3.5-flash-lite</span>
     </div>
   </header>
 
   <nav class="tab-nav" role="tablist" aria-label="Main Navigation">
-    <button class="tab-btn active" role="tab" aria-selected="true" data-tab="tab-playground">
-      Ask &amp; Citations
-    </button>
-    <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-eval">
-      Evaluation (40 QA)
-    </button>
-    <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-corpus">
-      Documents &amp; Upload
-    </button>
+    <div class="tab-nav-inner">
+      <button class="tab-btn active" role="tab" aria-selected="true" data-tab="tab-playground">
+        Ask &amp; Citations
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-eval">
+        Evaluation (40 QA)
+      </button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-corpus">
+        Documents &amp; Upload
+      </button>
+    </div>
   </nav>
 
   <main class="container">
@@ -48,7 +58,7 @@
         <summary class="section-summary">
           <div class="section-title-group">
             <span class="section-step-num">1</span>
-            <h2>Ask a Question</h2>
+            <h2 data-rb-blur-text>Ask a Question</h2>
           </div>
           <span class="chevron-icon" aria-hidden="true"></span>
         </summary>
@@ -115,7 +125,7 @@
         <summary class="section-summary">
           <div class="section-title-group">
             <span class="section-step-num">2</span>
-            <h2>Pipeline Settings <span class="advanced-tag">Advanced</span></h2>
+            <h2><span data-rb-blur-text>Pipeline Settings</span> <span class="advanced-tag">Advanced</span></h2>
           </div>
           <div class="summary-right">
             <span id="settings-diff-summary" class="diff-summary-pill">Defaults</span>
@@ -294,7 +304,7 @@
         <summary class="section-summary">
           <div class="section-title-group">
             <span class="section-step-num">3</span>
-            <h2>Answer</h2>
+            <h2 data-rb-blur-text>Answer</h2>
           </div>
           <div class="summary-right">
             <span id="answer-state-pill" class="state-pill">Ready</span>
@@ -349,7 +359,7 @@
         <summary class="section-summary">
           <div class="section-title-group">
             <span class="section-step-num">4</span>
-            <h2>Citations</h2>
+            <h2 data-rb-blur-text>Citations</h2>
           </div>
           <div class="summary-right">
             <span id="citation-count" class="state-pill">Verified 0/0 citations</span>
@@ -373,7 +383,7 @@
         <summary class="section-summary">
           <div class="section-title-group">
             <span class="section-step-num">5</span>
-            <h2>Retrieved Context (<span id="chunk-count">0</span>)</h2>
+            <h2><span data-rb-blur-text>Retrieved Context</span> (<span id="chunk-count">0</span>)</h2>
           </div>
           <div class="summary-right">
             <span id="context-used-summary" class="state-pill">0 used / 0 retrieved</span>
@@ -410,7 +420,7 @@
         <summary class="section-summary">
           <div class="section-title-group">
             <span class="section-step-num">6</span>
-            <h2>Run Metrics</h2>
+            <h2 data-rb-blur-text>Run Metrics</h2>
           </div>
           <div class="summary-right">
             <span id="metrics-total-pill" class="state-pill">0 ms</span>
@@ -456,7 +466,9 @@
       <div class="card">
         <div class="card-header-row">
           <div>
-            <h2>40-Question Evaluation Harness</h2>
+            <h2>
+              <span data-rb-gradient-text data-colors="#60A5FA,#A78BFA,#34D399,#38BDF8" data-speed="7" data-glow="0.35">40-Question Evaluation Harness</span>
+            </h2>
             <p class="muted-text">
               Retrieval (Recall@K, MRR@5, NDCG@5) and generation accuracy across 4 ablation configurations.
             </p>
@@ -543,7 +555,9 @@
         <div class="col-answer">
           <div class="card">
             <div class="card-header-row">
-              <h3>Indexed Documents</h3>
+              <h3>
+                <span data-rb-gradient-text data-colors="#60A5FA,#38BDF8,#A78BFA" data-speed="7" data-glow="0.3">Indexed Documents</span>
+              </h3>
               <button id="refresh-docs-btn" class="secondary-btn">Refresh</button>
             </div>
             <div id="documents-list" class="documents-list"></div>
@@ -552,7 +566,9 @@
 
         <div class="col-chunks">
           <div class="card">
-            <h3>Upload or Paste a Document</h3>
+            <h3>
+              <span data-rb-gradient-text data-colors="#34D399,#38BDF8,#818CF8" data-speed="7" data-glow="0.3">Upload or Paste a Document</span>
+            </h3>
             <p class="muted-text">
               Upload a file or paste Markdown below to index it into the search corpus.
             </p>
@@ -591,6 +607,7 @@
     </section>
   </main>
 
+  <script src="/static/reactbits_fx.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

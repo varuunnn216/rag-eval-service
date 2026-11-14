@@ -793,10 +793,17 @@ function renderMetricsSection(data) {
   const totTok = Number(data.total_tokens || pTok + cTok);
 
   document.getElementById("metrics-total-pill").textContent = `${totalMs.toFixed(0)} ms • ${totTok} tokens`;
-  document.getElementById("metric-retrieval-ms").textContent = `${retMs.toFixed(1)} ms`;
-  document.getElementById("metric-llm-ms").textContent = `${llmMs.toFixed(0)} ms`;
-  document.getElementById("metric-total-ms").textContent = `${totalMs.toFixed(0)} ms`;
-  document.getElementById("metric-tokens-total").textContent = String(totTok);
+  if (window.animateCountUp) {
+    window.animateCountUp("metric-retrieval-ms", retMs, " ms", 1);
+    window.animateCountUp("metric-llm-ms", llmMs, " ms", 0);
+    window.animateCountUp("metric-total-ms", totalMs, " ms", 0);
+    window.animateCountUp("metric-tokens-total", totTok, "", 0);
+  } else {
+    document.getElementById("metric-retrieval-ms").textContent = `${retMs.toFixed(1)} ms`;
+    document.getElementById("metric-llm-ms").textContent = `${llmMs.toFixed(0)} ms`;
+    document.getElementById("metric-total-ms").textContent = `${totalMs.toFixed(0)} ms`;
+    document.getElementById("metric-tokens-total").textContent = String(totTok);
+  }
   document.getElementById("metric-rerank-sub").textContent = `Rerank: ${rerankMs} ms`;
   document.getElementById("metric-model-sub").textContent =
     (data.effective_settings && data.effective_settings.llm_model) || currentSettings.llmModel;
