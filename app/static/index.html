@@ -7,11 +7,14 @@
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+  <!-- REACT BITS: GradientASCII Full-Viewport Interactive Canvas Background -->
+  <canvas id="gradient-ascii-bg" class="gradient-ascii-canvas" aria-hidden="true"></canvas>
+
   <header class="topbar">
     <div class="topbar-brand">
       <div class="logo-badge" aria-hidden="true">RAG</div>
       <div>
-        <h1>RAG Service &amp; Evaluation Harness</h1>
+        <h1 data-ascii-heading="RAG SERVICE // EVAL HARNESS">RAG SERVICE // EVAL HARNESS</h1>
         <p class="subtitle">FastAPI &bull; pgvector HNSW &bull; Hybrid RRF &bull; Cross-Encoder Reranking &bull; Claim-Verified Citations</p>
       </div>
     </div>
@@ -19,6 +22,9 @@
       <span class="pill pill-ok"><span class="dot"></span> System Online</span>
       <span class="pill" id="pill-docs">Loading Corpus...</span>
       <span class="pill" id="pill-models">Gemini &bull; MiniLM CrossEncoder</span>
+      <button type="button" class="pill pill-fx-toggle" id="ascii-fx-toggle" aria-pressed="true" title="Toggle Gradient ASCII &amp; ASCII Text Animations">
+        ASCII FX: ON
+      </button>
     </div>
   </header>
 
@@ -36,6 +42,52 @@
 
   <main class="container">
     <!-- =====================================================================
+         REACT BITS HOME HERO BANNER (ASCIIText + TiltedCards + Spotlight)
+         ===================================================================== -->
+    <section class="ascii-hero-banner" id="ascii-hero-banner" aria-label="RAG Architecture Hero">
+      <div class="hero-top-grid">
+        <div class="hero-left">
+          <div class="shiny-pill">
+            <span class="ascii-bracket">[</span>
+            <span class="shiny-text">REACT BITS // GRADIENT ASCII &amp; ASCII TEXT</span>
+            <span class="ascii-bracket">]</span>
+          </div>
+          <div class="ascii-hero-stage" id="ascii-hero-stage" title="Hover to tilt &amp; scramble • Click to cycle ASCII title">
+            <canvas id="ascii-hero-canvas" height="128" aria-label="RAG // EVAL Interactive ASCII Heading"></canvas>
+            <div class="ascii-stage-hint">HOVER TO SCRAMBLE &bull; CLICK TO CYCLE GLYPHS [RAG // EVAL &rarr; PGVECTOR &rarr; HYBRID RRF]</div>
+          </div>
+          <p class="hero-lead" data-ascii-heading="Production Hybrid Retrieval + Cross-Encoder Reranking + Claim-Level Grounded Citations">
+            Production Hybrid Retrieval + Cross-Encoder Reranking + Claim-Level Grounded Citations
+          </p>
+        </div>
+
+        <!-- 4 Interactive 3D TiltedCards (@react-bits/TiltedCard + SpotlightCard) -->
+        <div class="hero-tilt-grid">
+          <div class="tilt-card" data-rb-tilt>
+            <div class="tilt-ascii-tag">[01 // DENSE_HNSW]</div>
+            <div class="tilt-title" data-ascii-heading="pgvector Cosine">pgvector Cosine</div>
+            <div class="tilt-desc">768-dim L2-normalized embeddings with HNSW graph index (<code>1 - &lt;=&gt;</code>).</div>
+          </div>
+          <div class="tilt-card" data-rb-tilt>
+            <div class="tilt-ascii-tag">[02 // SPARSE_FTS]</div>
+            <div class="tilt-title" data-ascii-heading="Hybrid RRF (k=60)">Hybrid RRF (k=60)</div>
+            <div class="tilt-desc">English <code>websearch_to_tsquery</code> cover-density fused via Reciprocal Rank Fusion.</div>
+          </div>
+          <div class="tilt-card" data-rb-tilt>
+            <div class="tilt-ascii-tag">[03 // RERANK_GATE]</div>
+            <div class="tilt-title" data-ascii-heading="Cross-Encoder Gate">Cross-Encoder Gate</div>
+            <div class="tilt-desc">Unified abstain floor (<code>0.25</code>) &amp; relative ratio (<code>0.60 &times; top</code>) before LLM call.</div>
+          </div>
+          <div class="tilt-card" data-rb-tilt>
+            <div class="tilt-ascii-tag">[04 // CLAIM_VERIFY]</div>
+            <div class="tilt-title" data-ascii-heading="Verified Citations">Verified Citations</div>
+            <div class="tilt-desc">Sentence-level claim similarity checks with exact supporting quotes.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
          TAB 1: ASK WITH GROUNDED INLINE CITATIONS
          ===================================================================== -->
     <section id="tab-playground" class="tab-panel active" role="tabpanel">
@@ -44,9 +96,9 @@
       <details class="collapsible-section" id="section-ask" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">1</span>
+            <span class="section-step-num">01</span>
             <div>
-              <h2>Ask</h2>
+              <h2><span class="ascii-prefix">//</span> <span data-ascii-heading="ASK_PIPELINE">ASK_PIPELINE</span></h2>
               <p class="section-subtitle">Query the indexed corpus with claim-level citation verification</p>
             </div>
           </div>
@@ -65,7 +117,7 @@
               >What time does the cafe open on Sunday?</textarea>
               <div class="textarea-actions">
                 <span class="shortcut-hint">Press <kbd>⌘/Ctrl</kbd> + <kbd>Enter</kbd> to run</span>
-                <button type="submit" id="ask-submit-btn" class="primary-btn">
+                <button type="submit" id="ask-submit-btn" class="primary-btn star-border-btn">
                   <span id="ask-submit-label">Run</span>
                   <kbd class="btn-kbd">⌘↵</kbd>
                 </button>
@@ -116,9 +168,13 @@
       <details class="collapsible-section" id="section-settings">
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">2</span>
+            <span class="section-step-num">02</span>
             <div>
-              <h2>Pipeline Settings <span class="advanced-tag">Advanced</span></h2>
+              <h2>
+                <span class="ascii-prefix">//</span>
+                <span data-ascii-heading="PIPELINE_SETTINGS">PIPELINE_SETTINGS</span>
+                <span class="advanced-tag">Advanced</span>
+              </h2>
               <p class="section-subtitle">Configure retrieval mode, document scope, reranker thresholds, and LLM parameters</p>
             </div>
           </div>
@@ -311,9 +367,9 @@
       <details class="collapsible-section" id="section-answer" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">3</span>
+            <span class="section-step-num">03</span>
             <div>
-              <h2>Answer</h2>
+              <h2><span class="ascii-prefix">//</span> <span data-ascii-heading="GROUNDED_ANSWER">GROUNDED_ANSWER</span></h2>
               <p class="section-subtitle">Grounded synthesis with clickable <code>[n]</code> markers linked to verified citations</p>
             </div>
           </div>
@@ -375,9 +431,9 @@
       <details class="collapsible-section" id="section-citations" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">4</span>
+            <span class="section-step-num">04</span>
             <div>
-              <h2>Citations</h2>
+              <h2><span class="ascii-prefix">//</span> <span data-ascii-heading="VERIFIED_CITATIONS">VERIFIED_CITATIONS</span></h2>
               <p class="section-subtitle">Claim-level verification matching each answer sentence against supporting chunk sentences</p>
             </div>
           </div>
@@ -402,9 +458,9 @@
       <details class="collapsible-section" id="section-context" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">5</span>
+            <span class="section-step-num">05</span>
             <div>
-              <h2>Retrieved Context (<span id="chunk-count">0</span>)</h2>
+              <h2><span class="ascii-prefix">//</span> <span data-ascii-heading="RETRIEVED_CONTEXT">RETRIEVED_CONTEXT</span> (<span id="chunk-count">0</span>)</h2>
               <p class="section-subtitle">Candidate chunks with USED / DROPPED selection status, reasons, and multi-stage score bars</p>
             </div>
           </div>
@@ -443,9 +499,9 @@
       <details class="collapsible-section" id="section-metrics" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">6</span>
+            <span class="section-step-num">06</span>
             <div>
-              <h2>Run Metrics</h2>
+              <h2><span class="ascii-prefix">//</span> <span data-ascii-heading="RUN_METRICS">RUN_METRICS</span></h2>
               <p class="section-subtitle">Per-request stage latencies and LLM token telemetry</p>
             </div>
           </div>
@@ -631,6 +687,7 @@
     </section>
   </main>
 
+  <script src="/static/reactbits_fx.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

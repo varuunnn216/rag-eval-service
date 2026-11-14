@@ -785,25 +785,32 @@ window.toggleChunkText = function (contentId, btnEl) {
 };
 
 function renderMetricsSection(data) {
-  const retMs = Number(data.retrieval_latency_ms || 0).toFixed(2);
+  const retMs = Number(data.retrieval_latency_ms || 0);
   const rerankMs = Number(data.rerank_latency_ms || 0).toFixed(2);
-  const llmMs = Number(data.generation_latency_ms || 0).toFixed(2);
-  const totalMs = Number(data.total_latency_ms || 0).toFixed(2);
+  const llmMs = Number(data.generation_latency_ms || 0);
+  const totalMs = Number(data.total_latency_ms || 0);
   const pTok = Number(data.prompt_tokens || 0);
   const cTok = Number(data.completion_tokens || 0);
   const totTok = Number(data.total_tokens || pTok + cTok);
 
-  document.getElementById("metrics-total-pill").textContent = `${totalMs} ms • ${totTok} tokens`;
-  document.getElementById("metric-retrieval-ms").textContent = `${retMs} ms`;
+  document.getElementById("metrics-total-pill").textContent = `${totalMs.toFixed(2)} ms • ${totTok} tokens`;
+  if (window.animateCountUp) {
+    window.animateCountUp("metric-retrieval-ms", retMs, " ms", 2);
+    window.animateCountUp("metric-llm-ms", llmMs, " ms", 2);
+    window.animateCountUp("metric-total-ms", totalMs, " ms", 2);
+    window.animateCountUp("metric-tokens-total", totTok, "", 0);
+  } else {
+    document.getElementById("metric-retrieval-ms").textContent = `${retMs.toFixed(2)} ms`;
+    document.getElementById("metric-llm-ms").textContent = `${llmMs.toFixed(2)} ms`;
+    document.getElementById("metric-total-ms").textContent = `${totalMs.toFixed(2)} ms`;
+    document.getElementById("metric-tokens-total").textContent = String(totTok);
+  }
   document.getElementById("metric-rerank-sub").textContent = `Rerank stage: ${rerankMs} ms`;
-  document.getElementById("metric-llm-ms").textContent = `${llmMs} ms`;
   document.getElementById("metric-model-sub").textContent =
     (data.effective_settings && data.effective_settings.llm_model) || currentSettings.llmModel;
-  document.getElementById("metric-total-ms").textContent = `${totalMs} ms`;
   document.getElementById("metric-status-sub").textContent = data.abstained
     ? "Abstained (guard triggered)"
     : "Grounded generation complete";
-  document.getElementById("metric-tokens-total").textContent = String(totTok);
   document.getElementById("metric-tokens-sub").textContent =
     `Prompt: ${pTok} • Completion: ${cTok}`;
 }

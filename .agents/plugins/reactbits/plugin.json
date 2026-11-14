@@ -1,0 +1,7 @@
+{
+  "name": "reactbits",
+  "version": "1.0.0",
+  "description": "React Bits (@react-bits) MCP integration and animated UI component registry for backgrounds, text animations, and interactive cards.",
+  "mcpConfig": "mcp_config.json",
+  "skills": ["skills/reactbits"]
+}
