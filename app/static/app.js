@@ -36,22 +36,55 @@ document.addEventListener("DOMContentLoaded", async () => {
 /* =====================================================================
    TABS & SYSTEM HEALTH
    ===================================================================== */
-function initTabs() {
+function switchToTab(tabId) {
   const buttons = document.querySelectorAll(".tab-btn");
   const panels = document.querySelectorAll(".tab-panel");
+  buttons.forEach((b) => {
+    const isMatch = b.dataset.tab === tabId;
+    b.classList.toggle("active", isMatch);
+    b.setAttribute("aria-selected", isMatch ? "true" : "false");
+  });
+  panels.forEach((p) => {
+    p.classList.toggle("active", p.id === tabId);
+  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function initTabs() {
+  const buttons = document.querySelectorAll(".tab-btn");
   buttons.forEach((btn) => {
     btn.addEventListener("click", () => {
-      buttons.forEach((b) => {
-        b.classList.remove("active");
-        b.setAttribute("aria-selected", "false");
-      });
-      panels.forEach((p) => p.classList.remove("active"));
-      btn.classList.add("active");
-      btn.setAttribute("aria-selected", "true");
-      const target = document.getElementById(btn.dataset.tab);
-      if (target) target.classList.add("active");
+      switchToTab(btn.dataset.tab);
     });
   });
+
+  // Home landing page 3 main portal cards & CTA buttons
+  document.querySelectorAll("[data-goto-tab]").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const targetTab = el.dataset.gotoTab;
+      if (targetTab) switchToTab(targetTab);
+    });
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        const targetTab = el.dataset.gotoTab;
+        if (targetTab) switchToTab(targetTab);
+      }
+    });
+  });
+
+  // Clicking top-left brand returns to Home landing page
+  const brandHome = document.getElementById("brand-home-link");
+  if (brandHome) {
+    brandHome.addEventListener("click", () => switchToTab("tab-home"));
+    brandHome.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        switchToTab("tab-home");
+      }
+    });
+  }
 }
 
 async function fetchHealth() {

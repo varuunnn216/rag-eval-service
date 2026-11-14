@@ -5,11 +5,14 @@
  *  2. GradientText (Flowing multi-stop radial/linear gradient text with glow layer)
  *  3. ShinyText (Metallic light-sweep shimmer across badges & subtitles)
  *  4. BlurText (Staggered blur-to-sharp word entrance reveal on headers)
- *  5. DecryptedText (Cipher glyph scramble reveal on monospace IDs & badges)
- *  6. SpotlightCard (Proximity-aware radial cursor spotlight + glowing rim edge + fractal grain)
- *  7. StarBorder (Orbiting glowing star trail + stardust motes + click pulse wave on buttons)
- *  8. ClickSpark (Bursting star & streak sparks on interactive clicks)
- *  9. CountUp (Cubic-out animated numeric counters for metrics & KPIs)
+ *  5. RotatingText (3D flip/slide cycling hero value-proposition badge)
+ *  6. TrueFocus (Animated corner-bracket focus frame cycling across pipeline stages)
+ *  7. TiltedCard (3D spring-physics perspective tilt card with glare & rim edge for the 3 main launch cards)
+ *  8. DecryptedText (Cipher glyph scramble reveal on monospace IDs & badges)
+ *  9. SpotlightCard (Proximity-aware radial cursor spotlight + glowing rim edge)
+ * 10. StarBorder (Orbiting glowing star trail + stardust motes on primary CTAs)
+ * 11. ClickSpark (Bursting star & streak sparks on interactive clicks)
+ * 12. CountUp (Cubic-out animated numeric counters for metrics & KPIs)
  */
 
 (function () {
@@ -439,7 +442,165 @@ void main() {
   }
 
   /* =========================================================================
-   * 5. REACT BITS: DECRYPTED TEXT (from DecryptedText-JS-CSS.json)
+   * 5. REACT BITS: ROTATING TEXT (from RotatingText-JS-CSS.json)
+   * ========================================================================= */
+  function initRotatingTexts() {
+    document.querySelectorAll("[data-rb-rotating-text]").forEach((el) => {
+      if (el.dataset.rbRotReady === "1") return;
+      el.dataset.rbRotReady = "1";
+      const phrases = (el.dataset.phrases || "")
+        .split("|")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (phrases.length < 2) return;
+
+      const interval = parseInt(el.dataset.interval || "2600", 10);
+      let idx = 0;
+
+      const renderPhrase = (text) => {
+        el.innerHTML = Array.from(text)
+          .map((ch, i) =>
+            ch === " "
+              ? `<span class="rb-rot-space">&nbsp;</span>`
+              : `<span class="rb-rot-char" style="animation-delay:${i * 22}ms">${ch}</span>`
+          )
+          .join("");
+      };
+
+      renderPhrase(phrases[0]);
+      setInterval(() => {
+        if (document.hidden || reduceMotion()) return;
+        idx = (idx + 1) % phrases.length;
+        renderPhrase(phrases[idx]);
+      }, interval);
+    });
+  }
+
+  /* =========================================================================
+   * 6. REACT BITS: TRUE FOCUS (from TrueFocus-JS-CSS.json)
+   * ========================================================================= */
+  function initTrueFocus() {
+    const container = document.getElementById("rb-true-focus");
+    if (!container || container.dataset.rbFocusReady === "1") return;
+    container.dataset.rbFocusReady = "1";
+
+    const words = Array.from(container.querySelectorAll(".focus-word"));
+    const frame = container.querySelector(".focus-frame");
+    if (!words.length || !frame) return;
+
+    let activeIndex = 0;
+    let hovered = false;
+
+    function updateFocus(index) {
+      activeIndex = index;
+      words.forEach((w, i) => {
+        w.classList.toggle("active", i === activeIndex);
+      });
+      const target = words[activeIndex];
+      if (!target) return;
+      const padX = 10;
+      const padY = 6;
+      const x = target.offsetLeft - padX;
+      const y = target.offsetTop - padY;
+      const w = target.offsetWidth + padX * 2;
+      const h = target.offsetHeight + padY * 2;
+      frame.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      frame.style.width = `${w}px`;
+      frame.style.height = `${h}px`;
+      frame.style.opacity = "1";
+    }
+
+    words.forEach((w, idx) => {
+      w.addEventListener("pointerenter", () => {
+        hovered = true;
+        updateFocus(idx);
+      });
+      w.addEventListener("pointerleave", () => {
+        hovered = false;
+      });
+    });
+
+    window.addEventListener("resize", () => updateFocus(activeIndex));
+    setTimeout(() => updateFocus(0), 60);
+
+    setInterval(() => {
+      if (hovered || document.hidden || reduceMotion()) return;
+      updateFocus((activeIndex + 1) % words.length);
+    }, 2200);
+  }
+
+  /* =========================================================================
+   * 7. REACT BITS: TILTED CARD (from TiltedCard-JS-CSS.json)
+   * ========================================================================= */
+  function initTiltedCards() {
+    document.querySelectorAll("[data-rb-tilted-card]").forEach((card) => {
+      if (card.dataset.rbTiltReady === "1") return;
+      card.dataset.rbTiltReady = "1";
+
+      const glare = document.createElement("span");
+      glare.className = "tilted-card__glare";
+      glare.setAttribute("aria-hidden", "true");
+      card.appendChild(glare);
+
+      const amplitude = parseFloat(card.dataset.tiltAmplitude || "9");
+      let rx = 0,
+        ry = 0,
+        tx = 0,
+        ty = 0,
+        scale = 1,
+        targetScale = 1,
+        glareAlpha = 0,
+        targetGlare = 0,
+        raf = 0;
+
+      function animate() {
+        raf = 0;
+        rx += (tx - rx) * 0.18;
+        ry += (ty - ry) * 0.18;
+        scale += (targetScale - scale) * 0.18;
+        glareAlpha += (targetGlare - glareAlpha) * 0.18;
+
+        card.style.transform = `perspective(900px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) scale3d(${scale.toFixed(3)}, ${scale.toFixed(3)}, 1)`;
+        card.style.setProperty("--tc-glare", glareAlpha.toFixed(3));
+
+        if (
+          Math.abs(tx - rx) > 0.05 ||
+          Math.abs(ty - ry) > 0.05 ||
+          Math.abs(targetScale - scale) > 0.002
+        ) {
+          raf = requestAnimationFrame(animate);
+        }
+      }
+
+      function wake() {
+        if (!raf && !reduceMotion()) raf = requestAnimationFrame(animate);
+      }
+
+      card.addEventListener("pointermove", (e) => {
+        const rect = card.getBoundingClientRect();
+        const nx = clamp(((e.clientX - rect.left) / rect.width) * 2 - 1, -1, 1);
+        const ny = clamp(((e.clientY - rect.top) / rect.height) * 2 - 1, -1, 1);
+        tx = -ny * amplitude;
+        ty = nx * amplitude;
+        targetScale = 1.024;
+        targetGlare = 1;
+        card.style.setProperty("--tc-gx", `${((nx + 1) * 50).toFixed(1)}%`);
+        card.style.setProperty("--tc-gy", `${((ny + 1) * 50).toFixed(1)}%`);
+        wake();
+      });
+
+      card.addEventListener("pointerleave", () => {
+        tx = 0;
+        ty = 0;
+        targetScale = 1;
+        targetGlare = 0;
+        wake();
+      });
+    });
+  }
+
+  /* =========================================================================
+   * 8. REACT BITS: DECRYPTED TEXT (from DecryptedText-JS-CSS.json)
    * ========================================================================= */
   const CIPHER_POOL = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*+<>";
 
@@ -477,7 +638,7 @@ void main() {
   }
 
   /* =========================================================================
-   * 6. REACT BITS: SPOTLIGHT CARD (from SpotlightCard-JS-CSS.json)
+   * 9. REACT BITS: SPOTLIGHT CARD (from SpotlightCard-JS-CSS.json)
    * ========================================================================= */
   const spotlightCards = new Set();
   const globalPointer = { x: -9999, y: -9999, active: false };
@@ -485,6 +646,8 @@ void main() {
 
   function registerSpotlightCards(root = document) {
     const selectors = [
+      ".home-portal-card",
+      ".home-feature-card",
       ".collapsible-section",
       ".control-card",
       ".citation-card",
@@ -510,8 +673,10 @@ void main() {
       card.insertBefore(light, card.firstChild);
       card.appendChild(edge);
 
-      const isSection =
-        card.classList.contains("collapsible-section") || card.classList.contains("card");
+      const isLarge =
+        card.classList.contains("collapsible-section") ||
+        card.classList.contains("card") ||
+        card.classList.contains("home-portal-card");
       spotlightCards.add({
         root: card,
         light,
@@ -519,9 +684,9 @@ void main() {
         x: 0,
         y: 0,
         presence: 0,
-        size: isSection ? 420 : 250,
-        proximity: isSection ? 110 : 75,
-        intensity: isSection ? 0.16 : 0.22,
+        size: isLarge ? 420 : 250,
+        proximity: isLarge ? 110 : 75,
+        intensity: isLarge ? 0.18 : 0.22,
       });
     });
   }
@@ -592,7 +757,7 @@ void main() {
   }
 
   /* =========================================================================
-   * 7. REACT BITS: STAR BORDER (from StarBorder-JS-CSS.json)
+   * 10. REACT BITS: STAR BORDER (from StarBorder-JS-CSS.json)
    * ========================================================================= */
   const BLEED = 32;
 
@@ -742,7 +907,7 @@ void main() {
           py = pt.y;
         }
 
-        // Star head bloom + cross sparkle
+        // Star head bloom
         pointOnOutline(shape, phase, pt);
         const bloom = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 18);
         bloom.addColorStop(0, "rgba(255,255,255,0.95)");
@@ -788,7 +953,7 @@ void main() {
   }
 
   /* =========================================================================
-   * 8. REACT BITS: CLICK SPARK (from ClickSpark-JS-CSS.json)
+   * 11. REACT BITS: CLICK SPARK (from ClickSpark-JS-CSS.json)
    * ========================================================================= */
   function initClickSpark() {
     const canvas = document.createElement("canvas");
@@ -843,7 +1008,6 @@ void main() {
         const ease = 1 - Math.pow(1 - p, 3);
         const fade = 1 - p;
 
-        // Expanding ring
         ctx.globalAlpha = fade * 0.45;
         ctx.strokeStyle = burst.ringColor;
         ctx.lineWidth = 1.5 * (1 - p);
@@ -884,7 +1048,7 @@ void main() {
     window.addEventListener("pointerdown", (e) => {
       if (reduceMotion() || e.button !== 0) return;
       const target = e.target.closest(
-        "button, .sample-chip, .tab-btn, summary, .cite-badge, .sort-btn"
+        "button, .sample-chip, .tab-btn, summary, .cite-badge, .sort-btn, .home-portal-card, .topbar-brand"
       );
       if (!target) return;
 
@@ -909,7 +1073,7 @@ void main() {
   }
 
   /* =========================================================================
-   * 9. REACT BITS: COUNT UP (Animated Numeric Counter)
+   * 12. REACT BITS: COUNT UP (Animated Numeric Counter)
    * ========================================================================= */
   window.animateCountUp = function (elOrId, targetValue, suffix = "", decimals = 0) {
     const el = typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
@@ -919,7 +1083,7 @@ void main() {
       el.textContent = `${Number(targetValue || 0).toFixed(decimals)}${suffix}`;
       return;
     }
-    const duration = 520;
+    const duration = 560;
     const startTime = performance.now();
     function step(now) {
       const p = Math.min(1, (now - startTime) / duration);
@@ -939,10 +1103,20 @@ void main() {
     initGradientTexts();
     initShinyTexts();
     initBlurTexts();
+    initRotatingTexts();
+    initTrueFocus();
+    initTiltedCards();
     registerSpotlightCards(document);
     bindDecryptedHover(document);
     initClickSpark();
 
+    // Animate Home Hero KPI counters on load
+    window.animateCountUp("home-kpi-recall", 100.0, "%", 1);
+    window.animateCountUp("home-kpi-accuracy", 97.5, "%", 1);
+    window.animateCountUp("home-kpi-faithfulness", 100.0, "%", 1);
+    window.animateCountUp("home-kpi-abstention", 100.0, "%", 0);
+
+    // Attach StarBorder to primary CTA buttons and Home portal buttons
     attachStarBorder(document.getElementById("ask-submit-btn"), {
       headRgb: [147, 197, 253],
       tailRgb: [99, 102, 241],
@@ -960,6 +1134,18 @@ void main() {
       tailRgb: [59, 130, 246],
       radius: 10,
       duration: 3.8,
+    });
+    document.querySelectorAll(".home-portal-cta").forEach((btn, i) => {
+      const palettes = [
+        { headRgb: [96, 165, 250], tailRgb: [139, 92, 246] },
+        { headRgb: [167, 139, 250], tailRgb: [56, 189, 248] },
+        { headRgb: [52, 211, 153], tailRgb: [59, 130, 246] },
+      ];
+      attachStarBorder(btn, {
+        ...palettes[i % palettes.length],
+        radius: 10,
+        duration: 3.2 + i * 0.3,
+      });
     });
 
     window.addEventListener(
@@ -981,7 +1167,6 @@ void main() {
       { passive: true, capture: true }
     );
 
-    // Watch dynamically rendered Citation Cards, Chunk Cards, and KPI Cards
     const observer = new MutationObserver((mutations) => {
       for (const m of mutations) {
         m.addedNodes.forEach((node) => {
