@@ -1,17 +1,17 @@
 /**
  * Official React Bits (@react-bits) Vanilla JS / WebGL2 / Canvas Runtime
- * Ported directly from https://reactbits.dev/r/{Component}-JS-CSS.json via React Bits MCP:
- *  1. GooeyNav (WebGL2 SDF liquid metaball top menu bar with multi-color droplets & clipped ink overlay)
- *  2. Prism (WebGL2 3D raymarched spectral prism light dispersion backdrop in Coral, Gold, Mint & Rose)
- *  3. Waves (Interactive Perlin-noise vector wave lines in warm coral, gold & mint)
- *  4. PixelCard (Interactive radial twinkling pixel canvas in Coral, Mint & Gold variants)
+ * Unified Warm Amber (#F5A524) & Stone (#171513 / #F5F1EA) Token System:
+ *  1. GooeyNav (WebGL2 SDF liquid metaball top menu bar with --accent-soft pill & --accent text)
+ *  2. Prism (WebGL2 3D raymarched spectral prism in warm amber & stone)
+ *  3. Waves (Interactive Perlin-noise vector wave lines in subtle amber)
+ *  4. PixelCard (Interactive radial twinkling pixel canvas in unified amber/stone for workspace cards)
  *  5. Magnet (Spring-physics magnetic cursor pull on buttons & chips)
  *  6. GlareHover (Diagonal specular light sheen sweep across cards)
- *  7. GradientText (Flowing multi-stop gradient text with glow layer)
- *  8. ShinyText (Metallic light-sweep shimmer across badges)
+ *  7. GradientText (Hero phrase linear gradient #F5A524 -> #FF7A59)
+ *  8. ShinyText (Subtle light-sweep shimmer on hero eyebrow)
  *  9. BlurText (Staggered blur-to-sharp word entrance reveal on headers)
- * 10. StarBorder (Orbiting glowing star trail in warm gold/coral/mint on primary CTAs)
- * 11. ClickSpark (Bursting star & streak sparks in Coral, Gold, Mint & Rose on clicks)
+ * 10. StarBorder (Orbiting glowing amber star trail on primary CTAs)
+ * 11. ClickSpark (Bursting amber sparks on interactive clicks)
  * 12. CountUp (Cubic-out animated numeric counters for metrics & KPIs)
  */
 
@@ -26,7 +26,7 @@
 
   /* =========================================================================
    * 1. REACT BITS: GOOEY NAV (From GooeyNav-JS-CSS.json)
-   *    WebGL2 SDF liquid metaball navigation pill with multi-hue droplets
+   *    WebGL2 SDF liquid metaball navigation pill (--accent-soft bg, --accent text)
    * ========================================================================= */
   const GN_MAX_DROPS = 32;
   const GN_MAX_PILLS = 4;
@@ -51,6 +51,7 @@ uniform vec3 uTints[${GN_MAX_DROPS}];
 uniform int uCount;
 uniform float uSmooth;
 uniform vec3 uPill;
+uniform float uPillAlpha;
 uniform vec4 uHoverColor;
 uniform float uShadow;
 
@@ -100,19 +101,14 @@ void main() {
   float aa = max(fwidth(d), 0.35);
   float body = clamp(0.5 - d / aa, 0.0, 1.0);
 
-  vec2 grad = vec2(dFdx(d), -dFdy(d));
-  vec2 n = length(grad) > 0.0001 ? normalize(grad) : vec2(0.0, 1.0);
-  float rim = (1.0 - smoothstep(0.0, 1.6, -d)) * max(0.0, -n.y) * 0.35;
-  vec3 fill = mix(shape.rgb, vec3(1.0), rim) * (1.0 - 0.06 * max(0.0, n.y) * (1.0 - smoothstep(0.0, 6.0, -d)));
-
-  float lifted = field(p - vec2(0.0, 3.0)).w;
-  float shadow = (1.0 - smoothstep(-3.0, 9.0, lifted)) * uShadow * (1.0 - body);
+  float edgeBand = (1.0 - smoothstep(0.0, 1.4, abs(d))) * body;
+  float fillAlpha = body * uPillAlpha + edgeBand * 0.32;
+  vec3 fill = shape.rgb;
 
   float hover = clamp(0.5 - sdPill(p, uHover) / aa, 0.0, 1.0) * uHoverColor.a;
 
-  vec4 color = vec4(0.0, 0.0, 0.0, shadow);
-  color = vec4(uHoverColor.rgb * hover, hover) + color * (1.0 - hover);
-  color = vec4(fill * body, body) + color * (1.0 - body);
+  vec4 color = vec4(uHoverColor.rgb * hover, hover);
+  color = vec4(fill * fillAlpha, fillAlpha) + color * (1.0 - fillAlpha);
   outColor = color;
 }`;
 
@@ -179,6 +175,7 @@ void main() {
             "uCount",
             "uSmooth",
             "uPill",
+            "uPillAlpha",
             "uHoverColor",
             "uShadow",
           ];
@@ -205,24 +202,23 @@ void main() {
     fallback.style.display = pipeline ? "none" : "block";
     canvas.style.display = pipeline ? "block" : "none";
 
-    /* Warm Solar Amber Pill + Multi-Spectral Droplet Tints (Coral, Gold, Mint, Rose) */
+    /* Unified Amber Accent Pill (--accent-soft rgba(245,165,36,.12), --accent #F5A524) */
     const settings = {
-      animationTime: 620,
-      particleCount: 16,
-      timeVariance: 280,
-      spread: 54,
-      gooeyness: 0.55,
-      wobble: 0.52,
+      animationTime: 580,
+      particleCount: 14,
+      timeVariance: 240,
+      spread: 48,
+      gooeyness: 0.52,
+      wobble: 0.48,
       hoverEffect: true,
-      pillRgb: [1.0, 0.87, 0.68, 1.0], // Warm solar champagne #FFDEAD
+      pillRgb: [245 / 255, 165 / 255, 36 / 255], // #F5A524
+      pillAlpha: 0.14,                           // --accent-soft
       tints: [
-        [1.0, 0.42, 0.29], // Sunset Coral #FF6B4A
-        [1.0, 0.72, 0.0],  // Solar Gold #FFB800
-        [0.0, 0.96, 0.83], // Electric Mint #00F5D4
-        [1.0, 0.18, 0.58], // Rose Magenta #FF2E93
+        [245 / 255, 165 / 255, 36 / 255], // #F5A524 (--accent)
+        [255 / 255, 185 / 255, 77 / 255], // #FFB94D (--accent-hover)
       ],
-      hoverRgb: [1.0, 0.65, 0.35, 0.12],
-      shadow: 0.45,
+      hoverRgb: [245 / 255, 241 / 255, 234 / 255, 0.05],
+      shadow: 0.25,
     };
 
     const view = { width: 0, height: 0 };
@@ -498,6 +494,7 @@ void main() {
         settings.pillRgb[1],
         settings.pillRgb[2]
       );
+      gl.uniform1f(uniforms.uPillAlpha, settings.pillAlpha);
       gl.uniform4f(
         uniforms.uHoverColor,
         settings.hoverRgb[0],
@@ -695,8 +692,8 @@ void main() {
   }
 
   /* =========================================================================
-   * 2. REACT BITS: PRISM (From Prism-JS-CSS.json) + WARM PERLIN WAVES
-   *    WebGL2 3D raymarched spectral prism in Coral, Gold, Mint & Rose
+   * 2. REACT BITS: PRISM (From Prism-JS-CSS.json)
+   *    WebGL2 3D raymarched prism in Warm Amber (#F5A524) & Stone (#2B2723)
    * ========================================================================= */
   const PRISM_PALETTE_SIZE = 64;
   const PRISM_VERTEX = `#version 300 es
@@ -750,7 +747,7 @@ void main() {
   vec3 axis = uRay[2];
   float z = 5.0;
   vec4 o = vec4(0.0);
-  for (int i = 0; i < 80; i++) {
+  for (int i = 0; i < 75; i++) {
     vec3 p = origin + axis * z;
     float d = 0.12 + 0.2 * abs(pyramid(p + vec3(0.0, uCenterShift, 0.0)));
     z -= d;
@@ -763,7 +760,7 @@ void main() {
   vec4 e = exp(2.0 * raw);
   vec4 mapped = (e - 1.0) / (e + 1.0);
   vec2 seed = gl_FragCoord.xy + vec2(uTime);
-  outColor = vec4(grade(mapped.rgb, seed) * mapped.a * 0.65, mapped.a * 0.65);
+  outColor = vec4(grade(mapped.rgb, seed) * mapped.a * 0.42, mapped.a * 0.42);
 }`;
 
   const prismRotation = (yaw, pitch, roll) => {
@@ -825,13 +822,12 @@ void main() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    /* Multi-Spectral Warm Palette: Coral, Solar Gold, Electric Mint, Rose, Warm Amber */
+    /* Unified Amber & Stone Palette: #F5A524, #FFB94D, #B8B0A4, #2B2723 */
     const stops = [
-      [255, 107, 74],  // #FF6B4A Sunset Coral
-      [255, 184, 0],   // #FFB800 Solar Gold
-      [0, 245, 212],   // #00F5D4 Electric Mint
-      [255, 46, 147],  // #FF2E93 Rose Magenta
-      [255, 209, 102], // #FFD166 Warm Amber
+      [245, 165, 36],  // --accent #F5A524
+      [255, 185, 77],  // --accent-hover #FFB94D
+      [184, 176, 164], // --text-2 #B8B0A4
+      [43, 39, 35],    // --border #2B2723
     ];
     const data = new Uint8Array(PRISM_PALETTE_SIZE * 4);
     for (let i = 0; i < PRISM_PALETTE_SIZE; i++) {
@@ -891,16 +887,16 @@ void main() {
       last = now;
       if (!reduceMotion()) time += dt;
 
-      const yaw = pointer.inside ? -pointer.x * 0.22 : 0;
-      const pitch = pointer.inside ? pointer.y * 0.22 : 0;
+      const yaw = pointer.inside ? -pointer.x * 0.2 : 0;
+      const pitch = pointer.inside ? pointer.y * 0.2 : 0;
       pose.yaw += (yaw - pose.yaw) * 0.06;
       pose.pitch += (pitch - pose.pitch) * 0.06;
 
-      const t = time * 0.35;
+      const t = time * 0.32;
       const tilt = prismRotation(pose.yaw, pose.pitch, pose.roll);
       const ray = prismMultiply(
         tilt,
-        prismRotation(t * 0.55, Math.sin(t * 0.6 + 0.6) * 0.5, Math.sin(t * 0.35 + 1.9) * 0.4)
+        prismRotation(t * 0.55, Math.sin(t * 0.6 + 0.6) * 0.48, Math.sin(t * 0.35 + 1.9) * 0.38)
       );
 
       const height = 3.6;
@@ -911,9 +907,9 @@ void main() {
       gl.useProgram(prog);
       gl.uniform2f(u.uResolution, canvas.width, canvas.height);
       gl.uniformMatrix3fv(u.uRay, false, ray);
-      gl.uniform1f(u.uGlow, 0.92);
+      gl.uniform1f(u.uGlow, 0.72);
       gl.uniform2f(u.uOffset, 0, 60 * view.scale);
-      gl.uniform1f(u.uColorFreq, 0.95);
+      gl.uniform1f(u.uColorFreq, 0.9);
       gl.uniform1f(u.uCenterShift, height * 0.25);
       gl.uniform1f(u.uInvBaseHalf, 1 / half);
       gl.uniform1f(u.uInvHeight, 1 / height);
@@ -924,8 +920,8 @@ void main() {
       gl.uniform1i(u.uPalette, 0);
       gl.uniform1i(u.uUsePalette, 1);
       gl.uniform1f(u.uTime, time);
-      gl.uniform1f(u.uNoise, 0.015);
-      gl.uniform1f(u.uSaturation, 1.45);
+      gl.uniform1f(u.uNoise, 0.012);
+      gl.uniform1f(u.uSaturation, 1.15);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       if (!reduceMotion()) {
@@ -937,7 +933,7 @@ void main() {
   }
 
   /* =========================================================================
-   * 3. REACT BITS: WAVES (Warm Coral / Gold / Mint Perlin-Noise Silk Lines)
+   * 3. REACT BITS: WAVES (Subtle Amber & Warm Stone Perlin-Noise Silk Lines)
    * ========================================================================= */
   class Grad {
     constructor(x, y, z) {
@@ -1016,15 +1012,15 @@ void main() {
 
     const noise = new PerlinNoise(77);
     const config = {
-      xGap: 24,
+      xGap: 26,
       yGap: 36,
-      waveSpeedX: 0.011,
-      waveSpeedY: 0.005,
-      waveAmpX: 28,
-      waveAmpY: 14,
+      waveSpeedX: 0.01,
+      waveSpeedY: 0.004,
+      waveAmpX: 26,
+      waveAmpY: 12,
       friction: 0.91,
       tension: 0.006,
-      maxCursorMove: 95,
+      maxCursorMove: 90,
       interactionRadius: 150,
     };
 
@@ -1123,13 +1119,8 @@ void main() {
       }
 
       ctx.clearRect(0, 0, width, height);
-      const grad = ctx.createLinearGradient(0, 0, width, height);
-      grad.addColorStop(0, "rgba(255, 107, 74, 0.14)");
-      grad.addColorStop(0.5, "rgba(255, 184, 0, 0.12)");
-      grad.addColorStop(1, "rgba(0, 245, 212, 0.13)");
-
       ctx.beginPath();
-      ctx.strokeStyle = grad;
+      ctx.strokeStyle = "rgba(245, 165, 36, 0.09)"; // --accent subtle wave lines
       ctx.lineWidth = 1.0;
 
       for (let i = 0; i < lines.length; i++) {
@@ -1171,24 +1162,12 @@ void main() {
   }
 
   /* =========================================================================
-   * 4. REACT BITS: PIXEL CARD (Coral, Mint, and Gold Multi-Spectral Variants)
+   * 4. REACT BITS: PIXEL CARD (Unified Neutral Stone + Amber Shimmer)
    * ========================================================================= */
-  const PIXEL_VARIANTS = {
-    coral: {
-      gap: 6,
-      speed: 48,
-      colors: "#fff1f2,#fda4af,#ff6b4a,#f97316,#ffb800",
-    },
-    mint: {
-      gap: 6,
-      speed: 48,
-      colors: "#ecfdf5,#6ee7b7,#00f5d4,#10b981,#14b8a6",
-    },
-    gold: {
-      gap: 6,
-      speed: 48,
-      colors: "#fefce8,#fde047,#ffb800,#f59e0b,#ff2e93",
-    },
+  const UNIFIED_PIXEL_CONFIG = {
+    gap: 6,
+    speed: 45,
+    colors: ["#F5F1EA", "#B8B0A4", "#F5A524", "#FFB94D"],
   };
 
   class PixelCell {
@@ -1201,7 +1180,7 @@ void main() {
       this.size = 0;
       this.sizeStep = Math.random() * 0.45 + 0.18;
       this.minSize = 0.6;
-      this.maxSizeInteger = 2.5;
+      this.maxSizeInteger = 2.3;
       this.maxSize = Math.random() * (this.maxSizeInteger - this.minSize) + this.minSize;
       this.delay = delay;
       this.counter = 0;
@@ -1217,7 +1196,7 @@ void main() {
       this.ctx.fillStyle = this.color;
       this.ctx.globalAlpha = Math.min(
         1,
-        0.38 + (this.size / this.maxSizeInteger) * 0.52 + this.boost * 0.25
+        0.24 + (this.size / this.maxSizeInteger) * 0.42 + this.boost * 0.22
       );
       this.ctx.fillRect(this.x + centerOffset, this.y + centerOffset, this.size, this.size);
       this.ctx.globalAlpha = 1;
@@ -1287,10 +1266,8 @@ void main() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const variantName = card.dataset.pixelVariant || "coral";
-      const cfg = PIXEL_VARIANTS[variantName] || PIXEL_VARIANTS.coral;
-      const colorsArr = cfg.colors.split(",");
-      const effSpeed = reduced ? 0 : cfg.speed * 0.001;
+      const colorsArr = UNIFIED_PIXEL_CONFIG.colors;
+      const effSpeed = reduced ? 0 : UNIFIED_PIXEL_CONFIG.speed * 0.001;
 
       let pixels = [];
       let rafId = null;
@@ -1309,8 +1286,8 @@ void main() {
         const cy = originY ?? height / 2;
 
         pixels = [];
-        for (let x = 0; x < width; x += cfg.gap) {
-          for (let y = 0; y < height; y += cfg.gap) {
+        for (let x = 0; x < width; x += UNIFIED_PIXEL_CONFIG.gap) {
+          for (let y = 0; y < height; y += UNIFIED_PIXEL_CONFIG.gap) {
             const color = colorsArr[Math.floor(Math.random() * colorsArr.length)];
             const dist = Math.hypot(x - cx, y - cy);
             const delay = reduced ? 0 : dist * 0.6;
@@ -1381,7 +1358,6 @@ void main() {
 
   /* =========================================================================
    * 5. REACT BITS: MAGNET (From Magnet-JS-CSS.json)
-   *    Spring-physics magnetic cursor pull on buttons & chips
    * ========================================================================= */
   function initMagnet(root = document) {
     const els = root.querySelectorAll("[data-rb-magnet], .sample-chip");
@@ -1394,7 +1370,7 @@ void main() {
         const rect = el.getBoundingClientRect();
         const dx = e.clientX - (rect.left + rect.width / 2);
         const dy = e.clientY - (rect.top + rect.height / 2);
-        el.style.transform = `translate3d(${(dx * 0.16).toFixed(2)}px, ${(dy * 0.22).toFixed(2)}px, 0)`;
+        el.style.transform = `translate3d(${(dx * 0.14).toFixed(2)}px, ${(dy * 0.18).toFixed(2)}px, 0)`;
       });
 
       el.addEventListener("pointerleave", () => {
@@ -1408,7 +1384,7 @@ void main() {
    * ========================================================================= */
   function initGlareHover(root = document) {
     const targets = root.querySelectorAll(
-      "[data-rb-glare], .collapsible-section, .kpi-card, .citation-card, .chunk-card, .corpus-card"
+      "[data-rb-glare], .collapsible-section, .kpi-box, .citation-card, .chunk-card, .doc-card"
     );
     targets.forEach((el) => {
       if (el.dataset.rbGlareBound === "1") return;
@@ -1418,7 +1394,7 @@ void main() {
   }
 
   /* =========================================================================
-   * 7. REACT BITS: GRADIENT TEXT (From GradientText-JS-CSS.json)
+   * 7. REACT BITS: GRADIENT TEXT (Hero phrase linear #F5A524 -> #FF7A59)
    * ========================================================================= */
   function initGradientText(root = document) {
     const els = root.querySelectorAll("[data-rb-gradient-text]");
@@ -1427,18 +1403,7 @@ void main() {
       el.dataset.rbGradBound = "1";
 
       const text = el.textContent;
-      const colors = (
-        el.dataset.colors || "#FF6B4A,#FFB800,#00F5D4,#FF2E93,#FFD166"
-      ).split(",");
-      const speed = parseFloat(el.dataset.speed || "6");
-      const glow = parseFloat(el.dataset.glow || "0.38");
-
-      const palette = [...colors, colors[0]].join(", ");
-      const gradient = `linear-gradient(90deg, ${palette})`;
-
       el.classList.add("gradient-text");
-      el.style.setProperty("--gt-gradient", gradient);
-      el.style.setProperty("--gt-glow", String(glow));
       el.textContent = "";
 
       const inner = document.createElement("span");
@@ -1456,35 +1421,6 @@ void main() {
       inner.appendChild(glowSpan);
       inner.appendChild(contentSpan);
       el.appendChild(inner);
-
-      let elapsed = 0;
-      let lastTime = null;
-      const animDuration = speed * 1000;
-
-      function step(time) {
-        if (lastTime === null) lastTime = time;
-        const dt = time - lastTime;
-        lastTime = time;
-        elapsed += dt;
-
-        const fullCycle = animDuration * 2;
-        const cycleTime = elapsed % fullCycle;
-        const p =
-          cycleTime < animDuration
-            ? (cycleTime / animDuration) * 100
-            : 100 - ((cycleTime - animDuration) / animDuration) * 100;
-
-        const pos = `${p.toFixed(2)}% 50%`;
-        contentSpan.style.backgroundPosition = pos;
-        glowSpan.style.backgroundPosition = pos;
-        contentSpan.style.backgroundSize = "300% 100%";
-        glowSpan.style.backgroundSize = "300% 100%";
-
-        if (!reduceMotion()) {
-          requestAnimationFrame(step);
-        }
-      }
-      requestAnimationFrame(step);
     });
   }
 
@@ -1523,20 +1459,9 @@ void main() {
   }
 
   /* =========================================================================
-   * 9. REACT BITS: STAR BORDER (Warm Gold / Coral / Mint Orbiting Trails)
+   * 9. REACT BITS: STAR BORDER (Unified Amber #F5A524 Orbiting Trail)
    * ========================================================================= */
   const STAR_BORDER_PAD = 28;
-
-  function parseStarColor(input) {
-    const probe = document.createElement("span");
-    probe.style.color = input;
-    probe.style.display = "none";
-    document.body.appendChild(probe);
-    const computed = getComputedStyle(probe).color;
-    document.body.removeChild(probe);
-    const match = computed.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
-    return match ? [+match[1], +match[2], +match[3]] : [255, 184, 0];
-  }
 
   function pointOnRoundedRect(s, w, h, r) {
     const R = Math.max(0, Math.min(r, w / 2, h / 2));
@@ -1574,7 +1499,7 @@ void main() {
     return { x: R + Math.cos(a) * R, y: R + Math.sin(a) * R, nx: Math.cos(a), ny: Math.sin(a) };
   }
 
-  function attachStarBorder(el, color = "#ffb800", speedSeconds = 6.0) {
+  function attachStarBorder(el, speedSeconds = 6.0) {
     if (!el || el.dataset.rbStarBound === "1") return;
     el.dataset.rbStarBound = "1";
     el.classList.add("rb-star-border");
@@ -1587,10 +1512,9 @@ void main() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const [r, g, b] = parseStarColor(color);
-    const hr = Math.min(255, Math.round(r + (255 - r) * 0.72));
-    const hg = Math.min(255, Math.round(g + (255 - g) * 0.72));
-    const hb = Math.min(255, Math.round(b + (255 - b) * 0.72));
+    // Unified --accent (#F5A524) and --accent-hover (#FFB94D)
+    const r = 245, g = 165, b = 36;
+    const hr = 255, hg = 185, hb = 77;
 
     let width = 0;
     let height = 0;
@@ -1632,8 +1556,8 @@ void main() {
         ctx.globalCompositeOperation = "lighter";
 
         const headDist = phase * perimeter;
-        const trailLen = perimeter * 0.24;
-        const steps = 32;
+        const trailLen = perimeter * 0.22;
+        const steps = 28;
 
         for (let i = 0; i < 2; i++) {
           const offset = i * (perimeter * 0.5);
@@ -1645,8 +1569,8 @@ void main() {
             const p1 = pointOnRoundedRect(hDist - u1 * trailLen, width, height, radius);
             const fade = Math.pow(1 - u0, 1.85);
 
-            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${fade * 0.72})`;
-            ctx.lineWidth = 1.6 * Math.pow(1 - u0, 0.45);
+            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${fade * 0.65})`;
+            ctx.lineWidth = 1.5 * Math.pow(1 - u0, 0.45);
             ctx.lineCap = "round";
             ctx.beginPath();
             ctx.moveTo(p0.x, p0.y);
@@ -1655,13 +1579,13 @@ void main() {
           }
 
           const head = pointOnRoundedRect(hDist, width, height, radius);
-          const bloom = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, 12);
-          bloom.addColorStop(0, `rgba(${hr}, ${hg}, ${hb}, 0.92)`);
-          bloom.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, 0.38)`);
+          const bloom = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, 11);
+          bloom.addColorStop(0, `rgba(${hr}, ${hg}, ${hb}, 0.85)`);
+          bloom.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, 0.32)`);
           bloom.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
           ctx.fillStyle = bloom;
           ctx.beginPath();
-          ctx.arc(head.x, head.y, 12, 0, TAU);
+          ctx.arc(head.x, head.y, 11, 0, TAU);
           ctx.fill();
         }
         ctx.restore();
@@ -1675,15 +1599,12 @@ void main() {
 
   function initStarBorders() {
     document.querySelectorAll(".primary-btn").forEach((btn) => {
-      let color = "#ffb800";
-      if (btn.classList.contains("btn-mint")) color = "#00f5d4";
-      else if (btn.classList.contains("btn-coral")) color = "#ff6b4a";
-      attachStarBorder(btn, color, 6.0);
+      attachStarBorder(btn, 6.0);
     });
   }
 
   /* =========================================================================
-   * 10. REACT BITS: CLICK SPARK (Multi-Spectral Coral, Gold, Mint & Rose)
+   * 10. REACT BITS: CLICK SPARK (Unified Amber #F5A524 / #FFB94D Sparks)
    * ========================================================================= */
   function initClickSpark() {
     const canvas = document.createElement("canvas");
@@ -1708,10 +1629,8 @@ void main() {
     window.addEventListener("resize", resize);
 
     const colors = [
-      [255, 107, 74],  // Sunset Coral
-      [255, 184, 0],   // Solar Gold
-      [0, 245, 212],   // Electric Mint
-      [255, 46, 147],  // Rose Magenta
+      [245, 165, 36], // --accent #F5A524
+      [255, 185, 77], // --accent-hover #FFB94D
     ];
 
     const render = (now) => {
@@ -1741,10 +1660,10 @@ void main() {
         const grad = ctx.createLinearGradient(tx, ty, hx, hy);
         grad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, 0)`);
         grad.addColorStop(0.6, `rgba(${cr}, ${cg}, ${cb}, ${fade * 0.9})`);
-        grad.addColorStop(1, `rgba(255, 255, 255, ${fade})`);
+        grad.addColorStop(1, `rgba(245, 241, 234, ${fade})`);
 
         ctx.strokeStyle = grad;
-        ctx.lineWidth = 1.9 * (1 - t * 0.4);
+        ctx.lineWidth = 1.8 * (1 - t * 0.4);
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(tx, ty);
@@ -1765,17 +1684,17 @@ void main() {
       (e) => {
         if (reduceMotion() || e.button !== 0) return;
         const now = performance.now();
-        const count = 10;
+        const count = 9;
         for (let i = 0; i < count; i++) {
           const base = (TAU * i) / count;
-          const rgb = colors[(i + Math.floor(Math.random() * 2)) % colors.length];
+          const rgb = colors[i % colors.length];
           sparks.push({
             x: e.clientX,
             y: e.clientY,
             angle: base + (Math.random() - 0.5) * 0.35,
-            radius: 28 * (0.8 + Math.random() * 0.45),
-            size: 12 * (0.8 + Math.random() * 0.4),
-            duration: 440 * (0.85 + Math.random() * 0.3),
+            radius: 26 * (0.8 + Math.random() * 0.45),
+            size: 11 * (0.8 + Math.random() * 0.4),
+            duration: 420 * (0.85 + Math.random() * 0.3),
             startTime: now,
             rgb,
           });

@@ -53,7 +53,7 @@
               data-tab="tab-playground"
             >
               <span class="gooey-nav__icon" aria-hidden="true">&#10022;</span>
-              <span class="gooey-nav__label">Ask &amp; Citations</span>
+              <span class="gooey-nav__label">Ask</span>
             </button>
           </li>
           <li class="gooey-nav__item" data-gooey-index="2">
@@ -65,7 +65,7 @@
               data-tab="tab-eval"
             >
               <span class="gooey-nav__icon" aria-hidden="true">&#9670;</span>
-              <span class="gooey-nav__label">Evaluation (40 QA)</span>
+              <span class="gooey-nav__label">Evaluate</span>
             </button>
           </li>
           <li class="gooey-nav__item" data-gooey-index="3">
@@ -77,12 +77,12 @@
               data-tab="tab-corpus"
             >
               <span class="gooey-nav__icon" aria-hidden="true">&#9635;</span>
-              <span class="gooey-nav__label">Documents &amp; Upload</span>
+              <span class="gooey-nav__label">Documents</span>
             </button>
           </li>
         </ul>
 
-        <!-- Clipped Active Ink Overlay List (Inverts text inside the liquid pill) -->
+        <!-- Clipped Active Ink Overlay List -->
         <ul class="gooey-nav__list gooey-nav__list--active" id="gooey-nav-overlay" aria-hidden="true">
           <li class="gooey-nav__item">
             <span class="gooey-nav__link">
@@ -93,19 +93,19 @@
           <li class="gooey-nav__item">
             <span class="gooey-nav__link">
               <span class="gooey-nav__icon">&#10022;</span>
-              <span class="gooey-nav__label">Ask &amp; Citations</span>
+              <span class="gooey-nav__label">Ask</span>
             </span>
           </li>
           <li class="gooey-nav__item">
             <span class="gooey-nav__link">
               <span class="gooey-nav__icon">&#9670;</span>
-              <span class="gooey-nav__label">Evaluation (40 QA)</span>
+              <span class="gooey-nav__label">Evaluate</span>
             </span>
           </li>
           <li class="gooey-nav__item">
             <span class="gooey-nav__link">
               <span class="gooey-nav__icon">&#9635;</span>
-              <span class="gooey-nav__label">Documents &amp; Upload</span>
+              <span class="gooey-nav__label">Documents</span>
             </span>
           </li>
         </ul>
@@ -115,132 +115,135 @@
 
   <main class="container">
     <!-- =====================================================================
-         TAB 0: LANDING PAGE / HOME OVERVIEW (REACT BITS PRISM + GOOEYNAV + PIXELCARD)
+         TAB 0: LANDING PAGE / HOME OVERVIEW
          ===================================================================== -->
     <section id="tab-home" class="tab-panel active" role="tabpanel">
       <!-- Clean Hero Showcase -->
       <div class="home-hero" data-rb-glare>
         <div class="home-hero-badge">
           <span class="badge-dot"></span>
-          <span data-rb-shiny>GROUNDED DOCUMENT INTELLIGENCE</span>
+          <span data-rb-shiny>Grounded Q&amp;A for your documents</span>
         </div>
 
         <h1 class="home-hero-title">
-          <span data-rb-blur-text>Verified Answers from Your Documents with</span><br />
+          <span data-rb-blur-text>Answers you can verify,</span>
           <span
             data-rb-gradient-text
-            data-colors="#FF6B4A,#FFB800,#00F5D4,#FF2E93,#FFD166"
-            data-speed="5"
-            data-glow="0.45"
-          >Sentence-Level Citations</span>
+            data-speed="6"
+            data-glow="0.28"
+          >sentence by sentence.</span>
         </h1>
 
         <p class="home-hero-lead">
-          Combine dense vector search, full-text keyword ranking, and cross-encoder reranking to answer questions accurately — with every claim linked to its exact supporting quote.
+          Ask questions across your documents. Every claim links to the exact sentence that supports it. If the answer isn't there, it says so.
         </p>
 
+        <div class="home-hero-actions">
+          <div data-rb-magnet>
+            <button type="button" class="primary-btn" data-goto-tab="tab-playground">
+              Ask a question
+            </button>
+          </div>
+          <div data-rb-magnet>
+            <button type="button" class="secondary-btn" data-goto-tab="tab-corpus">
+              Upload documents
+            </button>
+          </div>
+        </div>
+
         <div class="home-pill-row">
-          <span class="home-feature-pill"><span class="pill-spark spark-coral"></span>Hybrid RRF Search</span>
-          <span class="home-feature-pill"><span class="pill-spark spark-mint"></span>Cross-Encoder Reranking</span>
-          <span class="home-feature-pill"><span class="pill-spark spark-gold"></span>Claim-Verified Quotes</span>
-          <span class="home-feature-pill"><span class="pill-spark spark-rose"></span>Abstention Guardrails</span>
+          <span class="home-feature-pill">Hybrid search</span>
+          <span class="home-feature-pill">Reranking</span>
+          <span class="home-feature-pill">Verified citations</span>
+          <span class="home-feature-pill">Says I don't know</span>
         </div>
       </div>
 
-      <!-- The 3 Main Interactive Options (React Bits PixelCard + Magnet + GlareHover) -->
+      <!-- The 3 Main Interactive Workspace Cards (React Bits PixelCard + Magnet + GlareHover) -->
       <div class="home-section-header">
-        <span class="home-eyebrow">GET STARTED</span>
-        <h2>Select a Workspace</h2>
+        <span class="home-eyebrow">WORKSPACES</span>
+        <h2>Explore the app</h2>
       </div>
 
       <div class="home-portals-grid">
-        <!-- Option 1: Ask & Grounded Citations (Sunset Coral & Solar Amber) -->
+        <!-- Card 1: Ask -->
         <article
           class="home-portal-card pixel-card"
           data-rb-pixel-card
-          data-pixel-variant="coral"
           data-rb-glare
           data-goto-tab="tab-playground"
           tabindex="0"
           role="button"
-          aria-label="Open Ask with Grounded Inline Citations"
+          aria-label="Ask your documents"
         >
           <canvas class="pixel-canvas" aria-hidden="true"></canvas>
           <div class="portal-card-content">
             <div class="portal-top">
-              <span class="portal-step-tag portal-step-coral">01 / ASK</span>
-              <span class="portal-icon portal-icon-coral" aria-hidden="true">&#10022;</span>
+              <span class="portal-step-tag">Ask</span>
+              <span class="portal-icon" aria-hidden="true">&#10022;</span>
             </div>
-            <h3 class="portal-title">
-              <span data-rb-gradient-text data-colors="#FF6B4A,#FF9F1C,#FFD166" data-speed="6" data-glow="0.32">Ask &amp; Citations</span>
-            </h3>
+            <h3 class="portal-title">Ask your documents</h3>
             <p class="portal-desc">
-              Ask questions across your documents and get grounded answers with clickable <code>[n]</code> citations, exact supporting quotes, and chunk retrieval scores.
+              Get answers with a citation for every claim.
             </p>
             <div class="portal-footer" data-rb-magnet>
-              <button type="button" class="primary-btn btn-coral home-portal-cta" data-goto-tab="tab-playground">
-                Open Ask &amp; Citations <span aria-hidden="true">&rarr;</span>
+              <button type="button" class="secondary-btn home-portal-cta" data-goto-tab="tab-playground">
+                Open Ask <span aria-hidden="true">&rarr;</span>
               </button>
             </div>
           </div>
         </article>
 
-        <!-- Option 2: 40-Question Evaluation Harness (Electric Mint & Jade) -->
+        <!-- Card 2: Evaluate -->
         <article
           class="home-portal-card pixel-card"
           data-rb-pixel-card
-          data-pixel-variant="mint"
           data-rb-glare
           data-goto-tab="tab-eval"
           tabindex="0"
           role="button"
-          aria-label="Open 40-Question Evaluation Harness"
+          aria-label="Measure quality"
         >
           <canvas class="pixel-canvas" aria-hidden="true"></canvas>
           <div class="portal-card-content">
             <div class="portal-top">
-              <span class="portal-step-tag portal-step-mint">02 / EVALUATE</span>
-              <span class="portal-icon portal-icon-mint" aria-hidden="true">&#9670;</span>
+              <span class="portal-step-tag">Evaluate</span>
+              <span class="portal-icon" aria-hidden="true">&#9670;</span>
             </div>
-            <h3 class="portal-title">
-              <span data-rb-gradient-text data-colors="#00F5D4,#34D399,#A7F3D0" data-speed="6" data-glow="0.32">Evaluation (40 QA)</span>
-            </h3>
+            <h3 class="portal-title">Measure quality</h3>
             <p class="portal-desc">
-              Benchmark retrieval and answer quality across 40 test questions. Compare Dense, Sparse, Hybrid RRF, and Reranked pipelines side by side.
+              Run 40 test questions and see retrieval and answer accuracy.
             </p>
             <div class="portal-footer" data-rb-magnet>
-              <button type="button" class="primary-btn btn-mint home-portal-cta" data-goto-tab="tab-eval">
-                Open Evaluation <span aria-hidden="true">&rarr;</span>
+              <button type="button" class="secondary-btn home-portal-cta" data-goto-tab="tab-eval">
+                Open Evaluate <span aria-hidden="true">&rarr;</span>
               </button>
             </div>
           </div>
         </article>
 
-        <!-- Option 3: Documents & Upload (Solar Gold & Rose) -->
+        <!-- Card 3: Documents -->
         <article
           class="home-portal-card pixel-card"
           data-rb-pixel-card
-          data-pixel-variant="gold"
           data-rb-glare
           data-goto-tab="tab-corpus"
           tabindex="0"
           role="button"
-          aria-label="Open Documents and Upload"
+          aria-label="Manage your corpus"
         >
           <canvas class="pixel-canvas" aria-hidden="true"></canvas>
           <div class="portal-card-content">
             <div class="portal-top">
-              <span class="portal-step-tag portal-step-gold">03 / CORPUS</span>
-              <span class="portal-icon portal-icon-gold" aria-hidden="true">&#9635;</span>
+              <span class="portal-step-tag">Documents</span>
+              <span class="portal-icon" aria-hidden="true">&#9635;</span>
             </div>
-            <h3 class="portal-title">
-              <span data-rb-gradient-text data-colors="#FFB800,#FDE047,#FF6B4A" data-speed="6" data-glow="0.32">Documents &amp; Upload</span>
-            </h3>
+            <h3 class="portal-title">Manage your corpus</h3>
             <p class="portal-desc">
-              Browse indexed documents or upload new Markdown, text, JSON, or CSV files for automatic section-aware chunking and vector indexing.
+              Upload files or browse what's indexed.
             </p>
             <div class="portal-footer" data-rb-magnet>
-              <button type="button" class="primary-btn btn-gold home-portal-cta" data-goto-tab="tab-corpus">
+              <button type="button" class="secondary-btn home-portal-cta" data-goto-tab="tab-corpus">
                 Open Documents <span aria-hidden="true">&rarr;</span>
               </button>
             </div>
@@ -250,32 +253,32 @@
 
       <!-- Concise 3-Column Feature Summary (React Bits GlareHover) -->
       <div class="home-section-header">
-        <span class="home-eyebrow">KEY FEATURES</span>
-        <h2>How It Works</h2>
+        <span class="home-eyebrow">HOW IT WORKS</span>
+        <h2>Built for verifiable answers</h2>
       </div>
 
       <div class="home-features-grid">
-        <div class="home-feature-card feature-card-coral" data-rb-glare>
-          <div class="feature-tag tag-coral">HYBRID RETRIEVAL</div>
-          <h3>Vector + Keyword Fusion</h3>
+        <div class="home-feature-card" data-rb-glare>
+          <div class="feature-tag">HYBRID SEARCH</div>
+          <h3>Vector + keyword fusion</h3>
           <p>
             Combines semantic vector similarity with full-text search using Reciprocal Rank Fusion so both exact terms and concepts rank accurately.
           </p>
         </div>
 
-        <div class="home-feature-card feature-card-mint" data-rb-glare>
-          <div class="feature-tag tag-mint">RERANK &amp; ABSTAIN</div>
-          <h3>Cross-Encoder Filtering</h3>
+        <div class="home-feature-card" data-rb-glare>
+          <div class="feature-tag">RERANKING</div>
+          <h3>Cross-encoder filtering</h3>
           <p>
-            Scores candidate chunks with a cross-encoder and automatically abstains when no document contains sufficient evidence.
+            Scores candidate chunks with a cross-encoder and abstains when no document contains sufficient evidence.
           </p>
         </div>
 
-        <div class="home-feature-card feature-card-gold" data-rb-glare>
-          <div class="feature-tag tag-gold">GROUNDED CITATIONS</div>
-          <h3>Verified Inline Quotes</h3>
+        <div class="home-feature-card" data-rb-glare>
+          <div class="feature-tag">VERIFIED CITATIONS</div>
+          <h3>Sentence-level quotes</h3>
           <p>
-            Every <code>[n]</code> citation is matched against the source chunk sentence to surface the exact supporting quote and similarity badge.
+            Every <code>[n]</code> citation is matched against the source chunk sentence to surface the exact supporting quote.
           </p>
         </div>
       </div>
@@ -699,11 +702,9 @@
       <div class="card">
         <div class="card-header-row">
           <div>
-            <h2>
-              <span data-rb-gradient-text data-colors="#60A5FA,#A78BFA,#34D399,#38BDF8" data-speed="7" data-glow="0.35">40-Question Evaluation Harness</span>
-            </h2>
+            <h2 data-rb-blur-text>Measure quality</h2>
             <p class="muted-text">
-              Retrieval (Recall@K, MRR@5, NDCG@5) and generation accuracy across 4 ablation configurations.
+              Run 40 test questions and see retrieval and answer accuracy across 4 ablation configurations.
             </p>
           </div>
           <div class="eval-actions">
@@ -788,20 +789,17 @@
         <div class="col-answer">
           <div class="card">
             <div class="card-header-row">
-              <h3>
-                <span data-rb-gradient-text data-colors="#60A5FA,#38BDF8,#A78BFA" data-speed="7" data-glow="0.3">Indexed Documents</span>
-              </h3>
+              <h2 data-rb-blur-text>Manage your corpus</h2>
               <button id="refresh-docs-btn" class="secondary-btn">Refresh</button>
             </div>
+            <p class="muted-text">Browse what's indexed across your document collection.</p>
             <div id="documents-list" class="documents-list"></div>
           </div>
         </div>
 
         <div class="col-chunks">
           <div class="card">
-            <h3>
-              <span data-rb-gradient-text data-colors="#34D399,#38BDF8,#818CF8" data-speed="7" data-glow="0.3">Upload or Paste a Document</span>
-            </h3>
+            <h2 data-rb-blur-text>Upload documents</h2>
             <p class="muted-text">
               Upload a file or paste Markdown below to index it into the search corpus.
             </p>
@@ -830,7 +828,7 @@
                 <textarea id="ingest-content" rows="8" required placeholder="Paste Markdown content or choose a file above..."></textarea>
               </label>
               <button type="submit" id="ingest-submit-btn" class="primary-btn">
-                Index Document
+                Upload documents
               </button>
               <div id="ingest-feedback" class="ingest-feedback hidden" role="status"></div>
             </form>

@@ -990,7 +990,7 @@ function renderEvalDashboard(report) {
       const rm = runs[k].metrics;
       const isSelected = k === selectedKey;
       return `
-        <tr style="${isSelected ? "background: rgba(59, 130, 246, 0.12);" : ""}">
+        <tr class="${isSelected ? "row-selected" : ""}">
           <td><strong>${labels[k]}</strong></td>
           <td>${(rm.recall_at_1 * 100).toFixed(1)}%</td>
           <td>${(rm.recall_at_3 * 100).toFixed(1)}%</td>
