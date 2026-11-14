@@ -39,14 +39,28 @@ document.addEventListener("DOMContentLoaded", async () => {
 function switchToTab(tabId) {
   const buttons = document.querySelectorAll(".tab-btn");
   const panels = document.querySelectorAll(".tab-panel");
-  buttons.forEach((b) => {
+  let activeIndex = 0;
+
+  buttons.forEach((b, idx) => {
     const isMatch = b.dataset.tab === tabId;
     b.classList.toggle("active", isMatch);
     b.setAttribute("aria-selected", isMatch ? "true" : "false");
+    const li = b.closest("[data-gooey-index]");
+    if (li) {
+      if (isMatch) {
+        li.setAttribute("data-active", "");
+        activeIndex = Number(li.dataset.gooeyIndex ?? idx);
+      } else {
+        li.removeAttribute("data-active");
+      }
+    }
   });
+
   panels.forEach((p) => {
     p.classList.toggle("active", p.id === tabId);
   });
+
+  window.ReactBitsFX?.syncGooeyIndex?.(activeIndex);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 

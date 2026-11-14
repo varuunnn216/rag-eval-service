@@ -1,16 +1,18 @@
 /**
- * Official React Bits (@react-bits) Vanilla JS / Canvas Runtime
+ * Official React Bits (@react-bits) Vanilla JS / WebGL2 / Canvas Runtime
  * Ported directly from https://reactbits.dev/r/{Component}-JS-CSS.json via React Bits MCP:
- *  1. Waves (Interactive Perlin-noise flowing silk wave lines that bend around cursor velocity & ripple on click)
- *  2. PixelCard (Interactive radial twinkling pixel canvas for the 3 main workspace cards on the landing page)
- *  3. GlareHover (Diagonal specular light sheen sweep across cards and interactive panels)
- *  4. Dock (Spring-magnifying floating navigation pill bar with active indicator dots)
- *  5. GradientText (Flowing multi-stop gradient text with glow layer)
- *  6. ShinyText (Metallic light-sweep shimmer across badges)
- *  7. BlurText (Staggered blur-to-sharp word entrance reveal on headers)
- *  8. StarBorder (Orbiting glowing star trail + stardust motes on primary CTAs)
- *  9. ClickSpark (Bursting star & streak sparks on interactive clicks)
- * 10. CountUp (Cubic-out animated numeric counters for metrics & KPIs)
+ *  1. GooeyNav (WebGL2 SDF liquid metaball top menu bar with multi-color droplets & clipped ink overlay)
+ *  2. Prism (WebGL2 3D raymarched spectral prism light dispersion backdrop in Coral, Gold, Mint & Rose)
+ *  3. Waves (Interactive Perlin-noise vector wave lines in warm coral, gold & mint)
+ *  4. PixelCard (Interactive radial twinkling pixel canvas in Coral, Mint & Gold variants)
+ *  5. Magnet (Spring-physics magnetic cursor pull on buttons & chips)
+ *  6. GlareHover (Diagonal specular light sheen sweep across cards)
+ *  7. GradientText (Flowing multi-stop gradient text with glow layer)
+ *  8. ShinyText (Metallic light-sweep shimmer across badges)
+ *  9. BlurText (Staggered blur-to-sharp word entrance reveal on headers)
+ * 10. StarBorder (Orbiting glowing star trail in warm gold/coral/mint on primary CTAs)
+ * 11. ClickSpark (Bursting star & streak sparks in Coral, Gold, Mint & Rose on clicks)
+ * 12. CountUp (Cubic-out animated numeric counters for metrics & KPIs)
  */
 
 (function () {
@@ -18,12 +20,924 @@
 
   const TAU = Math.PI * 2;
   const clamp = (val, min, max) => Math.min(max, Math.max(min, val));
+  const clamp01 = (val) => Math.min(1, Math.max(0, val));
   const reduceMotion = () =>
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
   /* =========================================================================
-   * 1. REACT BITS: WAVES (From Waves-JS-CSS.json)
-   *    Perlin-noise flowing vector wave lines with cursor displacement & click ripples
+   * 1. REACT BITS: GOOEY NAV (From GooeyNav-JS-CSS.json)
+   *    WebGL2 SDF liquid metaball navigation pill with multi-hue droplets
+   * ========================================================================= */
+  const GN_MAX_DROPS = 32;
+  const GN_MAX_PILLS = 4;
+  const GN_MARGIN = 64;
+
+  const GN_VERTEX = `#version 300 es
+in vec2 aPosition;
+void main() {
+  gl_Position = vec4(aPosition, 0.0, 1.0);
+}`;
+
+  const GN_FRAGMENT = `#version 300 es
+precision highp float;
+
+uniform vec2 uSize;
+uniform float uRatio;
+uniform vec4 uPills[${GN_MAX_PILLS}];
+uniform vec4 uHover;
+uniform vec4 uDrops[${GN_MAX_DROPS}];
+uniform vec2 uTails[${GN_MAX_DROPS}];
+uniform vec3 uTints[${GN_MAX_DROPS}];
+uniform int uCount;
+uniform float uSmooth;
+uniform vec3 uPill;
+uniform vec4 uHoverColor;
+uniform float uShadow;
+
+out vec4 outColor;
+
+float sdPill(vec2 p, vec4 box) {
+  vec2 extent = max(box.zw, vec2(0.0));
+  float r = min(extent.x, extent.y);
+  vec2 q = abs(p - box.xy) - extent + r;
+  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+
+float sdCapsule(vec2 p, vec2 a, vec2 b, float r) {
+  vec2 pa = p - a;
+  vec2 ba = b - a;
+  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 0.0001), 0.0, 1.0);
+  return length(pa - ba * h) - r;
+}
+
+vec4 blend(vec4 a, vec4 b, float k) {
+  float h = clamp(0.5 + 0.5 * (b.w - a.w) / k, 0.0, 1.0);
+  return vec4(mix(b.rgb, a.rgb, h), mix(b.w, a.w, h) - k * h * (1.0 - h));
+}
+
+vec4 field(vec2 p) {
+  vec4 shape = vec4(uPill, 1e5);
+  for (int i = 0; i < ${GN_MAX_PILLS}; i++) {
+    vec4 pill = uPills[i];
+    if (pill.z <= 0.0) continue;
+    shape = blend(shape, vec4(uPill, sdPill(p, pill)), uSmooth);
+  }
+  for (int i = 0; i < ${GN_MAX_DROPS}; i++) {
+    if (i >= uCount) break;
+    vec4 drop = uDrops[i];
+    if (drop.z <= 0.0) continue;
+    float d = sdCapsule(p, drop.xy, drop.xy - uTails[i], drop.z);
+    if (d > shape.w + uSmooth) continue;
+    shape = blend(shape, vec4(uTints[i], d), uSmooth);
+  }
+  return shape;
+}
+
+void main() {
+  vec2 p = vec2(gl_FragCoord.x, uSize.y * uRatio - gl_FragCoord.y) / uRatio;
+  vec4 shape = field(p);
+  float d = shape.w;
+  float aa = max(fwidth(d), 0.35);
+  float body = clamp(0.5 - d / aa, 0.0, 1.0);
+
+  vec2 grad = vec2(dFdx(d), -dFdy(d));
+  vec2 n = length(grad) > 0.0001 ? normalize(grad) : vec2(0.0, 1.0);
+  float rim = (1.0 - smoothstep(0.0, 1.6, -d)) * max(0.0, -n.y) * 0.35;
+  vec3 fill = mix(shape.rgb, vec3(1.0), rim) * (1.0 - 0.06 * max(0.0, n.y) * (1.0 - smoothstep(0.0, 6.0, -d)));
+
+  float lifted = field(p - vec2(0.0, 3.0)).w;
+  float shadow = (1.0 - smoothstep(-3.0, 9.0, lifted)) * uShadow * (1.0 - body);
+
+  float hover = clamp(0.5 - sdPill(p, uHover) / aa, 0.0, 1.0) * uHoverColor.a;
+
+  vec4 color = vec4(0.0, 0.0, 0.0, shadow);
+  color = vec4(uHoverColor.rgb * hover, hover) + color * (1.0 - hover);
+  color = vec4(fill * body, body) + color * (1.0 - body);
+  outColor = color;
+}`;
+
+  const gnTravelEase = (t) => {
+    const x = clamp01(t);
+    return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  };
+
+  const gnBezier = (a, b, c, d, t) => {
+    const u = 1 - t;
+    return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d;
+  };
+
+  const gnPillPath = (x, y, w, h) => {
+    if (w <= 0.5 || h <= 0.5) return "";
+    const r = Math.min(w, h) / 2;
+    return `M${x + r},${y}H${x + w - r}A${r},${r} 0 0 1 ${x + w},${y + r}V${y + h - r}A${r},${r} 0 0 1 ${x + w - r},${y + h}H${x + r}A${r},${r} 0 0 1 ${x},${y + h - r}V${y + r}A${r},${r} 0 0 1 ${x + r},${y}Z`;
+  };
+
+  function compileShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    if (!shader) return null;
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return shader;
+    gl.deleteShader(shader);
+    return null;
+  }
+
+  let gooeyController = null;
+
+  function initGooeyNav() {
+    const stage = document.getElementById("gooey-nav-stage");
+    const canvas = document.getElementById("gooey-nav-canvas");
+    const list = document.getElementById("gooey-nav-list");
+    const overlay = document.getElementById("gooey-nav-overlay");
+    const fallback = document.getElementById("gooey-nav-fallback");
+    if (!stage || !canvas || !list || !overlay || !fallback) return;
+
+    const gl = canvas.getContext("webgl2", {
+      alpha: true,
+      premultipliedAlpha: true,
+      antialias: false,
+    });
+
+    let pipeline = null;
+    if (gl) {
+      const vs = compileShader(gl, gl.VERTEX_SHADER, GN_VERTEX);
+      const fs = compileShader(gl, gl.FRAGMENT_SHADER, GN_FRAGMENT);
+      const prog = gl.createProgram();
+      if (vs && fs && prog) {
+        gl.attachShader(prog, vs);
+        gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
+        if (gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+          const uniformNames = [
+            "uSize",
+            "uRatio",
+            "uPills",
+            "uHover",
+            "uDrops",
+            "uTails",
+            "uTints",
+            "uCount",
+            "uSmooth",
+            "uPill",
+            "uHoverColor",
+            "uShadow",
+          ];
+          const uniforms = Object.fromEntries(
+            uniformNames.map((n) => [n, gl.getUniformLocation(prog, n)])
+          );
+          const buffer = gl.createBuffer();
+          gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+          gl.bufferData(
+            gl.ARRAY_BUFFER,
+            new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+            gl.STATIC_DRAW
+          );
+          pipeline = {
+            program: prog,
+            uniforms,
+            buffer,
+            position: gl.getAttribLocation(prog, "aPosition"),
+          };
+        }
+      }
+    }
+
+    fallback.style.display = pipeline ? "none" : "block";
+    canvas.style.display = pipeline ? "block" : "none";
+
+    /* Warm Solar Amber Pill + Multi-Spectral Droplet Tints (Coral, Gold, Mint, Rose) */
+    const settings = {
+      animationTime: 620,
+      particleCount: 16,
+      timeVariance: 280,
+      spread: 54,
+      gooeyness: 0.55,
+      wobble: 0.52,
+      hoverEffect: true,
+      pillRgb: [1.0, 0.87, 0.68, 1.0], // Warm solar champagne #FFDEAD
+      tints: [
+        [1.0, 0.42, 0.29], // Sunset Coral #FF6B4A
+        [1.0, 0.72, 0.0],  // Solar Gold #FFB800
+        [0.0, 0.96, 0.83], // Electric Mint #00F5D4
+        [1.0, 0.18, 0.58], // Rose Magenta #FF2E93
+      ],
+      hoverRgb: [1.0, 0.65, 0.35, 0.12],
+      shadow: 0.45,
+    };
+
+    const view = { width: 0, height: 0 };
+    let rects = [];
+    let target = -1;
+    const pills = new Map();
+    const drops = [];
+    const hover = { x: 0, y: 0, w: 0, h: 0, alpha: 0, index: -1 };
+    const pillData = new Float32Array(GN_MAX_PILLS * 4);
+    const dropData = new Float32Array(GN_MAX_DROPS * 4);
+    const tailData = new Float32Array(GN_MAX_DROPS * 2);
+    const tintData = new Float32Array(GN_MAX_DROPS * 3);
+    let raf = 0;
+    let last = 0;
+
+    const measure = () => {
+      const box = stage.getBoundingClientRect();
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      view.width = box.width;
+      view.height = box.height;
+      const outerWidth = box.width + GN_MARGIN * 2;
+      const outerHeight = box.height + GN_MARGIN * 2;
+      Object.assign(canvas.style, {
+        left: `${-GN_MARGIN}px`,
+        top: `${-GN_MARGIN}px`,
+        width: `${outerWidth}px`,
+        height: `${outerHeight}px`,
+      });
+      const w = Math.max(1, Math.round(outerWidth * ratio));
+      const h = Math.max(1, Math.round(outerHeight * ratio));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      rects = Array.from(list.children).map((item) => {
+        const r = item.getBoundingClientRect();
+        return { x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height };
+      });
+    };
+
+    const trace = (boxes, blobs, smooth) => {
+      const field = (x, y) => {
+        let d = 1e5;
+        const merge = (value) => {
+          const h = clamp01(0.5 + (0.5 * (value - d)) / smooth);
+          d = value + (d - value) * h - smooth * h * (1 - h);
+        };
+        for (const box of boxes) {
+          const r = Math.min(box.hw, box.hh);
+          const qx = Math.abs(x - box.cx) - box.hw + r;
+          const qy = Math.abs(y - box.cy) - box.hh + r;
+          merge(Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r);
+        }
+        for (const blob of blobs) {
+          const px = x - blob.x;
+          const py = y - blob.y;
+          const bx = -blob.tx;
+          const by = -blob.ty;
+          const span = bx * bx + by * by;
+          const h = span > 0.0001 ? clamp01((px * bx + py * by) / span) : 0;
+          const value = Math.hypot(px - bx * h, py - by * h) - blob.r;
+          if (value > d + smooth) continue;
+          merge(value);
+        }
+        return d;
+      };
+      const step = 2;
+      const parts = [];
+      for (let y = 0; y < view.height; y += 1) {
+        const cy = y + 0.5;
+        let previous = field(0, cy);
+        let start = previous < 0 ? 0 : null;
+        for (let x = step; x <= view.width + step; x += step) {
+          const value = field(Math.min(x, view.width), cy);
+          if (previous < 0 !== value < 0) {
+            const cross = x - step + (step * previous) / (previous - value);
+            if (value < 0) start = cross;
+            else if (start !== null) {
+              parts.push(`M${start.toFixed(1)},${y}H${cross.toFixed(1)}V${y + 1}H${start.toFixed(1)}Z`);
+              start = null;
+            }
+          }
+          previous = value;
+        }
+        if (start !== null)
+          parts.push(`M${start.toFixed(1)},${y}H${view.width}V${y + 1}H${start.toFixed(1)}Z`);
+      }
+      return parts.join("");
+    };
+
+    const getPill = (index) => {
+      if (!pills.has(index)) pills.set(index, { mass: 0, scale: 0, velocity: 0, outgoing: 0 });
+      return pills.get(index);
+    };
+
+    const shape = (index, amount) => {
+      const rect = rects[index];
+      if (!rect || amount <= 0.002) return null;
+      const h = rect.h * Math.min(1.08, 0.42 + 0.58 * Math.sqrt(Math.max(0, amount)));
+      const w = Math.max(h, rect.w * Math.pow(Math.max(0, amount), 0.75));
+      return { x: rect.x + rect.w / 2 - w / 2, y: rect.y + rect.h / 2 - h / 2, w, h };
+    };
+
+    const plan = (drop, index, now, fresh) => {
+      const rect = rects[index];
+      if (!rect) return;
+      const reach = Math.max(0, settings.spread);
+      const ex = rect.x + rect.w / 2 + (Math.random() - 0.5) * rect.w * 0.45;
+      const ey = rect.y + rect.h / 2 + (Math.random() - 0.5) * rect.h * 0.2;
+      const base = Math.max(0.15, settings.animationTime / 1000);
+      const variance = (Math.random() - 0.5) * (Math.max(0, settings.timeVariance) / 1000);
+      const duration = Math.max(0.15, base * (0.62 + Math.random() * 0.32) + variance * 0.6);
+      const out = Math.random() * TAU;
+      const into = Math.random() * TAU;
+      const burst = reach * (0.7 + Math.random() * 0.6);
+      const swing = reach * (0.55 + Math.random() * 0.55);
+      const carry = Math.min(duration / 3, 0.12);
+      drop.index = index;
+      drop.start = now;
+      drop.duration = duration;
+      drop.path = [
+        drop.x,
+        drop.y,
+        fresh ? drop.x + Math.cos(out) * burst * 1.6 : drop.x + drop.vx * carry,
+        fresh ? drop.y + Math.sin(out) * burst * 1.6 : drop.y + drop.vy * carry,
+        ex + Math.cos(into) * swing * 1.5,
+        ey + Math.sin(into) * swing * 1.5,
+        ex,
+        ey,
+      ];
+    };
+
+    const emit = (from, to, now) => {
+      const source = pills.get(from);
+      const rect = rects[from];
+      if (!source || !rect || !rects[to]) return;
+      const available = source.mass - source.outgoing;
+      if (available <= 0.002) return;
+      const room = GN_MAX_DROPS - drops.length;
+      const count = Math.min(room, Math.max(1, Math.round(settings.particleCount * available)));
+      if (count <= 0) return;
+      const win = Math.max(0.15, settings.animationTime / 1000) * 0.16;
+      for (let i = 0; i < count; i++) {
+        const mass = available / count;
+        source.outgoing += mass;
+        drops.push({
+          x: rect.x + rect.w / 2 + (Math.random() - 0.5) * rect.w * 0.6,
+          y: rect.y + rect.h / 2 + (Math.random() - 0.5) * rect.h * 0.3,
+          vx: 0,
+          vy: 0,
+          mass,
+          size: 0.85 + Math.random() * 0.42,
+          given: 0,
+          source: from,
+          index: to,
+          leave: now + Math.random() * win * 1000,
+          emerged: 0,
+          absorbed: 0,
+          state: "waiting",
+          tint: settings.tints[Math.floor(Math.random() * settings.tints.length)],
+        });
+      }
+    };
+
+    const render = () => {
+      const height = rects[target]?.h ?? rects[0]?.h ?? 38;
+      const smooth = height * (0.18 + 0.5 * clamp01(settings.gooeyness));
+      const boxes = [];
+      const blobs = [];
+      for (const [index, state] of pills) {
+        const box = shape(index, state.scale);
+        if (box)
+          boxes.push({
+            cx: box.x + box.w / 2,
+            cy: box.y + box.h / 2,
+            hw: box.w / 2,
+            hh: box.h / 2,
+          });
+      }
+      for (const drop of drops) {
+        if (drop.state === "waiting") continue;
+        const radius = 0.26 * height * drop.size * Math.min(drop.emerged, 1 - drop.absorbed);
+        if (radius <= 0.05) continue;
+        const speed = Math.hypot(drop.vx, drop.vy);
+        const len = Math.min(radius * 1.1, speed * 0.018);
+        blobs.push({
+          x: drop.x,
+          y: drop.y,
+          r: radius,
+          tx: speed > 0.01 ? (drop.vx / speed) * len : 0,
+          ty: speed > 0.01 ? (drop.vy / speed) * len : 0,
+          tint: drop.tint,
+        });
+      }
+
+      const settledPill = boxes.length === 1 && !blobs.length;
+      if (settledPill) {
+        const box = boxes[0];
+        overlay.style.clipPath = `path('${gnPillPath(
+          box.cx - box.hw,
+          box.cy - box.hh,
+          box.hw * 2,
+          box.hh * 2
+        )}')`;
+      } else {
+        overlay.style.clipPath = `path('${trace(boxes, blobs, smooth) || "M0,0Z"}')`;
+      }
+      overlay.style.visibility = "visible";
+
+      if (!pipeline || !gl) {
+        const box = shape(target, 1);
+        if (box) {
+          fallback.style.transform = `translate(${box.x.toFixed(2)}px, ${box.y.toFixed(2)}px)`;
+          fallback.style.width = `${box.w}px`;
+          fallback.style.height = `${box.h}px`;
+        }
+        fallback.style.opacity = box ? "1" : "0";
+        return;
+      }
+
+      let slot = 0;
+      for (const box of boxes) {
+        if (slot >= GN_MAX_PILLS) break;
+        pillData[slot * 4] = box.cx + GN_MARGIN;
+        pillData[slot * 4 + 1] = box.cy + GN_MARGIN;
+        pillData[slot * 4 + 2] = box.hw;
+        pillData[slot * 4 + 3] = box.hh;
+        slot += 1;
+      }
+      pillData.fill(0, slot * 4);
+      let count = 0;
+      for (const blob of blobs) {
+        if (count >= GN_MAX_DROPS) break;
+        dropData[count * 4] = blob.x + GN_MARGIN;
+        dropData[count * 4 + 1] = blob.y + GN_MARGIN;
+        dropData[count * 4 + 2] = blob.r;
+        dropData[count * 4 + 3] = 0;
+        tailData[count * 2] = blob.tx;
+        tailData[count * 2 + 1] = blob.ty;
+        const tint = blob.tint || settings.pillRgb;
+        tintData[count * 3] = tint[0];
+        tintData[count * 3 + 1] = tint[1];
+        tintData[count * 3 + 2] = tint[2];
+        count += 1;
+      }
+
+      const { program, uniforms, buffer, position } = pipeline;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(program);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.enableVertexAttribArray(position);
+      gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+      gl.uniform2f(uniforms.uSize, view.width + GN_MARGIN * 2, view.height + GN_MARGIN * 2);
+      gl.uniform1f(uniforms.uRatio, canvas.width / Math.max(1, view.width + GN_MARGIN * 2));
+      gl.uniform4fv(uniforms.uPills, pillData);
+      gl.uniform4f(
+        uniforms.uHover,
+        hover.x + GN_MARGIN,
+        hover.y + GN_MARGIN,
+        hover.w / 2,
+        hover.h / 2
+      );
+      gl.uniform4fv(uniforms.uDrops, dropData);
+      gl.uniform2fv(uniforms.uTails, tailData);
+      gl.uniform3fv(uniforms.uTints, tintData);
+      gl.uniform1i(uniforms.uCount, count);
+      gl.uniform1f(uniforms.uSmooth, smooth);
+      gl.uniform3f(
+        uniforms.uPill,
+        settings.pillRgb[0],
+        settings.pillRgb[1],
+        settings.pillRgb[2]
+      );
+      gl.uniform4f(
+        uniforms.uHoverColor,
+        settings.hoverRgb[0],
+        settings.hoverRgb[1],
+        settings.hoverRgb[2],
+        settings.hoverRgb[3] * hover.alpha
+      );
+      gl.uniform1f(uniforms.uShadow, settings.shadow);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    };
+
+    const frame = (now) => {
+      raf = 0;
+      const dt = Math.min(0.05, (now - last) / 1000 || 0);
+      last = now;
+      const emergeTime = 0.09;
+      const absorbTime = 0.12;
+
+      for (let i = drops.length - 1; i >= 0; i--) {
+        const drop = drops[i];
+        if (drop.state === "waiting") {
+          if (now < drop.leave) continue;
+          drop.state = "flying";
+          plan(drop, drop.index, now, true);
+        }
+        if (drop.state === "flying") {
+          drop.emerged = Math.min(1, drop.emerged + dt / emergeTime);
+          const source = pills.get(drop.source);
+          if (source && drop.given < drop.mass) {
+            const step = Math.min(drop.mass * (dt / emergeTime), drop.mass - drop.given);
+            source.mass = Math.max(0, source.mass - step);
+            source.outgoing = Math.max(0, source.outgoing - step);
+            drop.given += step;
+          }
+          const t = clamp01((now - drop.start) / 1000 / drop.duration);
+          const eased = gnTravelEase(t);
+          const [x0, y0, x1, y1, x2, y2, x3, y3] = drop.path;
+          const x = gnBezier(x0, x1, x2, x3, eased);
+          const y = gnBezier(y0, y1, y2, y3, eased);
+          if (dt > 0) {
+            drop.vx = (x - drop.x) / dt;
+            drop.vy = (y - drop.y) / dt;
+          }
+          drop.x = x;
+          drop.y = y;
+          if (t >= 1) drop.state = "absorbing";
+        }
+        if (drop.state === "absorbing") {
+          const step = Math.min(1 - drop.absorbed, dt / absorbTime);
+          drop.absorbed += step;
+          drop.vx *= 0.8;
+          drop.vy *= 0.8;
+          const host = getPill(drop.index);
+          host.mass = Math.min(1, host.mass + drop.mass * step);
+          if (drop.absorbed >= 1) drops.splice(i, 1);
+        }
+      }
+
+      const zeta = reduceMotion() ? 1 : 1 - 0.72 * clamp01(settings.wobble);
+      const omega = 26;
+      const steps = Math.max(1, Math.ceil(dt / (1 / 240)));
+      const h = dt / steps;
+      for (const [index, state] of pills) {
+        for (let n = 0; n < steps; n++) {
+          state.velocity +=
+            (omega * omega * (state.mass - state.scale) - 2 * zeta * omega * state.velocity) * h;
+          state.scale += state.velocity * h;
+        }
+        if (
+          index !== target &&
+          state.mass <= 0.002 &&
+          state.outgoing <= 0.002 &&
+          Math.abs(state.scale) < 0.004
+        ) {
+          pills.delete(index);
+        }
+      }
+
+      if (hover.index >= 0 && rects[hover.index]) {
+        const rect = rects[hover.index];
+        const k = 1 - Math.exp(-dt / 0.06);
+        hover.x += (rect.x + rect.w / 2 - hover.x) * k;
+        hover.y += (rect.y + rect.h / 2 - hover.y) * k;
+        hover.w += (rect.w - hover.w) * k;
+        hover.h += (rect.h - hover.h) * k;
+      }
+      const hoverGoal = settings.hoverEffect && hover.index >= 0 && hover.index !== target ? 1 : 0;
+      hover.alpha += (hoverGoal - hover.alpha) * (1 - Math.exp(-dt / 0.08));
+
+      render();
+
+      const host = pills.get(target);
+      const resting =
+        drops.length === 0 &&
+        pills.size === 1 &&
+        host &&
+        Math.abs(host.mass - host.scale) < 0.0008 &&
+        Math.abs(host.velocity) < 0.004;
+      const hoverRect = rects[hover.index];
+      const hovering =
+        Math.abs(hoverGoal - hover.alpha) > 0.003 ||
+        (hoverRect &&
+          Math.abs(hoverRect.x + hoverRect.w / 2 - hover.x) +
+            Math.abs(hoverRect.w - hover.w) >
+            0.1);
+      if (!resting || hovering) raf = requestAnimationFrame(frame);
+      else {
+        host.mass = 1;
+        host.scale = 1;
+        host.velocity = 0;
+        hover.alpha = hoverGoal;
+        render();
+      }
+    };
+
+    const wake = () => {
+      if (raf) return;
+      last = performance.now();
+      raf = requestAnimationFrame(frame);
+    };
+
+    const settle = (index) => {
+      pills.clear();
+      drops.length = 0;
+      target = index;
+      const state = getPill(index);
+      state.mass = 1;
+      state.scale = 1;
+      state.velocity = 0;
+      render();
+    };
+
+    const go = (index, animate = true) => {
+      if (index === target) return;
+      if (!rects[index] || !animate || reduceMotion() || target < 0) {
+        settle(index);
+        return;
+      }
+      const now = performance.now();
+      target = index;
+      getPill(index);
+      for (const drop of drops) {
+        drop.index = index;
+        if (drop.state === "flying") plan(drop, index, now, false);
+        if (drop.state === "absorbing") {
+          drop.state = "flying";
+          drop.mass *= 1 - drop.absorbed;
+          drop.absorbed = 0;
+          plan(drop, index, now, false);
+        }
+      }
+      for (const from of [...pills.keys()]) {
+        if (from !== index) emit(from, index, now);
+      }
+      wake();
+    };
+
+    list.addEventListener("pointerover", (event) => {
+      const item = event.target.closest("[data-gooey-index]");
+      if (!item || !list.contains(item)) return;
+      const index = Number(item.dataset.gooeyIndex);
+      const rect = rects[index];
+      if (!rect) return;
+      if (hover.alpha < 0.01) {
+        hover.x = rect.x + rect.w / 2;
+        hover.y = rect.y + rect.h / 2;
+        hover.w = rect.w;
+        hover.h = rect.h;
+      }
+      hover.index = index;
+      wake();
+    });
+
+    list.addEventListener("pointerleave", () => {
+      hover.index = -1;
+      wake();
+    });
+
+    const ro = new ResizeObserver(() => {
+      measure();
+      if (!drops.length) settle(target < 0 ? 0 : target);
+      else render();
+    });
+    ro.observe(stage);
+    ro.observe(list);
+
+    measure();
+    settle(0);
+    document.fonts?.ready.then(() => {
+      measure();
+      if (!drops.length) settle(target < 0 ? 0 : target);
+    });
+
+    gooeyController = { go };
+  }
+
+  /* =========================================================================
+   * 2. REACT BITS: PRISM (From Prism-JS-CSS.json) + WARM PERLIN WAVES
+   *    WebGL2 3D raymarched spectral prism in Coral, Gold, Mint & Rose
+   * ========================================================================= */
+  const PRISM_PALETTE_SIZE = 64;
+  const PRISM_VERTEX = `#version 300 es
+void main() {
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+  const PRISM_FRAGMENT = `#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform mat3 uRay;
+uniform float uGlow;
+uniform vec2 uOffset;
+uniform float uColorFreq;
+uniform float uCenterShift;
+uniform float uInvBaseHalf;
+uniform float uInvHeight;
+uniform float uMinAxis;
+uniform float uPxScale;
+uniform sampler2D uPalette;
+uniform int uUsePalette;
+uniform float uTime;
+uniform float uNoise;
+uniform float uSaturation;
+out vec4 outColor;
+
+const vec4 PHASE_COS = vec4(1.0, 0.5403023058681398, -0.4161468365471424, -0.9899924966004454);
+const vec4 PHASE_SIN = vec4(0.0, 0.8414709848078965, 0.9092974268256817, 0.1411200080598672);
+
+float rand(vec2 co) {
+  return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453123);
+}
+
+float pyramid(vec3 p) {
+  vec3 q = vec3(abs(p.x) * uInvBaseHalf, abs(p.y) * uInvHeight, abs(p.z) * uInvBaseHalf);
+  return max((q.x + q.y + q.z - 1.0) * uMinAxis * 0.5773502691896258, -p.y);
+}
+
+vec3 grade(vec3 col, vec2 seed) {
+  col += (rand(seed) - 0.5) * uNoise;
+  col = clamp(col, 0.0, 1.0);
+  float L = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col = clamp(mix(vec3(L), col, uSaturation), 0.0, 1.0);
+  return col;
+}
+
+void main() {
+  vec2 f = (gl_FragCoord.xy - 0.5 * uResolution - uOffset) * uPxScale;
+  vec3 origin = uRay * vec3(f, 0.0);
+  vec3 axis = uRay[2];
+  float z = 5.0;
+  vec4 o = vec4(0.0);
+  for (int i = 0; i < 80; i++) {
+    vec3 p = origin + axis * z;
+    float d = 0.12 + 0.2 * abs(pyramid(p + vec3(0.0, uCenterShift, 0.0)));
+    z -= d;
+    float phase = (p.y + z) * uColorFreq;
+    vec4 band = sin(phase) * PHASE_COS + cos(phase) * PHASE_SIN + 1.0;
+    if (uUsePalette == 1) band.rgb = texture(uPalette, vec2(phase * 0.15915494309189535, 0.5)).rgb * 2.0;
+    o += band / d;
+  }
+  vec4 raw = o * o * uGlow / 1e5;
+  vec4 e = exp(2.0 * raw);
+  vec4 mapped = (e - 1.0) / (e + 1.0);
+  vec2 seed = gl_FragCoord.xy + vec2(uTime);
+  outColor = vec4(grade(mapped.rgb, seed) * mapped.a * 0.65, mapped.a * 0.65);
+}`;
+
+  const prismRotation = (yaw, pitch, roll) => {
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const cx = Math.cos(pitch), sx = Math.sin(pitch);
+    const cz = Math.cos(roll), sz = Math.sin(roll);
+    return [
+      cy * cz + sy * sx * sz, cx * sz, -sy * cz + cy * sx * sz,
+      -cy * sz + sy * sx * cz, cx * cz, sy * sz + cy * sx * cz,
+      sy * cx, -sx, cy * cx,
+    ];
+  };
+
+  const prismMultiply = (a, b) => {
+    const out = new Array(9);
+    for (let c = 0; c < 3; c++) {
+      for (let r = 0; r < 3; r++) {
+        out[c * 3 + r] = a[r] * b[c * 3] + a[3 + r] * b[c * 3 + 1] + a[6 + r] * b[c * 3 + 2];
+      }
+    }
+    return out;
+  };
+
+  function initPrismBackdrop() {
+    const container = document.getElementById("reactbits-prism");
+    if (!container) return;
+    const canvas = container.querySelector(".prism-canvas");
+    if (!canvas) return;
+    const gl = canvas.getContext("webgl2", {
+      alpha: true,
+      premultipliedAlpha: true,
+      antialias: false,
+      depth: false,
+      stencil: false,
+    });
+    if (!gl) return;
+
+    const vs = compileShader(gl, gl.VERTEX_SHADER, PRISM_VERTEX);
+    const fs = compileShader(gl, gl.FRAGMENT_SHADER, PRISM_FRAGMENT);
+    const prog = gl.createProgram();
+    if (!vs || !fs || !prog) return;
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return;
+
+    const u = {};
+    const count = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < count; i++) {
+      const info = gl.getActiveUniform(prog, i);
+      if (info) u[info.name] = gl.getUniformLocation(prog, info.name);
+    }
+
+    const vao = gl.createVertexArray();
+    const paletteTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, paletteTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    /* Multi-Spectral Warm Palette: Coral, Solar Gold, Electric Mint, Rose, Warm Amber */
+    const stops = [
+      [255, 107, 74],  // #FF6B4A Sunset Coral
+      [255, 184, 0],   // #FFB800 Solar Gold
+      [0, 245, 212],   // #00F5D4 Electric Mint
+      [255, 46, 147],  // #FF2E93 Rose Magenta
+      [255, 209, 102], // #FFD166 Warm Amber
+    ];
+    const data = new Uint8Array(PRISM_PALETTE_SIZE * 4);
+    for (let i = 0; i < PRISM_PALETTE_SIZE; i++) {
+      const position = (i / PRISM_PALETTE_SIZE) * stops.length;
+      const index = Math.floor(position);
+      const a = stops[index % stops.length];
+      const b = stops[(index + 1) % stops.length];
+      const t = position - index;
+      const k = t * t * (3 - 2 * t);
+      for (let c = 0; c < 3; c++) data[i * 4 + c] = Math.round(a[c] + (b[c] - a[c]) * k);
+      data[i * 4 + 3] = 255;
+    }
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA8,
+      PRISM_PALETTE_SIZE,
+      1,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      data
+    );
+
+    const view = { width: 1, height: 1, scale: 0.45 };
+    const pose = { yaw: 0, pitch: 0, roll: 0 };
+    const pointer = { x: 0, y: 0, inside: false };
+    let time = 0;
+    let last = 0;
+
+    const resize = () => {
+      view.width = Math.max(1, container.clientWidth);
+      view.height = Math.max(1, container.clientHeight);
+      canvas.width = Math.max(1, Math.round(view.width * view.scale));
+      canvas.height = Math.max(1, Math.round(view.height * view.scale));
+    };
+
+    window.addEventListener(
+      "pointermove",
+      (e) => {
+        const rect = container.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1;
+        const y = ((e.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1;
+        pointer.inside = Math.abs(x) <= 1 && Math.abs(y) <= 1;
+        pointer.x = clamp(x, -1, 1);
+        pointer.y = clamp(y, -1, 1);
+      },
+      { passive: true }
+    );
+
+    const ro = new ResizeObserver(resize);
+    ro.observe(container);
+    resize();
+
+    const frame = (now) => {
+      const dt = last ? clamp((now - last) / 1000, 0.001, 0.05) : 1 / 60;
+      last = now;
+      if (!reduceMotion()) time += dt;
+
+      const yaw = pointer.inside ? -pointer.x * 0.22 : 0;
+      const pitch = pointer.inside ? pointer.y * 0.22 : 0;
+      pose.yaw += (yaw - pose.yaw) * 0.06;
+      pose.pitch += (pitch - pose.pitch) * 0.06;
+
+      const t = time * 0.35;
+      const tilt = prismRotation(pose.yaw, pose.pitch, pose.roll);
+      const ray = prismMultiply(
+        tilt,
+        prismRotation(t * 0.55, Math.sin(t * 0.6 + 0.6) * 0.5, Math.sin(t * 0.35 + 1.9) * 0.4)
+      );
+
+      const height = 3.6;
+      const half = 2.8;
+
+      gl.bindVertexArray(vao);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.useProgram(prog);
+      gl.uniform2f(u.uResolution, canvas.width, canvas.height);
+      gl.uniformMatrix3fv(u.uRay, false, ray);
+      gl.uniform1f(u.uGlow, 0.92);
+      gl.uniform2f(u.uOffset, 0, 60 * view.scale);
+      gl.uniform1f(u.uColorFreq, 0.95);
+      gl.uniform1f(u.uCenterShift, height * 0.25);
+      gl.uniform1f(u.uInvBaseHalf, 1 / half);
+      gl.uniform1f(u.uInvHeight, 1 / height);
+      gl.uniform1f(u.uMinAxis, Math.min(half, height));
+      gl.uniform1f(u.uPxScale, 1 / (canvas.height * 0.1 * 3.8));
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, paletteTexture);
+      gl.uniform1i(u.uPalette, 0);
+      gl.uniform1i(u.uUsePalette, 1);
+      gl.uniform1f(u.uTime, time);
+      gl.uniform1f(u.uNoise, 0.015);
+      gl.uniform1f(u.uSaturation, 1.45);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      if (!reduceMotion()) {
+        requestAnimationFrame(frame);
+      }
+    };
+
+    requestAnimationFrame(frame);
+  }
+
+  /* =========================================================================
+   * 3. REACT BITS: WAVES (Warm Coral / Gold / Mint Perlin-Noise Silk Lines)
    * ========================================================================= */
   class Grad {
     constructor(x, y, z) {
@@ -93,31 +1007,30 @@
   }
 
   function initWavesBackdrop() {
-    const container = document.getElementById("reactbits-waves");
-    if (!container) return;
-    const canvas = container.querySelector("canvas");
+    const canvas = document.getElementById("reactbits-waves-canvas");
     if (!canvas) return;
+    const container = canvas.parentElement;
+    if (!container) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const noise = new PerlinNoise(42);
+    const noise = new PerlinNoise(77);
     const config = {
-      xGap: 18,
-      yGap: 32,
-      waveSpeedX: 0.012,
+      xGap: 24,
+      yGap: 36,
+      waveSpeedX: 0.011,
       waveSpeedY: 0.005,
-      waveAmpX: 32,
-      waveAmpY: 16,
+      waveAmpX: 28,
+      waveAmpY: 14,
       friction: 0.91,
       tension: 0.006,
-      maxCursorMove: 110,
-      interactionRadius: 160,
+      maxCursorMove: 95,
+      interactionRadius: 150,
     };
 
     let width = 0;
     let height = 0;
     let lines = [];
-    let ripples = [];
     const mouse = {
       x: -500,
       y: -500,
@@ -141,12 +1054,9 @@
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      setLines();
-    }
 
-    function setLines() {
       lines = [];
-      const oWidth = width + 180;
+      const oWidth = width + 160;
       const oHeight = height + 60;
       const totalLines = Math.ceil(oWidth / config.xGap);
       const totalPoints = Math.ceil(oHeight / config.yGap);
@@ -167,107 +1077,6 @@
       }
     }
 
-    function movePoints(time) {
-      for (let i = 0; i < lines.length; i++) {
-        const pts = lines[i];
-        for (let j = 0; j < pts.length; j++) {
-          const p = pts[j];
-          const move =
-            noise.perlin2(
-              (p.x + time * config.waveSpeedX) * 0.0022,
-              (p.y + time * config.waveSpeedY) * 0.0016
-            ) * 12;
-          p.wave.x = Math.cos(move) * config.waveAmpX;
-          p.wave.y = Math.sin(move) * config.waveAmpY;
-
-          const dx = p.x - mouse.sx;
-          const dy = p.y - mouse.sy;
-          const dist = Math.hypot(dx, dy);
-          const l = Math.max(config.interactionRadius, mouse.vs);
-          if (dist < l) {
-            const s = 1 - dist / l;
-            const f = Math.cos(dist * 0.001) * s;
-            p.cursor.vx += Math.cos(mouse.a) * f * l * mouse.vs * 0.0006;
-            p.cursor.vy += Math.sin(mouse.a) * f * l * mouse.vs * 0.0006;
-          }
-
-          for (let r = 0; r < ripples.length; r++) {
-            const rp = ripples[r];
-            const rdx = p.x - rp.x;
-            const rdy = p.y - rp.y;
-            const rDist = Math.hypot(rdx, rdy);
-            const band = Math.abs(rDist - rp.radius);
-            if (band < 48 && rDist > 0.001) {
-              const falloff = (1 - band / 48) * rp.alpha;
-              const push = Math.sin((band / 48) * Math.PI) * falloff * 1.65;
-              p.cursor.vx += (rdx / rDist) * push;
-              p.cursor.vy += (rdy / rDist) * push;
-            }
-          }
-
-          p.cursor.vx += (0 - p.cursor.x) * config.tension;
-          p.cursor.vy += (0 - p.cursor.y) * config.tension;
-          p.cursor.vx *= config.friction;
-          p.cursor.vy *= config.friction;
-          p.cursor.x += p.cursor.vx * 2;
-          p.cursor.y += p.cursor.vy * 2;
-          p.cursor.x = clamp(p.cursor.x, -config.maxCursorMove, config.maxCursorMove);
-          p.cursor.y = clamp(p.cursor.y, -config.maxCursorMove, config.maxCursorMove);
-        }
-      }
-
-      for (let r = ripples.length - 1; r >= 0; r--) {
-        ripples[r].radius += 5.5;
-        ripples[r].alpha *= 0.962;
-        if (ripples[r].alpha < 0.025) ripples.splice(r, 1);
-      }
-    }
-
-    function moved(point, withCursor = true) {
-      return {
-        x: point.x + point.wave.x + (withCursor ? point.cursor.x : 0),
-        y: point.y + point.wave.y + (withCursor ? point.cursor.y : 0),
-      };
-    }
-
-    function drawLines() {
-      ctx.clearRect(0, 0, width, height);
-
-      const grad = ctx.createLinearGradient(0, 0, width, height);
-      grad.addColorStop(0, "rgba(56, 189, 248, 0.22)");
-      grad.addColorStop(0.5, "rgba(129, 140, 248, 0.20)");
-      grad.addColorStop(1, "rgba(52, 211, 153, 0.16)");
-
-      ctx.beginPath();
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = 1.1;
-
-      for (let i = 0; i < lines.length; i++) {
-        const points = lines[i];
-        if (!points.length) continue;
-        let p1 = moved(points[0], false);
-        ctx.moveTo(p1.x, p1.y);
-        for (let idx = 0; idx < points.length; idx++) {
-          const isLast = idx === points.length - 1;
-          p1 = moved(points[idx], !isLast);
-          const p2 = moved(points[idx + 1] || points[points.length - 1], !isLast);
-          ctx.lineTo(p1.x, p1.y);
-          if (isLast) ctx.moveTo(p2.x, p2.y);
-        }
-      }
-      ctx.stroke();
-
-      /* Subtle cursor halo on the wave grid */
-      if (mouse.set && mouse.sx > 0 && mouse.sy > 0) {
-        const glow = ctx.createRadialGradient(mouse.sx, mouse.sy, 0, mouse.sx, mouse.sy, 220);
-        glow.addColorStop(0, "rgba(56, 189, 248, 0.12)");
-        glow.addColorStop(0.5, "rgba(139, 92, 246, 0.06)");
-        glow.addColorStop(1, "rgba(0, 0, 0, 0)");
-        ctx.fillStyle = glow;
-        ctx.fillRect(0, 0, width, height);
-      }
-    }
-
     function tick(t) {
       mouse.sx += (mouse.x - mouse.sx) * 0.12;
       mouse.sy += (mouse.y - mouse.sy) * 0.12;
@@ -281,8 +1090,59 @@
       mouse.ly = mouse.y;
       mouse.a = Math.atan2(dy, dx);
 
-      movePoints(t);
-      drawLines();
+      for (let i = 0; i < lines.length; i++) {
+        const pts = lines[i];
+        for (let j = 0; j < pts.length; j++) {
+          const p = pts[j];
+          const move =
+            noise.perlin2(
+              (p.x + t * config.waveSpeedX) * 0.002,
+              (p.y + t * config.waveSpeedY) * 0.0015
+            ) * 12;
+          p.wave.x = Math.cos(move) * config.waveAmpX;
+          p.wave.y = Math.sin(move) * config.waveAmpY;
+
+          const cdx = p.x - mouse.sx;
+          const cdy = p.y - mouse.sy;
+          const dist = Math.hypot(cdx, cdy);
+          const l = Math.max(config.interactionRadius, mouse.vs);
+          if (dist < l) {
+            const s = 1 - dist / l;
+            const f = Math.cos(dist * 0.001) * s;
+            p.cursor.vx += Math.cos(mouse.a) * f * l * mouse.vs * 0.00055;
+            p.cursor.vy += Math.sin(mouse.a) * f * l * mouse.vs * 0.00055;
+          }
+
+          p.cursor.vx += (0 - p.cursor.x) * config.tension;
+          p.cursor.vy += (0 - p.cursor.y) * config.tension;
+          p.cursor.vx *= config.friction;
+          p.cursor.vy *= config.friction;
+          p.cursor.x = clamp(p.cursor.x + p.cursor.vx * 2, -config.maxCursorMove, config.maxCursorMove);
+          p.cursor.y = clamp(p.cursor.y + p.cursor.vy * 2, -config.maxCursorMove, config.maxCursorMove);
+        }
+      }
+
+      ctx.clearRect(0, 0, width, height);
+      const grad = ctx.createLinearGradient(0, 0, width, height);
+      grad.addColorStop(0, "rgba(255, 107, 74, 0.14)");
+      grad.addColorStop(0.5, "rgba(255, 184, 0, 0.12)");
+      grad.addColorStop(1, "rgba(0, 245, 212, 0.13)");
+
+      ctx.beginPath();
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.0;
+
+      for (let i = 0; i < lines.length; i++) {
+        const points = lines[i];
+        if (!points.length) continue;
+        ctx.moveTo(points[0].x + points[0].wave.x, points[0].y + points[0].wave.y);
+        for (let idx = 0; idx < points.length; idx++) {
+          const pt = points[idx];
+          ctx.lineTo(pt.x + pt.wave.x + pt.cursor.x, pt.y + pt.wave.y + pt.cursor.y);
+        }
+      }
+      ctx.stroke();
+
       if (!reduceMotion()) {
         requestAnimationFrame(tick);
       }
@@ -305,45 +1165,29 @@
       { passive: true }
     );
 
-    window.addEventListener(
-      "pointerdown",
-      (e) => {
-        const rect = container.getBoundingClientRect();
-        ripples.push({
-          x: e.clientX - rect.left,
-          y: e.clientY - rect.top,
-          radius: 4,
-          alpha: 1,
-        });
-        if (ripples.length > 6) ripples.shift();
-      },
-      { passive: true }
-    );
-
     window.addEventListener("resize", setSize);
     setSize();
     requestAnimationFrame(tick);
   }
 
   /* =========================================================================
-   * 2. REACT BITS: PIXEL CARD (From PixelCard-JS-CSS.json)
-   *    Interactive twinkling pixel canvas inside the 3 main workspace cards
+   * 4. REACT BITS: PIXEL CARD (Coral, Mint, and Gold Multi-Spectral Variants)
    * ========================================================================= */
   const PIXEL_VARIANTS = {
-    blue: {
+    coral: {
       gap: 6,
-      speed: 45,
-      colors: "#e0f2fe,#7dd3fc,#38bdf8,#0284c7",
+      speed: 48,
+      colors: "#fff1f2,#fda4af,#ff6b4a,#f97316,#ffb800",
     },
-    purple: {
+    mint: {
       gap: 6,
-      speed: 45,
-      colors: "#f3e8ff,#d8b4fe,#c084fc,#9333ea",
+      speed: 48,
+      colors: "#ecfdf5,#6ee7b7,#00f5d4,#10b981,#14b8a6",
     },
-    emerald: {
+    gold: {
       gap: 6,
-      speed: 45,
-      colors: "#d1fae5,#6ee7b7,#34d399,#059669",
+      speed: 48,
+      colors: "#fefce8,#fde047,#ffb800,#f59e0b,#ff2e93",
     },
   };
 
@@ -357,7 +1201,7 @@
       this.size = 0;
       this.sizeStep = Math.random() * 0.45 + 0.18;
       this.minSize = 0.6;
-      this.maxSizeInteger = 2.4;
+      this.maxSizeInteger = 2.5;
       this.maxSize = Math.random() * (this.maxSizeInteger - this.minSize) + this.minSize;
       this.delay = delay;
       this.counter = 0;
@@ -371,7 +1215,10 @@
     draw() {
       const centerOffset = this.maxSizeInteger * 0.5 - this.size * 0.5;
       this.ctx.fillStyle = this.color;
-      this.ctx.globalAlpha = Math.min(1, 0.35 + (this.size / this.maxSizeInteger) * 0.55 + this.boost * 0.25);
+      this.ctx.globalAlpha = Math.min(
+        1,
+        0.38 + (this.size / this.maxSizeInteger) * 0.52 + this.boost * 0.25
+      );
       this.ctx.fillRect(this.x + centerOffset, this.y + centerOffset, this.size, this.size);
       this.ctx.globalAlpha = 1;
       this.boost *= 0.92;
@@ -427,13 +1274,6 @@
     }
   }
 
-  function getEffectiveSpeed(value, reduced) {
-    const throttle = 0.001;
-    if (value <= 0 || reduced) return 0;
-    if (value >= 100) return 100 * throttle;
-    return value * throttle;
-  }
-
   function initPixelCards() {
     const cards = document.querySelectorAll("[data-rb-pixel-card]");
     const reduced = reduceMotion();
@@ -447,10 +1287,10 @@
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const variantName = card.dataset.pixelVariant || "blue";
-      const cfg = PIXEL_VARIANTS[variantName] || PIXEL_VARIANTS.blue;
+      const variantName = card.dataset.pixelVariant || "coral";
+      const cfg = PIXEL_VARIANTS[variantName] || PIXEL_VARIANTS.coral;
       const colorsArr = cfg.colors.split(",");
-      const effSpeed = getEffectiveSpeed(cfg.speed, reduced);
+      const effSpeed = reduced ? 0 : cfg.speed * 0.001;
 
       let pixels = [];
       let rafId = null;
@@ -473,7 +1313,7 @@
           for (let y = 0; y < height; y += cfg.gap) {
             const color = colorsArr[Math.floor(Math.random() * colorsArr.length)];
             const dist = Math.hypot(x - cx, y - cy);
-            const delay = reduced ? 0 : dist * 0.65;
+            const delay = reduced ? 0 : dist * 0.6;
             pixels.push(new PixelCell(ctx, x, y, color, effSpeed, delay));
           }
         }
@@ -540,8 +1380,31 @@
   }
 
   /* =========================================================================
-   * 3. REACT BITS: GLARE HOVER (From GlareHover-JS-CSS.json)
-   *    Glossy diagonal specular light sweep across cards on hover
+   * 5. REACT BITS: MAGNET (From Magnet-JS-CSS.json)
+   *    Spring-physics magnetic cursor pull on buttons & chips
+   * ========================================================================= */
+  function initMagnet(root = document) {
+    const els = root.querySelectorAll("[data-rb-magnet], .sample-chip");
+    els.forEach((el) => {
+      if (el.dataset.rbMagnetBound === "1") return;
+      el.dataset.rbMagnetBound = "1";
+
+      el.addEventListener("pointermove", (e) => {
+        if (reduceMotion()) return;
+        const rect = el.getBoundingClientRect();
+        const dx = e.clientX - (rect.left + rect.width / 2);
+        const dy = e.clientY - (rect.top + rect.height / 2);
+        el.style.transform = `translate3d(${(dx * 0.16).toFixed(2)}px, ${(dy * 0.22).toFixed(2)}px, 0)`;
+      });
+
+      el.addEventListener("pointerleave", () => {
+        el.style.transform = "";
+      });
+    });
+  }
+
+  /* =========================================================================
+   * 6. REACT BITS: GLARE HOVER (From GlareHover-JS-CSS.json)
    * ========================================================================= */
   function initGlareHover(root = document) {
     const targets = root.querySelectorAll(
@@ -555,37 +1418,7 @@
   }
 
   /* =========================================================================
-   * 4. REACT BITS: DOCK NAVIGATION (From Dock-JS-CSS.json)
-   *    Smooth proximity-scaled floating dock items
-   * ========================================================================= */
-  function initDockNav() {
-    const dock = document.querySelector("[data-rb-dock]");
-    if (!dock) return;
-    const items = Array.from(dock.querySelectorAll(".rb-dock-item"));
-    if (!items.length) return;
-
-    dock.addEventListener("pointermove", (e) => {
-      if (reduceMotion()) return;
-      items.forEach((item) => {
-        const rect = item.getBoundingClientRect();
-        const center = rect.left + rect.width / 2;
-        const dist = Math.abs(e.clientX - center);
-        const factor = Math.max(0, 1 - dist / 150);
-        const scale = 1 + factor * 0.08;
-        const lift = -factor * 3;
-        item.style.transform = `translateY(${lift.toFixed(2)}px) scale(${scale.toFixed(3)})`;
-      });
-    });
-
-    dock.addEventListener("pointerleave", () => {
-      items.forEach((item) => {
-        item.style.transform = "";
-      });
-    });
-  }
-
-  /* =========================================================================
-   * 5. REACT BITS: GRADIENT TEXT (From GradientText-JS-CSS.json)
+   * 7. REACT BITS: GRADIENT TEXT (From GradientText-JS-CSS.json)
    * ========================================================================= */
   function initGradientText(root = document) {
     const els = root.querySelectorAll("[data-rb-gradient-text]");
@@ -594,7 +1427,9 @@
       el.dataset.rbGradBound = "1";
 
       const text = el.textContent;
-      const colors = (el.dataset.colors || "#38BDF8,#818CF8,#C084FC,#34D399").split(",");
+      const colors = (
+        el.dataset.colors || "#FF6B4A,#FFB800,#00F5D4,#FF2E93,#FFD166"
+      ).split(",");
       const speed = parseFloat(el.dataset.speed || "6");
       const glow = parseFloat(el.dataset.glow || "0.38");
 
@@ -654,23 +1489,18 @@
   }
 
   /* =========================================================================
-   * 6. REACT BITS: SHINY TEXT (From ShinyText-JS-CSS.json)
+   * 8. REACT BITS: SHINY TEXT & BLUR TEXT
    * ========================================================================= */
   function initShinyText(root = document) {
-    const els = root.querySelectorAll("[data-rb-shiny]");
-    els.forEach((el) => {
+    root.querySelectorAll("[data-rb-shiny]").forEach((el) => {
       if (el.dataset.rbShinyBound === "1") return;
       el.dataset.rbShinyBound = "1";
       el.classList.add("rb-shiny-text");
     });
   }
 
-  /* =========================================================================
-   * 7. REACT BITS: BLUR TEXT (From BlurText-JS-CSS.json)
-   * ========================================================================= */
   function initBlurText(root = document) {
-    const els = root.querySelectorAll("[data-rb-blur-text]");
-    els.forEach((el) => {
+    root.querySelectorAll("[data-rb-blur-text]").forEach((el) => {
       if (el.dataset.rbBlurBound === "1") return;
       el.dataset.rbBlurBound = "1";
 
@@ -693,7 +1523,7 @@
   }
 
   /* =========================================================================
-   * 8. REACT BITS: STAR BORDER (From StarBorder-JS-CSS.json)
+   * 9. REACT BITS: STAR BORDER (Warm Gold / Coral / Mint Orbiting Trails)
    * ========================================================================= */
   const STAR_BORDER_PAD = 28;
 
@@ -705,7 +1535,7 @@
     const computed = getComputedStyle(probe).color;
     document.body.removeChild(probe);
     const match = computed.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
-    return match ? [+match[1], +match[2], +match[3]] : [96, 165, 250];
+    return match ? [+match[1], +match[2], +match[3]] : [255, 184, 0];
   }
 
   function pointOnRoundedRect(s, w, h, r) {
@@ -744,7 +1574,7 @@
     return { x: R + Math.cos(a) * R, y: R + Math.sin(a) * R, nx: Math.cos(a), ny: Math.sin(a) };
   }
 
-  function attachStarBorder(el, color = "#60a5fa", speedSeconds = 6.5) {
+  function attachStarBorder(el, color = "#ffb800", speedSeconds = 6.0) {
     if (!el || el.dataset.rbStarBound === "1") return;
     el.dataset.rbStarBound = "1";
     el.classList.add("rb-star-border");
@@ -815,7 +1645,7 @@
             const p1 = pointOnRoundedRect(hDist - u1 * trailLen, width, height, radius);
             const fade = Math.pow(1 - u0, 1.85);
 
-            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${fade * 0.7})`;
+            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${fade * 0.72})`;
             ctx.lineWidth = 1.6 * Math.pow(1 - u0, 0.45);
             ctx.lineCap = "round";
             ctx.beginPath();
@@ -826,8 +1656,8 @@
 
           const head = pointOnRoundedRect(hDist, width, height, radius);
           const bloom = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, 12);
-          bloom.addColorStop(0, `rgba(${hr}, ${hg}, ${hb}, 0.9)`);
-          bloom.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, 0.35)`);
+          bloom.addColorStop(0, `rgba(${hr}, ${hg}, ${hb}, 0.92)`);
+          bloom.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, 0.38)`);
           bloom.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
           ctx.fillStyle = bloom;
           ctx.beginPath();
@@ -845,12 +1675,15 @@
 
   function initStarBorders() {
     document.querySelectorAll(".primary-btn").forEach((btn) => {
-      attachStarBorder(btn, "#60a5fa", 6.0);
+      let color = "#ffb800";
+      if (btn.classList.contains("btn-mint")) color = "#00f5d4";
+      else if (btn.classList.contains("btn-coral")) color = "#ff6b4a";
+      attachStarBorder(btn, color, 6.0);
     });
   }
 
   /* =========================================================================
-   * 9. REACT BITS: CLICK SPARK (From ClickSpark-JS-CSS.json)
+   * 10. REACT BITS: CLICK SPARK (Multi-Spectral Coral, Gold, Mint & Rose)
    * ========================================================================= */
   function initClickSpark() {
     const canvas = document.createElement("canvas");
@@ -875,9 +1708,10 @@
     window.addEventListener("resize", resize);
 
     const colors = [
-      [56, 189, 248],
-      [192, 132, 252],
-      [52, 211, 153],
+      [255, 107, 74],  // Sunset Coral
+      [255, 184, 0],   // Solar Gold
+      [0, 245, 212],   // Electric Mint
+      [255, 46, 147],  // Rose Magenta
     ];
 
     const render = (now) => {
@@ -910,7 +1744,7 @@
         grad.addColorStop(1, `rgba(255, 255, 255, ${fade})`);
 
         ctx.strokeStyle = grad;
-        ctx.lineWidth = 1.8 * (1 - t * 0.4);
+        ctx.lineWidth = 1.9 * (1 - t * 0.4);
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(tx, ty);
@@ -931,17 +1765,17 @@
       (e) => {
         if (reduceMotion() || e.button !== 0) return;
         const now = performance.now();
-        const count = 9;
-        const rgb = colors[Math.floor(Math.random() * colors.length)];
+        const count = 10;
         for (let i = 0; i < count; i++) {
           const base = (TAU * i) / count;
+          const rgb = colors[(i + Math.floor(Math.random() * 2)) % colors.length];
           sparks.push({
             x: e.clientX,
             y: e.clientY,
             angle: base + (Math.random() - 0.5) * 0.35,
-            radius: 26 * (0.8 + Math.random() * 0.45),
-            size: 11 * (0.8 + Math.random() * 0.4),
-            duration: 420 * (0.85 + Math.random() * 0.3),
+            radius: 28 * (0.8 + Math.random() * 0.45),
+            size: 12 * (0.8 + Math.random() * 0.4),
+            duration: 440 * (0.85 + Math.random() * 0.3),
             startTime: now,
             rgb,
           });
@@ -953,7 +1787,7 @@
   }
 
   /* =========================================================================
-   * 10. REACT BITS: COUNT UP (Animated numeric counter)
+   * 11. REACT BITS: COUNT UP (Animated numeric counter)
    * ========================================================================= */
   function animateCountUp(el, targetValue, options = {}) {
     if (!el) return;
@@ -986,9 +1820,11 @@
    * BOOTSTRAP & PUBLIC HOOKS
    * ========================================================================= */
   function initAll() {
+    initGooeyNav();
+    initPrismBackdrop();
     initWavesBackdrop();
-    initDockNav();
     initPixelCards();
+    initMagnet(document);
     initGlareHover(document);
     initGradientText(document);
     initShinyText(document);
@@ -998,9 +1834,13 @@
   }
 
   window.ReactBitsFX = {
+    syncGooeyIndex(index) {
+      gooeyController?.go?.(index, true);
+    },
     refreshDynamicCards(root = document) {
       initGlareHover(root);
       initPixelCards();
+      initMagnet(root);
       initGradientText(root);
       initShinyText(root);
     },

@@ -10,41 +10,112 @@
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <!-- Official React Bits Waves Interactive Perlin-Noise Vector Backdrop -->
-  <div id="reactbits-waves" class="waves-backdrop" aria-hidden="true">
-    <canvas class="waves-canvas"></canvas>
-    <div class="waves-vignette"></div>
+  <!-- Official React Bits Prism 3D Spectral Shader + Warm Perlin Waves Backdrop -->
+  <div id="reactbits-prism" class="prism-backdrop" aria-hidden="true">
+    <canvas class="prism-canvas"></canvas>
+    <canvas class="waves-canvas" id="reactbits-waves-canvas"></canvas>
+    <div class="prism-vignette"></div>
   </div>
 
-  <!-- Official React Bits Floating Dock Navigation -->
-  <nav class="tab-nav rb-dock-nav" role="tablist" aria-label="Main Navigation" data-rb-dock>
-    <div class="tab-nav-inner rb-dock-panel">
-      <button class="tab-btn rb-dock-item active" role="tab" aria-selected="true" data-tab="tab-home">
-        <span class="rb-dock-icon" aria-hidden="true">&#9672;</span>
-        <span class="rb-dock-label">Home</span>
-        <span class="rb-dock-dot" aria-hidden="true"></span>
-      </button>
-      <button class="tab-btn rb-dock-item" role="tab" aria-selected="false" data-tab="tab-playground">
-        <span class="rb-dock-icon" aria-hidden="true">&#10022;</span>
-        <span class="rb-dock-label">Ask &amp; Citations</span>
-        <span class="rb-dock-dot" aria-hidden="true"></span>
-      </button>
-      <button class="tab-btn rb-dock-item" role="tab" aria-selected="false" data-tab="tab-eval">
-        <span class="rb-dock-icon" aria-hidden="true">&#9670;</span>
-        <span class="rb-dock-label">Evaluation (40 QA)</span>
-        <span class="rb-dock-dot" aria-hidden="true"></span>
-      </button>
-      <button class="tab-btn rb-dock-item" role="tab" aria-selected="false" data-tab="tab-corpus">
-        <span class="rb-dock-icon" aria-hidden="true">&#9635;</span>
-        <span class="rb-dock-label">Documents &amp; Upload</span>
-        <span class="rb-dock-dot" aria-hidden="true"></span>
-      </button>
-    </div>
-  </nav>
+  <!-- Official React Bits GooeyNav Top Menu Bar (WebGL2 Liquid Metaball Pill + Clipped Ink Overlay) -->
+  <div class="top-nav-shell">
+    <nav
+      class="gooey-nav gooey-nav--md gooey-nav--framed tab-nav"
+      id="rb-gooey-nav"
+      role="tablist"
+      aria-label="Main Navigation"
+    >
+      <span class="gooey-nav__rim" aria-hidden="true"></span>
+      <div class="gooey-nav__stage" id="gooey-nav-stage">
+        <canvas class="gooey-nav__canvas" id="gooey-nav-canvas" aria-hidden="true"></canvas>
+        <span class="gooey-nav__fallback" id="gooey-nav-fallback" aria-hidden="true"></span>
+
+        <!-- Interactive Menu List -->
+        <ul class="gooey-nav__list" id="gooey-nav-list">
+          <li class="gooey-nav__item" data-gooey-index="0" data-active>
+            <button
+              type="button"
+              class="gooey-nav__link tab-btn active"
+              role="tab"
+              aria-selected="true"
+              data-tab="tab-home"
+            >
+              <span class="gooey-nav__icon" aria-hidden="true">&#9672;</span>
+              <span class="gooey-nav__label">Home</span>
+            </button>
+          </li>
+          <li class="gooey-nav__item" data-gooey-index="1">
+            <button
+              type="button"
+              class="gooey-nav__link tab-btn"
+              role="tab"
+              aria-selected="false"
+              data-tab="tab-playground"
+            >
+              <span class="gooey-nav__icon" aria-hidden="true">&#10022;</span>
+              <span class="gooey-nav__label">Ask &amp; Citations</span>
+            </button>
+          </li>
+          <li class="gooey-nav__item" data-gooey-index="2">
+            <button
+              type="button"
+              class="gooey-nav__link tab-btn"
+              role="tab"
+              aria-selected="false"
+              data-tab="tab-eval"
+            >
+              <span class="gooey-nav__icon" aria-hidden="true">&#9670;</span>
+              <span class="gooey-nav__label">Evaluation (40 QA)</span>
+            </button>
+          </li>
+          <li class="gooey-nav__item" data-gooey-index="3">
+            <button
+              type="button"
+              class="gooey-nav__link tab-btn"
+              role="tab"
+              aria-selected="false"
+              data-tab="tab-corpus"
+            >
+              <span class="gooey-nav__icon" aria-hidden="true">&#9635;</span>
+              <span class="gooey-nav__label">Documents &amp; Upload</span>
+            </button>
+          </li>
+        </ul>
+
+        <!-- Clipped Active Ink Overlay List (Inverts text inside the liquid pill) -->
+        <ul class="gooey-nav__list gooey-nav__list--active" id="gooey-nav-overlay" aria-hidden="true">
+          <li class="gooey-nav__item">
+            <span class="gooey-nav__link">
+              <span class="gooey-nav__icon">&#9672;</span>
+              <span class="gooey-nav__label">Home</span>
+            </span>
+          </li>
+          <li class="gooey-nav__item">
+            <span class="gooey-nav__link">
+              <span class="gooey-nav__icon">&#10022;</span>
+              <span class="gooey-nav__label">Ask &amp; Citations</span>
+            </span>
+          </li>
+          <li class="gooey-nav__item">
+            <span class="gooey-nav__link">
+              <span class="gooey-nav__icon">&#9670;</span>
+              <span class="gooey-nav__label">Evaluation (40 QA)</span>
+            </span>
+          </li>
+          <li class="gooey-nav__item">
+            <span class="gooey-nav__link">
+              <span class="gooey-nav__icon">&#9635;</span>
+              <span class="gooey-nav__label">Documents &amp; Upload</span>
+            </span>
+          </li>
+        </ul>
+      </div>
+    </nav>
+  </div>
 
   <main class="container">
     <!-- =====================================================================
-         TAB 0: LANDING PAGE / HOME OVERVIEW (REACT BITS PIXELCARD + WAVES + GLAREHOVER)
+         TAB 0: LANDING PAGE / HOME OVERVIEW (REACT BITS PRISM + GOOEYNAV + PIXELCARD)
          ===================================================================== -->
     <section id="tab-home" class="tab-panel active" role="tabpanel">
       <!-- Clean Hero Showcase -->
@@ -56,7 +127,12 @@
 
         <h1 class="home-hero-title">
           <span data-rb-blur-text>Verified Answers from Your Documents with</span><br />
-          <span data-rb-gradient-text data-colors="#38BDF8,#818CF8,#C084FC,#34D399" data-speed="5" data-glow="0.45">Sentence-Level Citations</span>
+          <span
+            data-rb-gradient-text
+            data-colors="#FF6B4A,#FFB800,#00F5D4,#FF2E93,#FFD166"
+            data-speed="5"
+            data-glow="0.45"
+          >Sentence-Level Citations</span>
         </h1>
 
         <p class="home-hero-lead">
@@ -64,25 +140,25 @@
         </p>
 
         <div class="home-pill-row">
-          <span class="home-feature-pill"><span class="pill-spark"></span>Hybrid RRF Search</span>
-          <span class="home-feature-pill"><span class="pill-spark"></span>Cross-Encoder Reranking</span>
-          <span class="home-feature-pill"><span class="pill-spark"></span>Claim-Verified Quotes</span>
-          <span class="home-feature-pill"><span class="pill-spark"></span>Abstention Guardrails</span>
+          <span class="home-feature-pill"><span class="pill-spark spark-coral"></span>Hybrid RRF Search</span>
+          <span class="home-feature-pill"><span class="pill-spark spark-mint"></span>Cross-Encoder Reranking</span>
+          <span class="home-feature-pill"><span class="pill-spark spark-gold"></span>Claim-Verified Quotes</span>
+          <span class="home-feature-pill"><span class="pill-spark spark-rose"></span>Abstention Guardrails</span>
         </div>
       </div>
 
-      <!-- The 3 Main Interactive Options (React Bits PixelCard + GlareHover) -->
+      <!-- The 3 Main Interactive Options (React Bits PixelCard + Magnet + GlareHover) -->
       <div class="home-section-header">
         <span class="home-eyebrow">GET STARTED</span>
         <h2>Select a Workspace</h2>
       </div>
 
       <div class="home-portals-grid">
-        <!-- Option 1: Ask & Grounded Citations -->
+        <!-- Option 1: Ask & Grounded Citations (Sunset Coral & Solar Amber) -->
         <article
           class="home-portal-card pixel-card"
           data-rb-pixel-card
-          data-pixel-variant="blue"
+          data-pixel-variant="coral"
           data-rb-glare
           data-goto-tab="tab-playground"
           tabindex="0"
@@ -92,28 +168,28 @@
           <canvas class="pixel-canvas" aria-hidden="true"></canvas>
           <div class="portal-card-content">
             <div class="portal-top">
-              <span class="portal-step-tag">01 / ASK</span>
-              <span class="portal-icon portal-icon-blue" aria-hidden="true">&#10022;</span>
+              <span class="portal-step-tag portal-step-coral">01 / ASK</span>
+              <span class="portal-icon portal-icon-coral" aria-hidden="true">&#10022;</span>
             </div>
             <h3 class="portal-title">
-              <span data-rb-gradient-text data-colors="#38BDF8,#93C5FD,#818CF8" data-speed="6" data-glow="0.3">Ask &amp; Citations</span>
+              <span data-rb-gradient-text data-colors="#FF6B4A,#FF9F1C,#FFD166" data-speed="6" data-glow="0.32">Ask &amp; Citations</span>
             </h3>
             <p class="portal-desc">
               Ask questions across your documents and get grounded answers with clickable <code>[n]</code> citations, exact supporting quotes, and chunk retrieval scores.
             </p>
-            <div class="portal-footer">
-              <button type="button" class="primary-btn home-portal-cta" data-goto-tab="tab-playground">
+            <div class="portal-footer" data-rb-magnet>
+              <button type="button" class="primary-btn btn-coral home-portal-cta" data-goto-tab="tab-playground">
                 Open Ask &amp; Citations <span aria-hidden="true">&rarr;</span>
               </button>
             </div>
           </div>
         </article>
 
-        <!-- Option 2: 40-Question Evaluation Harness -->
+        <!-- Option 2: 40-Question Evaluation Harness (Electric Mint & Jade) -->
         <article
           class="home-portal-card pixel-card"
           data-rb-pixel-card
-          data-pixel-variant="purple"
+          data-pixel-variant="mint"
           data-rb-glare
           data-goto-tab="tab-eval"
           tabindex="0"
@@ -123,28 +199,28 @@
           <canvas class="pixel-canvas" aria-hidden="true"></canvas>
           <div class="portal-card-content">
             <div class="portal-top">
-              <span class="portal-step-tag portal-step-purple">02 / EVALUATE</span>
-              <span class="portal-icon portal-icon-purple" aria-hidden="true">&#9670;</span>
+              <span class="portal-step-tag portal-step-mint">02 / EVALUATE</span>
+              <span class="portal-icon portal-icon-mint" aria-hidden="true">&#9670;</span>
             </div>
             <h3 class="portal-title">
-              <span data-rb-gradient-text data-colors="#C084FC,#A78BFA,#38BDF8" data-speed="6" data-glow="0.3">Evaluation (40 QA)</span>
+              <span data-rb-gradient-text data-colors="#00F5D4,#34D399,#A7F3D0" data-speed="6" data-glow="0.32">Evaluation (40 QA)</span>
             </h3>
             <p class="portal-desc">
               Benchmark retrieval and answer quality across 40 test questions. Compare Dense, Sparse, Hybrid RRF, and Reranked pipelines side by side.
             </p>
-            <div class="portal-footer">
-              <button type="button" class="primary-btn home-portal-cta" data-goto-tab="tab-eval">
+            <div class="portal-footer" data-rb-magnet>
+              <button type="button" class="primary-btn btn-mint home-portal-cta" data-goto-tab="tab-eval">
                 Open Evaluation <span aria-hidden="true">&rarr;</span>
               </button>
             </div>
           </div>
         </article>
 
-        <!-- Option 3: Documents & Upload -->
+        <!-- Option 3: Documents & Upload (Solar Gold & Rose) -->
         <article
           class="home-portal-card pixel-card"
           data-rb-pixel-card
-          data-pixel-variant="emerald"
+          data-pixel-variant="gold"
           data-rb-glare
           data-goto-tab="tab-corpus"
           tabindex="0"
@@ -154,17 +230,17 @@
           <canvas class="pixel-canvas" aria-hidden="true"></canvas>
           <div class="portal-card-content">
             <div class="portal-top">
-              <span class="portal-step-tag portal-step-emerald">03 / CORPUS</span>
-              <span class="portal-icon portal-icon-emerald" aria-hidden="true">&#9635;</span>
+              <span class="portal-step-tag portal-step-gold">03 / CORPUS</span>
+              <span class="portal-icon portal-icon-gold" aria-hidden="true">&#9635;</span>
             </div>
             <h3 class="portal-title">
-              <span data-rb-gradient-text data-colors="#34D399,#38BDF8,#60A5FA" data-speed="6" data-glow="0.3">Documents &amp; Upload</span>
+              <span data-rb-gradient-text data-colors="#FFB800,#FDE047,#FF6B4A" data-speed="6" data-glow="0.32">Documents &amp; Upload</span>
             </h3>
             <p class="portal-desc">
               Browse indexed documents or upload new Markdown, text, JSON, or CSV files for automatic section-aware chunking and vector indexing.
             </p>
-            <div class="portal-footer">
-              <button type="button" class="primary-btn home-portal-cta" data-goto-tab="tab-corpus">
+            <div class="portal-footer" data-rb-magnet>
+              <button type="button" class="primary-btn btn-gold home-portal-cta" data-goto-tab="tab-corpus">
                 Open Documents <span aria-hidden="true">&rarr;</span>
               </button>
             </div>
@@ -179,24 +255,24 @@
       </div>
 
       <div class="home-features-grid">
-        <div class="home-feature-card" data-rb-glare>
-          <div class="feature-tag">HYBRID RETRIEVAL</div>
+        <div class="home-feature-card feature-card-coral" data-rb-glare>
+          <div class="feature-tag tag-coral">HYBRID RETRIEVAL</div>
           <h3>Vector + Keyword Fusion</h3>
           <p>
             Combines semantic vector similarity with full-text search using Reciprocal Rank Fusion so both exact terms and concepts rank accurately.
           </p>
         </div>
 
-        <div class="home-feature-card" data-rb-glare>
-          <div class="feature-tag">RERANK &amp; ABSTAIN</div>
+        <div class="home-feature-card feature-card-mint" data-rb-glare>
+          <div class="feature-tag tag-mint">RERANK &amp; ABSTAIN</div>
           <h3>Cross-Encoder Filtering</h3>
           <p>
             Scores candidate chunks with a cross-encoder and automatically abstains when no document contains sufficient evidence.
           </p>
         </div>
 
-        <div class="home-feature-card" data-rb-glare>
-          <div class="feature-tag">GROUNDED CITATIONS</div>
+        <div class="home-feature-card feature-card-gold" data-rb-glare>
+          <div class="feature-tag tag-gold">GROUNDED CITATIONS</div>
           <h3>Verified Inline Quotes</h3>
           <p>
             Every <code>[n]</code> citation is matched against the source chunk sentence to surface the exact supporting quote and similarity badge.
