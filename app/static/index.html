@@ -18,11 +18,11 @@
     <div class="prism-vignette"></div>
   </div>
 
-  <!-- Floating Navigation Header with Brand on Left, GooeyNav Tabs, and Status Strip -->
+  <!-- Sticky Single-Row Top Header: Brand (Left) & 3 Navigation Tabs (Right) -->
   <header class="top-nav-shell" id="top-nav-shell">
-    <div class="floating-nav-bar">
-      <!-- Brand on Left -->
-      <button type="button" class="nav-brand-btn" id="brand-home-link" aria-label="RAG Workbench Home">
+    <div class="top-nav-inner">
+      <!-- 1. Brand (Left): Icon + Text navigates to Home -->
+      <button type="button" class="nav-brand-btn" id="brand-home-link" aria-label="Go to home">
         <span class="nav-brand-logo" aria-hidden="true">
           <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
@@ -32,157 +32,59 @@
         <span class="nav-brand-text">RAG Workbench</span>
       </button>
 
-      <!-- Mobile Hamburger Toggle (<= 640px) -->
-      <button
-        type="button"
-        class="mobile-nav-toggle"
-        id="mobile-nav-toggle"
-        aria-expanded="false"
-        aria-controls="rb-gooey-nav"
-        aria-label="Toggle navigation menu"
-      >
-        <svg class="lucide-icon icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="4" x2="20" y1="6" y2="6"/>
-          <line x1="4" x2="20" y1="12" y2="12"/>
-          <line x1="4" x2="20" y1="18" y2="18"/>
-        </svg>
-      </button>
-
-      <!-- Official React Bits GooeyNav Top Menu Bar -->
-      <nav
-        class="gooey-nav gooey-nav--md gooey-nav--framed tab-nav"
-        id="rb-gooey-nav"
-        role="tablist"
-        aria-label="Main Navigation"
-      >
-        <span class="gooey-nav__rim" aria-hidden="true"></span>
-        <div class="gooey-nav__stage" id="gooey-nav-stage">
-          <canvas class="gooey-nav__canvas" id="gooey-nav-canvas" aria-hidden="true"></canvas>
-          <span class="gooey-nav__fallback" id="gooey-nav-fallback" aria-hidden="true"></span>
-
-          <!-- Interactive Menu List (Lucide SVG Icons) -->
-          <ul class="gooey-nav__list" id="gooey-nav-list">
-            <li class="gooey-nav__item" data-gooey-index="0" data-active>
-              <button
-                type="button"
-                class="gooey-nav__link tab-btn active"
-                role="tab"
-                aria-selected="true"
-                data-tab="tab-home"
-              >
-                <span class="gooey-nav__icon" aria-hidden="true">
-                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                </span>
-                <span class="gooey-nav__label">Home</span>
-              </button>
-            </li>
-            <li class="gooey-nav__item" data-gooey-index="1">
-              <button
-                type="button"
-                class="gooey-nav__link tab-btn"
-                role="tab"
-                aria-selected="false"
-                data-tab="tab-playground"
-              >
-                <span class="gooey-nav__icon" aria-hidden="true">
-                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h6"/></svg>
-                </span>
-                <span class="gooey-nav__label">Ask</span>
-              </button>
-            </li>
-            <li class="gooey-nav__item" data-gooey-index="2">
-              <button
-                type="button"
-                class="gooey-nav__link tab-btn"
-                role="tab"
-                aria-selected="false"
-                data-tab="tab-eval"
-              >
-                <span class="gooey-nav__icon" aria-hidden="true">
-                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
-                </span>
-                <span class="gooey-nav__label">Evaluate</span>
-              </button>
-            </li>
-            <li class="gooey-nav__item" data-gooey-index="3">
-              <button
-                type="button"
-                class="gooey-nav__link tab-btn"
-                role="tab"
-                aria-selected="false"
-                data-tab="tab-corpus"
-              >
-                <span class="gooey-nav__icon" aria-hidden="true">
-                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
-                </span>
-                <span class="gooey-nav__label">Documents</span>
-              </button>
-            </li>
-          </ul>
-
-          <!-- Clipped Active Ink Overlay List -->
-          <ul class="gooey-nav__list gooey-nav__list--active" id="gooey-nav-overlay" aria-hidden="true">
-            <li class="gooey-nav__item">
-              <span class="gooey-nav__link">
-                <span class="gooey-nav__icon">
-                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                </span>
-                <span class="gooey-nav__label">Home</span>
-              </span>
-            </li>
-            <li class="gooey-nav__item">
-              <span class="gooey-nav__link">
-                <span class="gooey-nav__icon">
-                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h6"/></svg>
-                </span>
-                <span class="gooey-nav__label">Ask</span>
-              </span>
-            </li>
-            <li class="gooey-nav__item">
-              <span class="gooey-nav__link">
-                <span class="gooey-nav__icon">
-                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
-                </span>
-                <span class="gooey-nav__label">Evaluate</span>
-              </span>
-            </li>
-            <li class="gooey-nav__item">
-              <span class="gooey-nav__link">
-                <span class="gooey-nav__icon">
-                  <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>
-                </span>
-                <span class="gooey-nav__label">Documents</span>
-              </span>
-            </li>
-          </ul>
-        </div>
-      </nav>
-
-      <!-- Compact System Status Strip (A.9: Online, N docs, N chunks, LLM model, reranker) -->
-      <div class="status-strip" aria-label="System Status">
-        <span class="status-strip-item status-online">
-          <span class="status-online-dot" aria-hidden="true"></span>
-          <span id="status-online-label">Online</span>
-        </span>
-        <span class="status-sep" aria-hidden="true">&middot;</span>
-        <span class="status-strip-item" id="status-docs-count">8 docs</span>
-        <span class="status-sep" aria-hidden="true">&middot;</span>
-        <span class="status-strip-item" id="status-chunks-count">35 chunks</span>
-        <span class="status-sep status-hide-tablet" aria-hidden="true">&middot;</span>
-        <span class="status-strip-item status-mono status-hide-tablet" id="status-llm-model">gemini-3.5-flash-lite</span>
-        <span class="status-sep status-hide-tablet" aria-hidden="true">&middot;</span>
-        <span
-          class="status-strip-item status-mono status-hide-tablet tooltip-wrap"
-          id="status-reranker-chip"
-          tabindex="0"
-          aria-label="Reranker model: cross-encoder/ms-marco-MiniLM-L-6-v2"
+      <!-- 2. Menu (Right): Exactly 3 items (Ask, Evaluate, Documents) + Sliding Active Pill -->
+      <nav class="top-nav-menu" id="top-nav-menu" aria-label="Main navigation">
+        <span class="nav-active-pill" id="nav-active-pill" aria-hidden="true"></span>
+        <button
+          type="button"
+          class="tab-btn"
+          data-tab="tab-playground"
+          aria-label="Ask"
+          title="Ask"
         >
-          <span id="status-reranker-short">MiniLM-L-6-v2</span>
-          <span class="tooltip-popup" role="tooltip">
-            Full reranker ID: <code>cross-encoder/ms-marco-MiniLM-L-6-v2</code>
+          <span class="tab-btn__icon" aria-hidden="true">
+            <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              <path d="M8 9h8"/>
+              <path d="M8 13h6"/>
+            </svg>
           </span>
-        </span>
-      </div>
+          <span class="tab-btn__label">Ask</span>
+        </button>
+
+        <button
+          type="button"
+          class="tab-btn"
+          data-tab="tab-eval"
+          aria-label="Evaluate"
+          title="Evaluate"
+        >
+          <span class="tab-btn__icon" aria-hidden="true">
+            <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 3v18h18"/>
+              <path d="M18 17V9"/>
+              <path d="M13 17V5"/>
+              <path d="M8 17v-3"/>
+            </svg>
+          </span>
+          <span class="tab-btn__label">Evaluate</span>
+        </button>
+
+        <button
+          type="button"
+          class="tab-btn"
+          data-tab="tab-corpus"
+          aria-label="Documents"
+          title="Documents"
+        >
+          <span class="tab-btn__icon" aria-hidden="true">
+            <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </span>
+          <span class="tab-btn__label">Documents</span>
+        </button>
+      </nav>
     </div>
   </header>
 
@@ -207,7 +109,7 @@
         </h1>
 
         <p class="home-hero-lead">
-          Ask questions across your documents. Every claim links to the exact sentence that supports it. If the answer isn't there, it says so.
+          Ask questions across your documents. Every claim links to the exact sentence that supports it. If the answer isn’t there, it says so.
         </p>
 
         <div class="home-hero-actions">
@@ -224,8 +126,142 @@
         </div>
       </div>
 
+      <!-- Project Summary Section (Between Hero and Workspace Cards) -->
+      <section class="home-summary-section reveal-on-scroll" aria-labelledby="home-summary-heading">
+        <div class="home-section-header">
+          <span class="home-eyebrow">WHY THIS EXISTS</span>
+          <h2 id="home-summary-heading">More than an LLM API call</h2>
+          <p class="home-summary-intro">
+            RAG Workbench answers questions from your own documents and proves each answer. It finds the right passages, checks that they support every claim, and says ‘I don’t know’ when they don’t.
+          </p>
+        </div>
+
+        <!-- Part 1: What it does (5 compact steps) -->
+        <div class="summary-block">
+          <h3 class="summary-subheading">What it does</h3>
+          <ol class="pipeline-steps-row">
+            <li class="pipeline-step-card">
+              <span class="pipeline-step-icon" aria-hidden="true">
+                <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></svg>
+              </span>
+              <div class="pipeline-step-body">
+                <div class="pipeline-step-title">1. Ingest</div>
+                <p>Documents are split by headings into chunks and stored with embeddings and a keyword index.</p>
+              </div>
+            </li>
+
+            <li class="pipeline-step-card">
+              <span class="pipeline-step-icon" aria-hidden="true">
+                <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              </span>
+              <div class="pipeline-step-body">
+                <div class="pipeline-step-title">2. Retrieve</div>
+                <p>Semantic (vector) and keyword search run together and are merged with Reciprocal Rank Fusion.</p>
+              </div>
+            </li>
+
+            <li class="pipeline-step-card">
+              <span class="pipeline-step-icon" aria-hidden="true">
+                <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              </span>
+              <div class="pipeline-step-body">
+                <div class="pipeline-step-title">3. Rerank</div>
+                <p>A cross-encoder re-scores candidates and drops weak ones.</p>
+              </div>
+            </li>
+
+            <li class="pipeline-step-card">
+              <span class="pipeline-step-icon" aria-hidden="true">
+                <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
+              </span>
+              <div class="pipeline-step-body">
+                <div class="pipeline-step-title">4. Answer and verify</div>
+                <p>The LLM answers only from the selected chunks. Each claim is matched to the exact sentence that supports it; unsupported claims are flagged, and weak evidence triggers an abstention.</p>
+              </div>
+            </li>
+
+            <li class="pipeline-step-card">
+              <span class="pipeline-step-icon" aria-hidden="true">
+                <svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+              </span>
+              <div class="pipeline-step-body">
+                <div class="pipeline-step-title">5. Measure</div>
+                <p>A benchmark compares 4 retrieval setups on recall, ranking, answer accuracy, faithfulness, citation recall and abstention.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+
+        <!-- Part 2: Why not just call an LLM API? -->
+        <div class="summary-block">
+          <h3 class="summary-subheading">Why not just call an LLM API?</h3>
+          <div class="comparison-card">
+            <div class="comparison-table-wrap">
+              <table class="comparison-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Capability</th>
+                    <th scope="col">Plain LLM API</th>
+                    <th scope="col" class="col-rag-workbench">RAG Workbench</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">Knows your documents</th>
+                    <td><span class="cmp-cell"><span class="cmp-icon cmp-x" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span><span>Only its training data, unless you paste text into the prompt</span></span></td>
+                    <td class="col-rag-workbench"><span class="cmp-cell"><span class="cmp-icon cmp-check" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span>Searches your indexed documents</span></span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Large document sets</th>
+                    <td><span class="cmp-cell"><span class="cmp-icon cmp-x" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span><span>Limited by context window and token cost</span></span></td>
+                    <td class="col-rag-workbench"><span class="cmp-cell"><span class="cmp-icon cmp-check" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span>Sends only the best few chunks, so prompts stay small</span></span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Wrong but confident answers</th>
+                    <td><span class="cmp-cell"><span class="cmp-icon cmp-x" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span><span>Can answer without evidence</span></span></td>
+                    <td class="col-rag-workbench"><span class="cmp-cell"><span class="cmp-icon cmp-check" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span>Answers only from retrieved text and abstains when evidence is weak</span></span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Sources</th>
+                    <td><span class="cmp-cell"><span class="cmp-icon cmp-x" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span><span>None, or made up</span></span></td>
+                    <td class="col-rag-workbench"><span class="cmp-cell"><span class="cmp-icon cmp-check" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span>Every claim linked to its exact supporting sentence</span></span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Fresh information</th>
+                    <td><span class="cmp-cell"><span class="cmp-icon cmp-x" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span><span>Stale after the training cutoff</span></span></td>
+                    <td class="col-rag-workbench"><span class="cmp-cell"><span class="cmp-icon cmp-check" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span>Upload a document and it is searchable right away, no retraining</span></span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Exact terms (IDs, config names, error codes)</th>
+                    <td><span class="cmp-cell"><span class="cmp-icon cmp-x" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span><span>Often missed</span></span></td>
+                    <td class="col-rag-workbench"><span class="cmp-cell"><span class="cmp-icon cmp-check" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span>Keyword search catches them, vector search catches paraphrases</span></span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Quality</th>
+                    <td><span class="cmp-cell"><span class="cmp-icon cmp-x" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span><span>“Seems fine”</span></span></td>
+                    <td class="col-rag-workbench"><span class="cmp-cell"><span class="cmp-icon cmp-check" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span>Measured with a benchmark, including unanswerable trap questions</span></span></td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Tuning</th>
+                    <td><span class="cmp-cell"><span class="cmp-icon cmp-x" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></span><span>Guesswork</span></span></td>
+                    <td class="col-rag-workbench"><span class="cmp-cell"><span class="cmp-icon cmp-check" aria-hidden="true"><svg class="lucide-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span>Settings and ablations show what actually helps</span></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <p class="summary-closing-line">
+            The LLM still writes the final sentence. RAG Workbench adds retrieval, verification and measurement around it.
+          </p>
+          <p class="summary-built-with">
+            Built with FastAPI &middot; PostgreSQL + pgvector &middot; tsvector &middot; Cross-encoder reranker
+          </p>
+        </div>
+      </section>
+
       <!-- The 3 Main Interactive Workspace Cards (Differentiated by Lucide icon only, no mono tag chips) -->
-      <div class="home-section-header">
+      <div class="home-section-header reveal-on-scroll">
         <span class="home-eyebrow">WORKSPACES</span>
         <h2>Explore the app</h2>
       </div>
@@ -310,7 +346,7 @@
             </div>
             <h3 class="portal-title">Manage your corpus</h3>
             <p class="portal-desc">
-              Upload files or browse what's indexed.
+              Upload files or browse what’s indexed.
             </p>
             <div class="portal-footer" data-rb-magnet>
               <button type="button" class="secondary-btn home-portal-cta" data-goto-tab="tab-corpus">
@@ -320,38 +356,6 @@
             </div>
           </div>
         </article>
-      </div>
-
-      <!-- Concise 3-Column Feature Summary (React Bits GlareHover) -->
-      <div class="home-section-header">
-        <span class="home-eyebrow">HOW IT WORKS</span>
-        <h2>Built for verifiable answers</h2>
-      </div>
-
-      <div class="home-features-grid">
-        <div class="home-feature-card" data-rb-glare>
-          <div class="feature-tag">HYBRID SEARCH</div>
-          <h3>Vector + keyword fusion</h3>
-          <p>
-            Combines semantic vector similarity with full-text search using Reciprocal Rank Fusion so both exact terms and concepts rank accurately.
-          </p>
-        </div>
-
-        <div class="home-feature-card" data-rb-glare>
-          <div class="feature-tag">RERANKING</div>
-          <h3>Cross-encoder filtering</h3>
-          <p>
-            Scores candidate chunks with a cross-encoder and abstains when no document contains sufficient evidence.
-          </p>
-        </div>
-
-        <div class="home-feature-card" data-rb-glare>
-          <div class="feature-tag">VERIFIED CITATIONS</div>
-          <h3>Sentence-level quotes</h3>
-          <p>
-            Every <code>[n]</code> citation is matched against the source chunk sentence to surface the exact supporting quote.
-          </p>
-        </div>
       </div>
     </section>
 
@@ -721,7 +725,7 @@
             <div>
               <div class="abstain-title">Not found in documents</div>
               <div class="abstain-desc" id="abstain-message-text">
-                I don't have enough information in the provided documents.
+                I don’t have enough information in the provided documents.
               </div>
               <div class="abstain-reason" id="abstain-reason-detail"></div>
             </div>

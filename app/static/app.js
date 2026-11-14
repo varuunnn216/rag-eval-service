@@ -297,25 +297,79 @@ function renderSafeMarkdown(rawText, options = {}) {
 }
 
 /* =====================================================================
-   TABS, MOBILE NAV & SYSTEM HEALTH
+   TABS, SLIDING NAV PILL, SCROLL STATE & REVEAL
    ===================================================================== */
+function updateNavActivePill(animate = true) {
+  const pill = document.getElementById("nav-active-pill");
+  const activeBtn = document.querySelector(".top-nav-menu .tab-btn.active");
+  if (!pill) return;
+
+  if (!activeBtn) {
+    pill.classList.remove("is-visible");
+    return;
+  }
+
+  const left = activeBtn.offsetLeft;
+  const width = activeBtn.offsetWidth;
+  if (!animate) {
+    const prevTransition = pill.style.transition;
+    pill.style.transition = "none";
+    pill.style.width = `${width}px`;
+    pill.style.transform = `translateX(${left}px)`;
+    pill.classList.add("is-visible");
+    void pill.offsetWidth;
+    pill.style.transition = prevTransition;
+  } else {
+    pill.style.width = `${width}px`;
+    pill.style.transform = `translateX(${left}px)`;
+    pill.classList.add("is-visible");
+  }
+}
+
+function initScrollHeaderAndReveal() {
+  const navShell = document.getElementById("top-nav-shell");
+  if (navShell) {
+    const onScroll = () => {
+      navShell.classList.toggle("is-scrolled", window.scrollY > 8);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+  }
+
+  const revealEls = document.querySelectorAll(".reveal-on-scroll");
+  if (!revealEls.length) return;
+
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion || typeof IntersectionObserver === "undefined") {
+    revealEls.forEach((el) => el.classList.add("is-visible"));
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.08 }
+  );
+  revealEls.forEach((el) => observer.observe(el));
+}
+
 function switchToTab(tabId) {
   const buttons = document.querySelectorAll(".tab-btn");
   const panels = document.querySelectorAll(".tab-panel");
-  let activeIndex = 0;
 
-  buttons.forEach((b, idx) => {
+  buttons.forEach((b) => {
     const isMatch = b.dataset.tab === tabId;
     b.classList.toggle("active", isMatch);
-    b.setAttribute("aria-selected", isMatch ? "true" : "false");
-    const li = b.closest("[data-gooey-index]");
-    if (li) {
-      if (isMatch) {
-        li.setAttribute("data-active", "");
-        activeIndex = Number(li.dataset.gooeyIndex ?? idx);
-      } else {
-        li.removeAttribute("data-active");
-      }
+    if (isMatch) {
+      b.setAttribute("aria-current", "page");
+    } else {
+      b.removeAttribute("aria-current");
     }
   });
 
@@ -323,15 +377,7 @@ function switchToTab(tabId) {
     p.classList.toggle("active", p.id === tabId);
   });
 
-  // Close mobile menu if open
-  const navShell = document.getElementById("top-nav-shell");
-  const mobileBtn = document.getElementById("mobile-nav-toggle");
-  if (navShell && navShell.classList.contains("mobile-nav-open")) {
-    navShell.classList.remove("mobile-nav-open");
-    if (mobileBtn) mobileBtn.setAttribute("aria-expanded", "false");
-  }
-
-  window.ReactBitsFX?.syncGooeyIndex?.(activeIndex);
+  requestAnimationFrame(() => updateNavActivePill(true));
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -342,15 +388,6 @@ function initTabs() {
       switchToTab(btn.dataset.tab);
     });
   });
-
-  const mobileToggle = document.getElementById("mobile-nav-toggle");
-  const navShell = document.getElementById("top-nav-shell");
-  if (mobileToggle && navShell) {
-    mobileToggle.addEventListener("click", () => {
-      const isOpen = navShell.classList.toggle("mobile-nav-open");
-      mobileToggle.setAttribute("aria-expanded", String(isOpen));
-    });
-  }
 
   document.querySelectorAll("[data-goto-tab]").forEach((el) => {
     el.addEventListener("click", (e) => {
@@ -371,6 +408,9 @@ function initTabs() {
   if (brandHome) {
     brandHome.addEventListener("click", () => switchToTab("tab-home"));
   }
+
+  window.addEventListener("resize", () => updateNavActivePill(false));
+  initScrollHeaderAndReveal();
 }
 
 function shortModelName(fullId) {
@@ -1050,7 +1090,7 @@ function renderAskResponse(data) {
     statePill.className = "state-pill pill-abstained";
     statePill.textContent = "Not found in documents";
     document.getElementById("abstain-message-text").textContent =
-      data.answer || "I don't have enough information in the provided documents.";
+      data.answer || "I don’t have enough information in the provided documents.";
     const topChunk = (data.retrieved_chunks || [])[0];
     const reasonText = topChunk
       ? formatPlainSelectionReason(topChunk.selection_reason)

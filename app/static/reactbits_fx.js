@@ -1044,7 +1044,7 @@ void main() {
       const rect = container.getBoundingClientRect();
       width = Math.max(1, Math.floor(rect.width));
       height = Math.max(1, Math.floor(rect.height));
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       canvas.style.width = `${width}px`;
@@ -1073,7 +1073,21 @@ void main() {
       }
     }
 
+    let rafId = null;
+    let lastDraw = 0;
+
     function tick(t) {
+      if (document.hidden) {
+        rafId = null;
+        return;
+      }
+
+      if (!reduceMotion() && lastDraw && t - lastDraw < 33) {
+        rafId = requestAnimationFrame(tick);
+        return;
+      }
+      lastDraw = t;
+
       mouse.sx += (mouse.x - mouse.sx) * 0.12;
       mouse.sy += (mouse.y - mouse.sy) * 0.12;
       const dx = mouse.x - mouse.lx;
@@ -1118,10 +1132,13 @@ void main() {
         }
       }
 
+      const isMobile = width < 640;
       ctx.clearRect(0, 0, width, height);
       ctx.beginPath();
-      ctx.strokeStyle = "rgba(245, 165, 36, 0.09)"; // --accent subtle wave lines
-      ctx.lineWidth = 1.0;
+      ctx.strokeStyle = isMobile ? "rgba(245, 165, 36, 0.20)" : "rgba(245, 165, 36, 0.34)"; // --accent subtle wave lines
+      ctx.lineWidth = isMobile ? 1.0 : 1.25;
+      ctx.shadowColor = isMobile ? "rgba(245, 165, 36, 0.18)" : "rgba(245, 165, 36, 0.35)";
+      ctx.shadowBlur = isMobile ? 4 : 8;
 
       for (let i = 0; i < lines.length; i++) {
         const points = lines[i];
@@ -1133,9 +1150,12 @@ void main() {
         }
       }
       ctx.stroke();
+      ctx.shadowBlur = 0;
 
-      if (!reduceMotion()) {
-        requestAnimationFrame(tick);
+      if (!reduceMotion() && !document.hidden) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        rafId = null;
       }
     }
 
@@ -1156,9 +1176,16 @@ void main() {
       { passive: true }
     );
 
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && !reduceMotion() && rafId === null) {
+        lastDraw = 0;
+        rafId = requestAnimationFrame(tick);
+      }
+    });
+
     window.addEventListener("resize", setSize);
     setSize();
-    requestAnimationFrame(tick);
+    rafId = requestAnimationFrame(tick);
   }
 
   /* =========================================================================
