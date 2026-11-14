@@ -183,117 +183,319 @@ function renderInlineMarkdown(escapedLine, allowCitations = false) {
   return out;
 }
 
-function renderSafeMarkdown(rawText, options = {}) {
-  const allowCitations = Boolean(options.allowCitations);
-  const normalized = normalizeEllipsis(String(rawText || "").trim());
-  if (!normalized) return "";
+function clampArrayLen(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return Math.floor(num);
+}
 
-  // Extract fenced code blocks ```lang ... ``` first
-  const fencePlaceholders = [];
-  const withoutFences = normalized.replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-    const idx = fencePlaceholders.length;
-    const langTag = lang ? `<span class="md-code-lang">${escapeHtml(lang)}</span>` : "";
-    fencePlaceholders.push(
-      `<div class="md-code-wrap">${langTag}<pre class="md-code-block"><code>${escapeHtml(code.replace(/\n$/, ""))}</code></pre></div>`
-    );
-    return `\n@@FENCE_${idx}@@\n`;
-  });
+function isMarkdownPipeRow(line) {
+  const t = String(line || "").trim();
+  return t.startsWith("|") && t.indexOf("|", 1) !== -1;
+}
 
-  const lines = withoutFences.split("\n");
-  const htmlBlocks = [];
-  let i = 0;
+function isMarkdownSeparatorRow(line) {
+  const t = String(line || "").trim();
+  return /^\|?(?:\s*:?-{2,}:?\s*\|)+\s*(?::?-{2,}:?\s*\|?)?$/.test(t) && t.includes("-");
+}
 
-  while (i < lines.length) {
-    const rawLine = lines[i];
-    const trimmed = rawLine.trim();
+function parseMarkdownTableCells(line, allowCitations) {
+  let t = String(line || "").trim();
+  if (t.startsWith("|")) t = t.slice(1);
+  if (t.endsWith("|")) t = t.slice(0, -1);
+  return t.split("|").map((c) => renderInlineMarkdown(escapeHtml(c.trim()), allowCitations));
+}
 
-    if (!trimmed) {
-      i++;
-      continue;
-    }
+function padTableRowCells(cells, targetLen) {
+  const len = clampArrayLen(targetLen);
+  const out = cells.slice();
+  while (out.length < len) {
+    out.push("");
+  }
+  return out;
+}
 
-    // Fenced code placeholder
-    const fenceMatch = trimmed.match(/^@@FENCE_(\d+)@@$/);
-    if (fenceMatch) {
-      htmlBlocks.push(fencePlaceholders[Number(fenceMatch[1])] || "");
-      i++;
-      continue;
-    }
+function parseListLine(line) {
+  const m = String(line || "").match(/^(\s*)(?:([-*•])|(\d+[.)]))\s+(.*)$/);
+  if (!m) return null;
+  return {
+    indent: m[1].replace(/\t/g, "  ").length,
+    type: m[3] ? "ol" : "ul",
+    text: m[4].trim(),
+  };
+}
 
-    // Markdown Table block
-    if (trimmed.startsWith("|") && trimmed.endsWith("|") && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
-      const headerCells = trimmed
-        .slice(1, -1)
-        .split("|")
-        .map((c) => renderInlineMarkdown(escapeHtml(c.trim()), allowCitations));
-      i += 2; // skip header + separator
-      const bodyRows = [];
-      while (i < lines.length && lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|")) {
-        const rowCells = lines[i]
-          .trim()
-          .slice(1, -1)
-          .split("|")
-          .map((c) => renderInlineMarkdown(escapeHtml(c.trim()), allowCitations));
-        bodyRows.push(`<tr>${rowCells.map((c) => `<td>${c}</td>`).join("")}</tr>`);
-        i++;
+function renderListBlock(lines, startIdx, allowCitations) {
+  let i = startIdx;
+  const first = parseListLine(lines[i]);
+  if (!first) return { html: "", nextIdx: i };
+
+  function buildList(baseIndent, listType) {
+    const items = [];
+    while (i < lines.length) {
+      const parsed = parseListLine(lines[i]);
+      if (!parsed) break;
+      if (parsed.indent < baseIndent) break;
+      if (parsed.indent > baseIndent) {
+        if (items.length > 0) {
+          const sub = buildList(parsed.indent, parsed.type);
+          items[items.length - 1] = items[items.length - 1].replace(/<\/li>$/, `${sub}</li>`);
+          continue;
+        }
       }
-      htmlBlocks.push(
-        `<div class="md-table-wrap"><table class="md-table"><thead><tr>${headerCells
-          .map((c) => `<th>${c}</th>`)
-          .join("")}</tr></thead><tbody>${bodyRows.join("")}</tbody></table></div>`
-      );
-      continue;
-    }
-
-    // Unordered list (- or * or •)
-    if (/^\s*[-*•]\s+/.test(rawLine)) {
-      const items = [];
-      while (i < lines.length && /^\s*[-*•]\s+/.test(lines[i])) {
-        const itemText = lines[i].replace(/^\s*[-*•]\s+/, "").trim();
-        items.push(`<li>${renderInlineMarkdown(escapeHtml(itemText), allowCitations)}</li>`);
-        i++;
+      if (parsed.type !== listType && parsed.indent === baseIndent) {
+        break;
       }
-      htmlBlocks.push(`<ul class="md-list">${items.join("")}</ul>`);
-      continue;
-    }
-
-    // Ordered list (1. )
-    if (/^\s*\d+[.)]\s+/.test(rawLine)) {
-      const items = [];
-      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
-        const itemText = lines[i].replace(/^\s*\d+[.)]\s+/, "").trim();
-        items.push(`<li>${renderInlineMarkdown(escapeHtml(itemText), allowCitations)}</li>`);
-        i++;
+      const content = renderInlineMarkdown(escapeHtml(parsed.text), allowCitations);
+      i++;
+      let nestedHtml = "";
+      if (i < lines.length) {
+        const nextParsed = parseListLine(lines[i]);
+        if (nextParsed && nextParsed.indent > baseIndent) {
+          nestedHtml = buildList(nextParsed.indent, nextParsed.type);
+        }
       }
-      htmlBlocks.push(`<ol class="md-list">${items.join("")}</ol>`);
-      continue;
+      items.push(`<li>${content}${nestedHtml}</li>`);
     }
-
-    // Subheading inside chunk
-    if (/^#{1,4}\s+/.test(trimmed)) {
-      const hText = trimmed.replace(/^#{1,4}\s+/, "");
-      htmlBlocks.push(`<div class="md-subheading">${renderInlineMarkdown(escapeHtml(hText), allowCitations)}</div>`);
-      i++;
-      continue;
-    }
-
-    // Standard paragraph (collect consecutive normal lines)
-    const paraLines = [];
-    while (
-      i < lines.length &&
-      lines[i].trim() &&
-      !/^@@FENCE_\d+@@$/.test(lines[i].trim()) &&
-      !/^\s*[-*•]\s+/.test(lines[i]) &&
-      !/^\s*\d+[.)]\s+/.test(lines[i]) &&
-      !(lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|"))
-    ) {
-      paraLines.push(renderInlineMarkdown(escapeHtml(lines[i].trim()), allowCitations));
-      i++;
-    }
-    htmlBlocks.push(`<p class="md-para">${paraLines.join(" ")}</p>`);
+    const tag = listType === "ol" ? "ol" : "ul";
+    return `<${tag} class="md-list">${items.join("")}</${tag}>`;
   }
 
-  return htmlBlocks.join("");
+  const html = buildList(first.indent, first.type);
+  return { html, nextIdx: i };
+}
+
+function truncateChunkPreview(rawText, maxChars = 320) {
+  const text = normalizeEllipsis(String(rawText || "").trim());
+  if (!text || text.length <= maxChars) {
+    return { previewText: text, truncated: false };
+  }
+
+  const lines = text.split("\n");
+  const out = [];
+  let chars = 0;
+  let inFence = false;
+  let inTable = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    const isFenceToggle = trimmed.startsWith("```");
+    const isTableLine = isMarkdownPipeRow(trimmed);
+
+    if (isFenceToggle) {
+      if (!inFence && chars > maxChars * 0.7 && out.length > 0) {
+        break;
+      }
+      inFence = !inFence;
+      out.push(line);
+      chars += line.length + 1;
+      if (!inFence && chars >= maxChars) break;
+      continue;
+    }
+
+    if (inFence) {
+      out.push(line);
+      chars += line.length + 1;
+      if (chars >= maxChars * 1.8) {
+        out.push("```");
+        inFence = false;
+        break;
+      }
+      continue;
+    }
+
+    if (isTableLine) {
+      if (!inTable && chars > maxChars * 0.75 && out.length > 0) {
+        break;
+      }
+      inTable = true;
+      out.push(line);
+      chars += line.length + 1;
+      const nextIsTable = i + 1 < lines.length && isMarkdownPipeRow(lines[i + 1]);
+      if (chars >= maxChars && out.length >= 3 && !isMarkdownSeparatorRow(trimmed)) {
+        break;
+      }
+      if (!nextIsTable) {
+        inTable = false;
+        if (chars >= maxChars) break;
+      }
+      continue;
+    }
+
+    inTable = false;
+    if (chars + line.length + 1 > maxChars && out.length > 0) {
+      break;
+    }
+    out.push(line);
+    chars += line.length + 1;
+    if (chars >= maxChars) break;
+  }
+
+  if (inFence) {
+    out.push("```");
+  }
+
+  const previewText = out.join("\n").trimEnd();
+  return {
+    previewText: previewText || lines[0] || "",
+    truncated: out.length < lines.length,
+  };
+}
+
+function renderSafeMarkdown(rawText, options = {}) {
+  const allowCitations = Boolean(options.allowCitations);
+  try {
+    const normalized = normalizeEllipsis(String(rawText || "").trim());
+    if (!normalized) return "";
+
+    // Extract closed fenced code blocks ```lang ... ``` first
+    const fencePlaceholders = [];
+    let withoutFences = normalized.replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+      const idx = fencePlaceholders.length;
+      const langTag = lang ? `<span class="md-code-lang">${escapeHtml(lang)}</span>` : "";
+      fencePlaceholders.push(
+        `<div class="md-code-wrap">${langTag}<pre class="md-code-block"><code>${escapeHtml(code.replace(/\n$/, ""))}</code></pre></div>`
+      );
+      return `\n@@FENCE_${idx}@@\n`;
+    });
+
+    // Handle an unclosed / cut-off fenced code block at EOF
+    withoutFences = withoutFences.replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*)$/, (_, lang, code) => {
+      const idx = fencePlaceholders.length;
+      const langTag = lang ? `<span class="md-code-lang">${escapeHtml(lang)}</span>` : "";
+      fencePlaceholders.push(
+        `<div class="md-code-wrap">${langTag}<pre class="md-code-block"><code>${escapeHtml(code.replace(/\n$/, ""))}</code></pre></div>`
+      );
+      return `\n@@FENCE_${idx}@@\n`;
+    });
+
+    const lines = withoutFences.split("\n");
+    const htmlBlocks = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const prevI = i;
+      const rawLine = lines[i];
+      const trimmed = rawLine.trim();
+
+      if (!trimmed) {
+        i++;
+        continue;
+      }
+
+      // Fenced code placeholder
+      const fenceMatch = trimmed.match(/^@@FENCE_(\d+)@@$/);
+      if (fenceMatch) {
+        htmlBlocks.push(fencePlaceholders[Number(fenceMatch[1])] || "");
+        i++;
+        continue;
+      }
+
+      // Markdown Table block (with or without separator row, including ragged/empty/single rows)
+      if (isMarkdownPipeRow(trimmed)) {
+        const hasSeparator = i + 1 < lines.length && isMarkdownSeparatorRow(lines[i + 1]);
+        if (hasSeparator) {
+          const headerCells = parseMarkdownTableCells(trimmed, allowCitations);
+          i += 2; // skip header + separator
+          const rawBodyRows = [];
+          while (i < lines.length && isMarkdownPipeRow(lines[i])) {
+            if (!isMarkdownSeparatorRow(lines[i])) {
+              rawBodyRows.push(parseMarkdownTableCells(lines[i], allowCitations));
+            }
+            i++;
+          }
+          const colCount = Math.max(
+            headerCells.length,
+            ...rawBodyRows.map((r) => r.length),
+            1
+          );
+          const paddedHeaders = padTableRowCells(headerCells, colCount);
+          const bodyHtml = rawBodyRows
+            .map((row) => {
+              const padded = padTableRowCells(row, colCount);
+              return `<tr>${padded.map((c) => `<td>${c}</td>`).join("")}</tr>`;
+            })
+            .join("");
+          htmlBlocks.push(
+            `<div class="md-table-wrap"><table class="md-table"><thead><tr>${paddedHeaders
+              .map((c) => `<th>${c}</th>`)
+              .join("")}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`
+          );
+          continue;
+        } else {
+          // Ragged / missing separator row / single table row (e.g. citation quote)
+          const rawRows = [];
+          while (i < lines.length && isMarkdownPipeRow(lines[i])) {
+            if (!isMarkdownSeparatorRow(lines[i])) {
+              rawRows.push(parseMarkdownTableCells(lines[i], allowCitations));
+            }
+            i++;
+          }
+          if (rawRows.length > 0) {
+            const colCount = Math.max(...rawRows.map((r) => r.length), 1);
+            const bodyHtml = rawRows
+              .map((row) => {
+                const padded = padTableRowCells(row, colCount);
+                return `<tr>${padded.map((c) => `<td>${c}</td>`).join("")}</tr>`;
+              })
+              .join("");
+            htmlBlocks.push(
+              `<div class="md-table-wrap"><table class="md-table"><tbody>${bodyHtml}</tbody></table></div>`
+            );
+            continue;
+          }
+        }
+      }
+
+      // Lists (unordered or ordered, including nested lists)
+      if (parseListLine(rawLine)) {
+        const { html, nextIdx } = renderListBlock(lines, i, allowCitations);
+        if (html) htmlBlocks.push(html);
+        i = nextIdx > i ? nextIdx : i + 1;
+        continue;
+      }
+
+      // Subheading inside chunk
+      if (/^#{1,4}\s+/.test(trimmed)) {
+        const hText = trimmed.replace(/^#{1,4}\s+/, "");
+        htmlBlocks.push(`<div class="md-subheading">${renderInlineMarkdown(escapeHtml(hText), allowCitations)}</div>`);
+        i++;
+        continue;
+      }
+
+      // Standard paragraph (collect consecutive normal lines)
+      const paraLines = [];
+      while (
+        i < lines.length &&
+        lines[i].trim() &&
+        !/^@@FENCE_\d+@@$/.test(lines[i].trim()) &&
+        !parseListLine(lines[i]) &&
+        !/^#{1,4}\s+/.test(lines[i].trim()) &&
+        !isMarkdownPipeRow(lines[i])
+      ) {
+        paraLines.push(renderInlineMarkdown(escapeHtml(lines[i].trim()), allowCitations));
+        i++;
+      }
+
+      // Guaranteed progress invariant: never stall on an unrecognized line
+      if (i === prevI) {
+        paraLines.push(renderInlineMarkdown(escapeHtml(trimmed), allowCitations));
+        i++;
+      }
+
+      if (paraLines.length > 0) {
+        htmlBlocks.push(`<p class="md-para">${paraLines.join(" ")}</p>`);
+      }
+    }
+
+    return htmlBlocks.join("");
+  } catch (err) {
+    if (typeof console !== "undefined" && console.error) {
+      console.error("renderSafeMarkdown fallback triggered:", err);
+    }
+    return `<p class="md-para">${escapeHtml(String(rawText || ""))}</p>`;
+  }
 }
 
 /* =====================================================================
@@ -913,10 +1115,152 @@ function updateStepperStage(stage) {
   }
 }
 
+let activeAskController = null;
+let activeAskRequestId = 0;
+const chunkTextStates = new Map();
+
+function clearPlaygroundResults() {
+  lastAskResponse = null;
+  chunkTextStates.clear();
+
+  const answerEmpty = document.getElementById("answer-empty");
+  const answerErr = document.getElementById("answer-error");
+  const answerAbstain = document.getElementById("answer-abstain-box");
+  const answerOut = document.getElementById("answer-output");
+  if (answerEmpty) answerEmpty.classList.add("hidden");
+  if (answerErr) {
+    answerErr.classList.add("hidden");
+    answerErr.innerHTML = "";
+  }
+  if (answerAbstain) answerAbstain.classList.add("hidden");
+  if (answerOut) {
+    answerOut.classList.add("hidden");
+    answerOut.innerHTML = "";
+  }
+
+  const citErr = document.getElementById("citations-error");
+  const citList = document.getElementById("citations-list");
+  const citCount = document.getElementById("citation-count");
+  if (citErr) {
+    citErr.classList.add("hidden");
+    citErr.innerHTML = "";
+  }
+  if (citList) citList.innerHTML = "";
+  if (citCount) citCount.textContent = "0";
+
+  const chkErr = document.getElementById("chunks-error");
+  const chkList = document.getElementById("chunks-list");
+  const chkCount = document.getElementById("chunk-count");
+  const chkSummary = document.getElementById("context-used-summary");
+  if (chkErr) {
+    chkErr.classList.add("hidden");
+    chkErr.innerHTML = "";
+  }
+  if (chkList) chkList.innerHTML = "";
+  if (chkCount) chkCount.textContent = "0";
+  if (chkSummary) chkSummary.textContent = "0 used / 0 retrieved";
+
+  const metErr = document.getElementById("metrics-error");
+  if (metErr) {
+    metErr.classList.add("hidden");
+    metErr.innerHTML = "";
+  }
+  [
+    "metric-retrieval-ms",
+    "metric-rerank-inline",
+    "metric-llm-ms",
+    "metric-total-ms",
+    "metric-tokens-total",
+    "metric-retrieval-card",
+    "metric-llm-card",
+    "metric-total-card",
+    "metric-tokens-card",
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = "—";
+  });
+  const promptEl = document.getElementById("prompt-sent-content");
+  if (promptEl) promptEl.textContent = "";
+
+  const copyAnsBtn = document.getElementById("copy-answer-btn");
+  const copyJsonBtn = document.getElementById("copy-json-btn");
+  if (copyAnsBtn) copyAnsBtn.disabled = true;
+  if (copyJsonBtn) copyJsonBtn.disabled = true;
+}
+
+function renderSectionError(el, friendlyTitle, err, retryFnCall = "retryAskQuery()") {
+  console.error(friendlyTitle, err);
+  if (!el) return;
+  const detailText = err && (err.stack || err.message) ? String(err.stack || err.message) : String(err || "Unknown error");
+  el.innerHTML = `
+    <div class="section-error-row">
+      <span>${escapeHtml(friendlyTitle)}</span>
+      <button type="button" class="secondary-btn error-retry-btn" onclick="${retryFnCall}">Retry</button>
+    </div>
+    <details class="error-details">
+      <summary>Details</summary>
+      <pre>${escapeHtml(detailText)}</pre>
+    </details>
+  `;
+  el.classList.remove("hidden");
+}
+
+window.retryAskQuery = function () {
+  runAskQuery();
+};
+
+window.retryAskSection = function (sectionName) {
+  if (!lastAskResponse) {
+    runAskQuery();
+    return;
+  }
+  if (sectionName === "answer") {
+    const el = document.getElementById("answer-error");
+    if (el) el.classList.add("hidden");
+    try {
+      renderAnswerSection(lastAskResponse);
+    } catch (err) {
+      renderSectionError(el, "Could not render the answer.", err, "retryAskSection('answer')");
+    }
+  } else if (sectionName === "citations") {
+    const el = document.getElementById("citations-error");
+    if (el) el.classList.add("hidden");
+    try {
+      renderCitationsSection(lastAskResponse);
+    } catch (err) {
+      renderSectionError(el, "Could not render citations.", err, "retryAskSection('citations')");
+    }
+  } else if (sectionName === "chunks") {
+    const el = document.getElementById("chunks-error");
+    if (el) el.classList.add("hidden");
+    try {
+      renderChunksSection(lastAskResponse);
+    } catch (err) {
+      renderSectionError(el, "Could not render retrieved context.", err, "retryAskSection('chunks')");
+    }
+  } else if (sectionName === "metrics") {
+    const el = document.getElementById("metrics-error");
+    if (el) el.classList.add("hidden");
+    try {
+      renderMetricsSection(lastAskResponse);
+    } catch (err) {
+      renderSectionError(el, "Could not render run metrics.", err, "retryAskSection('metrics')");
+    }
+  }
+};
+
 async function runAskQuery() {
   const question = document.getElementById("question-input").value.trim();
   if (!question) return;
 
+  if (activeAskController) {
+    activeAskController.abort();
+  }
+  const controller = new AbortController();
+  activeAskController = controller;
+  const reqId = ++activeAskRequestId;
+
+  clearPlaygroundResults();
   setPlaygroundLoadingState(true);
   updateStepperStage("retrieving");
 
@@ -940,7 +1284,9 @@ async function runAskQuery() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
+    if (reqId !== activeAskRequestId) return;
 
     if (res.ok && res.headers.get("content-type")?.includes("text/event-stream") && res.body) {
       const reader = res.body.getReader();
@@ -950,6 +1296,7 @@ async function runAskQuery() {
 
       while (true) {
         const { value, done } = await reader.read();
+        if (reqId !== activeAskRequestId) return;
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const parts = buffer.split("\n\n");
@@ -975,6 +1322,7 @@ async function runAskQuery() {
       }
 
       if (finalData) {
+        if (reqId !== activeAskRequestId) return;
         lastAskResponse = finalData;
         setPlaygroundLoadingState(false);
         renderAskResponse(finalData);
@@ -988,7 +1336,9 @@ async function runAskQuery() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
+    if (reqId !== activeAskRequestId) return;
 
     if (!stdRes.ok) {
       const errJson = await stdRes.json().catch(() => ({}));
@@ -996,12 +1346,19 @@ async function runAskQuery() {
     }
 
     const data = await stdRes.json();
+    if (reqId !== activeAskRequestId) return;
     lastAskResponse = data;
     setPlaygroundLoadingState(false);
     renderAskResponse(data);
   } catch (err) {
+    if (err && err.name === "AbortError") return;
+    if (reqId !== activeAskRequestId) return;
     setPlaygroundLoadingState(false);
-    renderPlaygroundError(err.message || "Request failed");
+    renderPlaygroundError(err);
+  } finally {
+    if (activeAskController === controller) {
+      activeAskController = null;
+    }
   }
 }
 
@@ -1018,35 +1375,35 @@ function setPlaygroundLoadingState(isLoading) {
   document.getElementById("metrics-loading").classList.toggle("hidden", !isLoading);
 
   if (isLoading) {
-    document.getElementById("answer-empty").classList.add("hidden");
-    document.getElementById("answer-error").classList.add("hidden");
-    document.getElementById("answer-abstain-box").classList.add("hidden");
-    document.getElementById("answer-output").classList.add("hidden");
-    document.getElementById("citations-error").classList.add("hidden");
-    document.getElementById("chunks-error").classList.add("hidden");
-    document.getElementById("metrics-error").classList.add("hidden");
     const statePill = document.getElementById("answer-state-pill");
     statePill.className = "state-pill";
     statePill.textContent = "Running...";
   }
 }
 
-function renderPlaygroundError(errorMessage) {
+function renderPlaygroundError(err) {
   const statePill = document.getElementById("answer-state-pill");
   statePill.className = "state-pill pill-error";
   statePill.textContent = "Error";
 
-  const ansErr = document.getElementById("answer-error");
-  ansErr.textContent = `Pipeline Error: ${errorMessage}`;
-  ansErr.classList.remove("hidden");
-
-  const citErr = document.getElementById("citations-error");
-  citErr.textContent = `Unable to verify citations: ${errorMessage}`;
-  citErr.classList.remove("hidden");
-
-  const chkErr = document.getElementById("chunks-error");
-  chkErr.textContent = `Retrieval error: ${errorMessage}`;
-  chkErr.classList.remove("hidden");
+  renderSectionError(
+    document.getElementById("answer-error"),
+    "Something went wrong while running your question.",
+    err,
+    "retryAskQuery()"
+  );
+  renderSectionError(
+    document.getElementById("citations-error"),
+    "Unable to verify citations for this request.",
+    err,
+    "retryAskQuery()"
+  );
+  renderSectionError(
+    document.getElementById("chunks-error"),
+    "Could not retrieve document context.",
+    err,
+    "retryAskQuery()"
+  );
 }
 
 function formatPlainSelectionReason(reasonStr) {
@@ -1060,7 +1417,7 @@ function formatPlainSelectionReason(reasonStr) {
   return s;
 }
 
-function renderAskResponse(data) {
+function renderAnswerSection(data) {
   const statePill = document.getElementById("answer-state-pill");
   const emptyBox = document.getElementById("answer-empty");
   const errorBox = document.getElementById("answer-error");
@@ -1084,8 +1441,12 @@ function renderAskResponse(data) {
   if (data.error) {
     statePill.className = "state-pill pill-error";
     statePill.textContent = "LLM Error";
-    errorBox.innerHTML = `<strong>LLM Generation Error:</strong> ${escapeHtml(data.error)}`;
-    errorBox.classList.remove("hidden");
+    renderSectionError(
+      errorBox,
+      "The language model could not generate an answer.",
+      new Error(String(data.error)),
+      "retryAskQuery()"
+    );
   } else if (data.abstained) {
     statePill.className = "state-pill pill-abstained";
     statePill.textContent = "Not found in documents";
@@ -1103,11 +1464,60 @@ function renderAskResponse(data) {
     answerBox.innerHTML = renderSafeMarkdown(data.answer, { allowCitations: true });
     answerBox.classList.remove("hidden");
   }
+}
 
-  renderCitationsSection(data);
+function renderAskResponse(data) {
+  chunkTextStates.clear();
+
+  try {
+    renderAnswerSection(data);
+  } catch (err) {
+    const statePill = document.getElementById("answer-state-pill");
+    if (statePill) {
+      statePill.className = "state-pill pill-error";
+      statePill.textContent = "Error";
+    }
+    renderSectionError(
+      document.getElementById("answer-error"),
+      "Could not display the generated answer.",
+      err,
+      "retryAskSection('answer')"
+    );
+  }
+
+  try {
+    renderCitationsSection(data);
+  } catch (err) {
+    renderSectionError(
+      document.getElementById("citations-error"),
+      "Could not verify or display citations for this answer.",
+      err,
+      "retryAskSection('citations')"
+    );
+  }
+
   showDroppedChunks = false;
-  renderChunksSection(data);
-  renderMetricsSection(data);
+  try {
+    renderChunksSection(data);
+  } catch (err) {
+    renderSectionError(
+      document.getElementById("chunks-error"),
+      "Could not display retrieved document chunks.",
+      err,
+      "retryAskSection('chunks')"
+    );
+  }
+
+  try {
+    renderMetricsSection(data);
+  } catch (err) {
+    renderSectionError(
+      document.getElementById("metrics-error"),
+      "Could not display run metrics.",
+      err,
+      "retryAskSection('metrics')"
+    );
+  }
 }
 
 function renderCitationsSection(data) {
@@ -1188,7 +1598,10 @@ function renderSingleChunkCard(c) {
 
   const contentId = `chunk-text-${c._finalRank}`;
   const cleanContent = normalizeEllipsis(c.content || "");
-  const needsExpand = cleanContent.length > 220;
+  const { previewText, truncated: needsExpand } = truncateChunkPreview(cleanContent, 320);
+  const previewHtml = renderSafeMarkdown(previewText);
+  const fullHtml = needsExpand ? renderSafeMarkdown(cleanContent) : previewHtml;
+  chunkTextStates.set(contentId, { previewHtml, fullHtml, expanded: false });
   const plainReason = formatPlainSelectionReason(c.selection_reason);
 
   return `
@@ -1207,7 +1620,7 @@ function renderSingleChunkCard(c) {
           : ""
       }
       ${c.heading ? `<div class="chunk-heading">${escapeHtml(c.heading)}</div>` : ""}
-      <div class="chunk-content markdown-body ${needsExpand ? "collapsed" : ""}" id="${contentId}">${renderSafeMarkdown(cleanContent)}</div>
+      <div class="chunk-content markdown-body" id="${contentId}">${previewHtml}</div>
       ${
         needsExpand
           ? `<button type="button" class="expand-text-btn" onclick="toggleChunkText('${contentId}', this)">Show full text</button>`
@@ -1311,7 +1724,14 @@ function renderChunksSection(data) {
 
 window.toggleChunkText = function (contentId, btnEl) {
   const el = document.getElementById(contentId);
+  const state = chunkTextStates.get(contentId);
   if (!el) return;
+  if (state) {
+    state.expanded = !state.expanded;
+    el.innerHTML = state.expanded ? state.fullHtml : state.previewHtml;
+    btnEl.textContent = state.expanded ? "Collapse text" : "Show full text";
+    return;
+  }
   const isCollapsed = el.classList.toggle("collapsed");
   btnEl.textContent = isCollapsed ? "Show full text" : "Collapse text";
 };
