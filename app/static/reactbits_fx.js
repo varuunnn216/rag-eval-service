@@ -1,18 +1,16 @@
 /**
- * Official React Bits (@react-bits) Vanilla JS / WebGL2 / Canvas Runtime
+ * Official React Bits (@react-bits) Vanilla JS / Canvas Runtime
  * Ported directly from https://reactbits.dev/r/{Component}-JS-CSS.json via React Bits MCP:
- *  1. Aurora (WebGL2 3-layer OKLCH simplex-noise northern lights shader with pointer reach)
- *  2. GradientText (Flowing multi-stop radial/linear gradient text with glow layer)
- *  3. ShinyText (Metallic light-sweep shimmer across badges & subtitles)
- *  4. BlurText (Staggered blur-to-sharp word entrance reveal on headers)
- *  5. RotatingText (3D flip/slide cycling hero value-proposition badge)
- *  6. TrueFocus (Animated corner-bracket focus frame cycling across pipeline stages)
- *  7. TiltedCard (3D spring-physics perspective tilt card with glare & rim edge for the 3 main launch cards)
- *  8. DecryptedText (Cipher glyph scramble reveal on monospace IDs & badges)
- *  9. SpotlightCard (Proximity-aware radial cursor spotlight + glowing rim edge)
- * 10. StarBorder (Orbiting glowing star trail + stardust motes on primary CTAs)
- * 11. ClickSpark (Bursting star & streak sparks on interactive clicks)
- * 12. CountUp (Cubic-out animated numeric counters for metrics & KPIs)
+ *  1. Waves (Interactive Perlin-noise flowing silk wave lines that bend around cursor velocity & ripple on click)
+ *  2. PixelCard (Interactive radial twinkling pixel canvas for the 3 main workspace cards on the landing page)
+ *  3. GlareHover (Diagonal specular light sheen sweep across cards and interactive panels)
+ *  4. Dock (Spring-magnifying floating navigation pill bar with active indicator dots)
+ *  5. GradientText (Flowing multi-stop gradient text with glow layer)
+ *  6. ShinyText (Metallic light-sweep shimmer across badges)
+ *  7. BlurText (Staggered blur-to-sharp word entrance reveal on headers)
+ *  8. StarBorder (Orbiting glowing star trail + stardust motes on primary CTAs)
+ *  9. ClickSpark (Bursting star & streak sparks on interactive clicks)
+ * 10. CountUp (Cubic-out animated numeric counters for metrics & KPIs)
  */
 
 (function () {
@@ -24,1167 +22,994 @@
     window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
   /* =========================================================================
-   * 1. REACT BITS: AURORA (WebGL2 Shader from Aurora-JS-CSS.json)
+   * 1. REACT BITS: WAVES (From Waves-JS-CSS.json)
+   *    Perlin-noise flowing vector wave lines with cursor displacement & click ripples
    * ========================================================================= */
-  const MAX_STOPS = 5;
-  const MAX_LAYERS = 3;
-  const INTRO_SECONDS = 2.0;
-
-  const AURORA_VERTEX = `#version 300 es
-in vec2 aPosition;
-void main() {
-  gl_Position = vec4(aPosition, 0.0, 1.0);
-}`;
-
-  const AURORA_FRAGMENT = `#version 300 es
-precision highp float;
-precision highp int;
-uniform vec2 uResolution;
-uniform float uTime;
-uniform vec3 uStops[${MAX_STOPS}];
-uniform int uStopCount;
-uniform float uAmplitude;
-uniform float uBlend;
-uniform float uHeight;
-uniform float uScale;
-uniform float uGlow;
-uniform float uBrightness;
-uniform int uLayers;
-uniform float uFlip;
-uniform vec3 uPointer;
-uniform float uReveal;
-uniform float uOpacity;
-out vec4 outColor;
-
-vec3 permute(vec3 x) {
-  return mod(((x * 34.0) + 1.0) * x, 289.0);
-}
-
-float snoise(vec2 v) {
-  const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
-  vec2 i = floor(v + dot(v, C.yy));
-  vec2 x0 = v - i + dot(i, C.xx);
-  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-  vec4 x12 = x0.xyxy + C.xxzz;
-  x12.xy -= i1;
-  i = mod(i, 289.0);
-  vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
-  vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
-  m = m * m;
-  m = m * m;
-  vec3 x = 2.0 * fract(p * C.www) - 1.0;
-  vec3 h = abs(x) - 0.5;
-  vec3 ox = floor(x + 0.5);
-  vec3 a0 = x - ox;
-  m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
-  vec3 g;
-  g.x = a0.x * x0.x + h.x * x0.y;
-  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-  return 130.0 * dot(m, g);
-}
-
-float smootherstep(float edge0, float edge1, float x) {
-  float t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
-  return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
-}
-
-vec3 oklabToLinear(vec3 c) {
-  float l = c.x + 0.3963377774 * c.y + 0.2158037573 * c.z;
-  float m = c.x - 0.1055613458 * c.y - 0.0638541728 * c.z;
-  float s = c.x - 0.0894841775 * c.y - 1.2914855480 * c.z;
-  l = l * l * l;
-  m = m * m * m;
-  s = s * s * s;
-  return vec3(
-    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
-    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
-  );
-}
-
-vec3 toSrgb(vec3 c) {
-  c = clamp(c, 0.0, 1.0);
-  return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c));
-}
-
-vec3 ramp(float t) {
-  float x = clamp(t, 0.0, 1.0) * float(uStopCount - 1);
-  int i = int(min(floor(x), float(uStopCount - 2)));
-  float f = x - float(i);
-  f = f * f * (3.0 - 2.0 * f);
-  vec3 lch = mix(uStops[i], uStops[i + 1], f);
-  return toSrgb(oklabToLinear(vec3(lch.x, lch.y * cos(lch.z), lch.y * sin(lch.z))));
-}
-
-float hash(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
-}
-
-void main() {
-  vec2 frag = gl_FragCoord.xy;
-  float y = 1.0 - frag.y / uResolution.y;
-  y = mix(y, 1.0 - y, uFlip);
-  float u = frag.x / uResolution.x;
-  float X = (frag.x - uResolution.x * 0.5) / uResolution.y;
-  float t = uTime;
-  float reach = uPointer.z * exp(-pow((X - uPointer.x) / 0.38, 2.0));
-
-  vec3 glow = vec3(0.0);
-  float cover = 0.0;
-  for (int k = 0; k < ${MAX_LAYERS}; k++) {
-    if (k >= uLayers) break;
-    float layer = float(k);
-    float seed = layer * 13.7;
-    float pace = t * (1.0 - layer * 0.18);
-    float warp = snoise(vec2(X * 0.45 * uScale + pace * 0.02 + seed, pace * 0.05 + seed));
-    float wave = snoise(vec2(X * 0.75 * uScale + warp * 0.35 - pace * 0.03 + seed, pace * 0.07 - seed)) * 0.72
-      + snoise(vec2(X * 1.6 * uScale + warp * 0.5 + pace * 0.04 - seed, pace * 0.1 + seed * 0.5)) * 0.28;
-    float hem = uHeight + layer * 0.07 + wave * 0.15 * uAmplitude;
-    hem += reach * 0.08 * (layer < 0.5 ? 1.0 : 0.4);
-    hem = mix(-0.25, hem, uReveal);
-
-    float soft = (0.04 + uBlend * 0.16) * (1.0 + layer * 0.9);
-    float rise = hem - y;
-    float low = -soft - uGlow * 0.14;
-    float high = 0.26 + soft * 0.6;
-    float body = pow(smootherstep(low, high, rise), 1.5 + uGlow * 0.6);
-    float lobes = 0.86 + 0.14 * snoise(vec2(X * 0.9 * uScale - pace * 0.025 + seed, y * 0.3 + pace * 0.04));
-    float alpha = body * lobes * (layer < 0.5 ? 1.0 : 0.32 / layer);
-    alpha = clamp(alpha * (1.0 + reach * 0.25 * smootherstep(0.9, 0.0, abs(y - hem))), 0.0, 1.0);
-
-    vec3 tint = ramp(u + 0.05 * sin(pace * 0.08 + layer * 2.3) + layer * 0.1 + max(rise, 0.0) * 0.05);
-    glow = 1.0 - (1.0 - glow) * (1.0 - tint * alpha);
-    cover = 1.0 - (1.0 - cover) * (1.0 - alpha);
-  }
-
-  float fade = smootherstep(0.0, 0.7, uReveal) * uOpacity;
-  float strength = clamp(uBrightness, 0.0, 2.0);
-  glow *= fade * min(strength, 1.0);
-  cover *= fade * min(strength, 1.0);
-  glow = 1.0 - pow(1.0 - glow, vec3(max(strength, 1.0)));
-  float dither = (hash(frag) - 0.5) / 255.0;
-  outColor = vec4(glow + dither, clamp(cover + dither, 0.0, 1.0));
-}`;
-
-  const toOklch = (rgb) => {
-    const [r, g, b] = rgb.map((c) =>
-      c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
-    );
-    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-    const lab = [
-      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
-      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
-      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
-    ];
-    return [lab[0], Math.hypot(lab[1], lab[2]), Math.atan2(lab[2], lab[1])];
-  };
-
-  const unwrapHues = (stops) => {
-    const known = stops.findIndex((stop) => stop[1] > 0.02);
-    const anchor = known === -1 ? 0 : stops[known][2];
-    let previous = anchor;
-    return stops.map((stop) => {
-      let hue = stop[1] > 0.02 ? stop[2] : previous;
-      while (hue - previous > Math.PI) hue -= Math.PI * 2;
-      while (hue - previous < -Math.PI) hue += Math.PI * 2;
-      previous = hue;
-      return [stop[0], stop[1], hue];
-    });
-  };
-
-  function compileShader(gl, type, source) {
-    const shader = gl.createShader(type);
-    if (!shader) return null;
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (gl.getShaderParameter(shader, gl.COMPILE_STATUS)) return shader;
-    gl.deleteShader(shader);
-    return null;
-  }
-
-  function linkProgram(gl) {
-    const vs = compileShader(gl, gl.VERTEX_SHADER, AURORA_VERTEX);
-    const fs = compileShader(gl, gl.FRAGMENT_SHADER, AURORA_FRAGMENT);
-    const prog = gl.createProgram();
-    if (!vs || !fs || !prog) return null;
-    gl.attachShader(prog, vs);
-    gl.attachShader(prog, fs);
-    gl.bindAttribLocation(prog, 0, "aPosition");
-    gl.linkProgram(prog);
-    gl.deleteShader(vs);
-    gl.deleteShader(fs);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-      gl.deleteProgram(prog);
-      return null;
+  class Grad {
+    constructor(x, y, z) {
+      this.x = x;
+      this.y = y;
+      this.z = z;
     }
-    const uniforms = {};
-    const count = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS);
-    for (let i = 0; i < count; i++) {
-      const info = gl.getActiveUniform(prog, i);
-      if (info) {
-        uniforms[info.name.replace("[0]", "")] = gl.getUniformLocation(prog, info.name);
+    dot2(x, y) {
+      return this.x * x + this.y * y;
+    }
+  }
+
+  class PerlinNoise {
+    constructor(seed = 0) {
+      this.grad3 = [
+        new Grad(1, 1, 0), new Grad(-1, 1, 0), new Grad(1, -1, 0), new Grad(-1, -1, 0),
+        new Grad(1, 0, 1), new Grad(-1, 0, 1), new Grad(1, 0, -1), new Grad(-1, 0, -1),
+        new Grad(0, 1, 1), new Grad(0, -1, 1), new Grad(0, 1, -1), new Grad(0, -1, -1),
+      ];
+      this.p = [
+        151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225, 140, 36, 103, 30, 69, 142, 8, 99, 37, 240,
+        21, 10, 23, 190, 6, 148, 247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219, 203, 117, 35, 11, 32, 57, 177, 33, 88,
+        237, 149, 56, 87, 174, 20, 125, 136, 171, 168, 68, 175, 74, 165, 71, 134, 139, 48, 27, 166, 77, 146, 158, 231, 83,
+        111, 229, 122, 60, 211, 133, 230, 220, 105, 92, 41, 55, 46, 245, 40, 244, 102, 143, 54, 65, 25, 63, 161, 1, 216,
+        80, 73, 209, 76, 132, 187, 208, 89, 18, 169, 200, 196, 135, 130, 116, 188, 159, 86, 164, 100, 109, 198, 173, 186,
+        3, 64, 52, 217, 226, 250, 124, 123, 5, 202, 38, 147, 118, 126, 255, 82, 85, 212, 207, 206, 59, 227, 47, 16, 58,
+        17, 182, 189, 28, 42, 223, 183, 170, 213, 119, 248, 152, 2, 44, 154, 163, 70, 221, 153, 101, 155, 167, 43, 172, 9,
+        129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232, 178, 185, 112, 104, 218, 246, 97, 228, 251, 34, 242, 193,
+        238, 210, 144, 12, 191, 179, 162, 241, 81, 51, 145, 235, 249, 14, 239, 107, 49, 192, 214, 31, 181, 199, 106, 157,
+        184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254, 138, 236, 205, 93, 222, 114, 67, 29, 24, 72, 243, 141, 128,
+        195, 78, 66, 215, 61, 156, 180,
+      ];
+      this.perm = new Array(512);
+      this.gradP = new Array(512);
+      this.seed(seed);
+    }
+    seed(seed) {
+      if (seed > 0 && seed < 1) seed *= 65536;
+      seed = Math.floor(seed);
+      if (seed < 256) seed |= seed << 8;
+      for (let i = 0; i < 256; i++) {
+        let v = i & 1 ? this.p[i] ^ (seed & 255) : this.p[i] ^ ((seed >> 8) & 255);
+        this.perm[i] = this.perm[i + 256] = v;
+        this.gradP[i] = this.gradP[i + 256] = this.grad3[v % 12];
       }
     }
-    return { program: prog, uniforms };
+    fade(t) {
+      return t * t * t * (t * (t * 6 - 15) + 10);
+    }
+    lerp(a, b, t) {
+      return (1 - t) * a + t * b;
+    }
+    perlin2(x, y) {
+      let X = Math.floor(x),
+        Y = Math.floor(y);
+      x -= X;
+      y -= Y;
+      X &= 255;
+      Y &= 255;
+      const n00 = this.gradP[X + this.perm[Y]].dot2(x, y);
+      const n01 = this.gradP[X + this.perm[Y + 1]].dot2(x, y - 1);
+      const n10 = this.gradP[X + 1 + this.perm[Y]].dot2(x - 1, y);
+      const n11 = this.gradP[X + 1 + this.perm[Y + 1]].dot2(x - 1, y - 1);
+      const u = this.fade(x);
+      return this.lerp(this.lerp(n00, n10, u), this.lerp(n01, n11, u), this.fade(y));
+    }
   }
 
-  function initAuroraBackdrop() {
-    const container = document.getElementById("reactbits-aurora");
+  function initWavesBackdrop() {
+    const container = document.getElementById("reactbits-waves");
     if (!container) return;
     const canvas = container.querySelector("canvas");
     if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
-    const gl = canvas.getContext("webgl2", {
-      alpha: true,
-      premultipliedAlpha: true,
-      antialias: false,
-      depth: false,
-      stencil: false,
-    });
-    if (!gl) return;
-
-    const linked = linkProgram(gl);
-    if (!linked) return;
-    const u = linked.uniforms;
-
-    const buffer = gl.createBuffer();
-    const vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-
-    const stops = ["#3B82F6", "#8B5CF6", "#06B6D4", "#10B981", "#6366F1"];
-    const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
-    const parseColor = (hex) => {
-      probe.clearRect(0, 0, 1, 1);
-      probe.fillStyle = hex;
-      probe.fillRect(0, 0, 1, 1);
-      const [r, g, b] = probe.getImageData(0, 0, 1, 1).data;
-      return [r / 255, g / 255, b / 255];
+    const noise = new PerlinNoise(42);
+    const config = {
+      xGap: 18,
+      yGap: 32,
+      waveSpeedX: 0.012,
+      waveSpeedY: 0.005,
+      waveAmpX: 32,
+      waveAmpY: 16,
+      friction: 0.91,
+      tension: 0.006,
+      maxCursorMove: 110,
+      interactionRadius: 160,
     };
-    const palette = new Float32Array(MAX_STOPS * 3);
-    unwrapHues(stops.map((c) => toOklch(parseColor(c)))).forEach((s, idx) =>
-      palette.set(s, idx * 3)
-    );
 
-    const view = { width: 1, height: 1 };
-    const pointer = { x: 0, y: 0, inside: false };
-    const state = {
-      clock: 0,
-      px: 0,
-      py: 0.4,
-      reach: 0,
-      reveal: reduceMotion() ? 1 : 0,
+    let width = 0;
+    let height = 0;
+    let lines = [];
+    let ripples = [];
+    const mouse = {
+      x: -500,
+      y: -500,
+      lx: 0,
+      ly: 0,
+      sx: -500,
+      sy: -500,
+      v: 0,
+      vs: 0,
+      a: 0,
+      set: false,
     };
-    let last = 0;
 
-    function render() {
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.useProgram(linked.program);
-      gl.bindVertexArray(vao);
-      gl.uniform2f(u.uResolution, canvas.width, canvas.height);
-      gl.uniform1f(u.uTime, state.clock);
-      gl.uniform3fv(u.uStops, palette);
-      gl.uniform1i(u.uStopCount, stops.length);
-      gl.uniform1f(u.uAmplitude, 1.15);
-      gl.uniform1f(u.uBlend, 0.58);
-      gl.uniform1f(u.uHeight, 0.48);
-      gl.uniform1f(u.uScale, 1.05);
-      gl.uniform1f(u.uGlow, 0.72);
-      gl.uniform1f(u.uBrightness, 1.05);
-      gl.uniform1i(u.uLayers, 3);
-      gl.uniform1f(u.uFlip, 0);
-      gl.uniform3f(u.uPointer, state.px, state.py, state.reach);
-      gl.uniform1f(u.uReveal, 1 - Math.pow(1 - state.reveal, 3));
-      gl.uniform1f(u.uOpacity, 0.88);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    function setSize() {
+      const rect = container.getBoundingClientRect();
+      width = Math.max(1, Math.floor(rect.width));
+      height = Math.max(1, Math.floor(rect.height));
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      setLines();
     }
 
-    function frame(now) {
-      if (document.hidden) {
-        requestAnimationFrame(frame);
-        return;
+    function setLines() {
+      lines = [];
+      const oWidth = width + 180;
+      const oHeight = height + 60;
+      const totalLines = Math.ceil(oWidth / config.xGap);
+      const totalPoints = Math.ceil(oHeight / config.yGap);
+      const xStart = (width - config.xGap * totalLines) / 2;
+      const yStart = (height - config.yGap * totalPoints) / 2;
+
+      for (let i = 0; i <= totalLines; i++) {
+        const pts = [];
+        for (let j = 0; j <= totalPoints; j++) {
+          pts.push({
+            x: xStart + config.xGap * i,
+            y: yStart + config.yGap * j,
+            wave: { x: 0, y: 0 },
+            cursor: { x: 0, y: 0, vx: 0, vy: 0 },
+          });
+        }
+        lines.push(pts);
       }
-      const dt = last ? clamp((now - last) / 1000, 0.001, 0.05) : 1 / 60;
-      last = now;
+    }
+
+    function movePoints(time) {
+      for (let i = 0; i < lines.length; i++) {
+        const pts = lines[i];
+        for (let j = 0; j < pts.length; j++) {
+          const p = pts[j];
+          const move =
+            noise.perlin2(
+              (p.x + time * config.waveSpeedX) * 0.0022,
+              (p.y + time * config.waveSpeedY) * 0.0016
+            ) * 12;
+          p.wave.x = Math.cos(move) * config.waveAmpX;
+          p.wave.y = Math.sin(move) * config.waveAmpY;
+
+          const dx = p.x - mouse.sx;
+          const dy = p.y - mouse.sy;
+          const dist = Math.hypot(dx, dy);
+          const l = Math.max(config.interactionRadius, mouse.vs);
+          if (dist < l) {
+            const s = 1 - dist / l;
+            const f = Math.cos(dist * 0.001) * s;
+            p.cursor.vx += Math.cos(mouse.a) * f * l * mouse.vs * 0.0006;
+            p.cursor.vy += Math.sin(mouse.a) * f * l * mouse.vs * 0.0006;
+          }
+
+          for (let r = 0; r < ripples.length; r++) {
+            const rp = ripples[r];
+            const rdx = p.x - rp.x;
+            const rdy = p.y - rp.y;
+            const rDist = Math.hypot(rdx, rdy);
+            const band = Math.abs(rDist - rp.radius);
+            if (band < 48 && rDist > 0.001) {
+              const falloff = (1 - band / 48) * rp.alpha;
+              const push = Math.sin((band / 48) * Math.PI) * falloff * 1.65;
+              p.cursor.vx += (rdx / rDist) * push;
+              p.cursor.vy += (rdy / rDist) * push;
+            }
+          }
+
+          p.cursor.vx += (0 - p.cursor.x) * config.tension;
+          p.cursor.vy += (0 - p.cursor.y) * config.tension;
+          p.cursor.vx *= config.friction;
+          p.cursor.vy *= config.friction;
+          p.cursor.x += p.cursor.vx * 2;
+          p.cursor.y += p.cursor.vy * 2;
+          p.cursor.x = clamp(p.cursor.x, -config.maxCursorMove, config.maxCursorMove);
+          p.cursor.y = clamp(p.cursor.y, -config.maxCursorMove, config.maxCursorMove);
+        }
+      }
+
+      for (let r = ripples.length - 1; r >= 0; r--) {
+        ripples[r].radius += 5.5;
+        ripples[r].alpha *= 0.962;
+        if (ripples[r].alpha < 0.025) ripples.splice(r, 1);
+      }
+    }
+
+    function moved(point, withCursor = true) {
+      return {
+        x: point.x + point.wave.x + (withCursor ? point.cursor.x : 0),
+        y: point.y + point.wave.y + (withCursor ? point.cursor.y : 0),
+      };
+    }
+
+    function drawLines() {
+      ctx.clearRect(0, 0, width, height);
+
+      const grad = ctx.createLinearGradient(0, 0, width, height);
+      grad.addColorStop(0, "rgba(56, 189, 248, 0.22)");
+      grad.addColorStop(0.5, "rgba(129, 140, 248, 0.20)");
+      grad.addColorStop(1, "rgba(52, 211, 153, 0.16)");
+
+      ctx.beginPath();
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.1;
+
+      for (let i = 0; i < lines.length; i++) {
+        const points = lines[i];
+        if (!points.length) continue;
+        let p1 = moved(points[0], false);
+        ctx.moveTo(p1.x, p1.y);
+        for (let idx = 0; idx < points.length; idx++) {
+          const isLast = idx === points.length - 1;
+          p1 = moved(points[idx], !isLast);
+          const p2 = moved(points[idx + 1] || points[points.length - 1], !isLast);
+          ctx.lineTo(p1.x, p1.y);
+          if (isLast) ctx.moveTo(p2.x, p2.y);
+        }
+      }
+      ctx.stroke();
+
+      /* Subtle cursor halo on the wave grid */
+      if (mouse.set && mouse.sx > 0 && mouse.sy > 0) {
+        const glow = ctx.createRadialGradient(mouse.sx, mouse.sy, 0, mouse.sx, mouse.sy, 220);
+        glow.addColorStop(0, "rgba(56, 189, 248, 0.12)");
+        glow.addColorStop(0.5, "rgba(139, 92, 246, 0.06)");
+        glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, width, height);
+      }
+    }
+
+    function tick(t) {
+      mouse.sx += (mouse.x - mouse.sx) * 0.12;
+      mouse.sy += (mouse.y - mouse.sy) * 0.12;
+      const dx = mouse.x - mouse.lx;
+      const dy = mouse.y - mouse.ly;
+      const d = Math.hypot(dx, dy);
+      mouse.v = d;
+      mouse.vs += (d - mouse.vs) * 0.1;
+      mouse.vs = Math.min(100, mouse.vs);
+      mouse.lx = mouse.x;
+      mouse.ly = mouse.y;
+      mouse.a = Math.atan2(dy, dx);
+
+      movePoints(t);
+      drawLines();
       if (!reduceMotion()) {
-        state.clock += dt * 0.85;
+        requestAnimationFrame(tick);
       }
-      const follow = 1 - Math.exp(-dt / 0.55);
-      if (pointer.inside) {
-        const tx = (pointer.x - view.width / 2) / Math.max(1, view.height);
-        const ty = pointer.y / Math.max(1, view.height);
-        state.px += (tx - state.px) * follow;
-        state.py += (ty - state.py) * follow;
-      }
-      state.reach +=
-        ((pointer.inside ? 1 : 0) - state.reach) *
-        (1 - Math.exp(-dt / (pointer.inside ? 0.8 : 1.3)));
-      if (state.reveal < 1) {
-        state.reveal = Math.min(1, state.reveal + dt / INTRO_SECONDS);
-      }
-      render();
-      requestAnimationFrame(frame);
-    }
-
-    function resize() {
-      view.width = Math.max(1, container.clientWidth);
-      view.height = Math.max(1, container.clientHeight);
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
-      canvas.width = Math.round(view.width * dpr);
-      canvas.height = Math.round(view.height * dpr);
-      render();
     }
 
     window.addEventListener(
       "pointermove",
       (e) => {
         const rect = container.getBoundingClientRect();
-        pointer.x = e.clientX - rect.left;
-        pointer.y = e.clientY - rect.top;
-        pointer.inside =
-          pointer.x >= 0 &&
-          pointer.y >= 0 &&
-          pointer.x <= rect.width &&
-          pointer.y <= rect.height;
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+        if (!mouse.set) {
+          mouse.sx = mouse.x;
+          mouse.sy = mouse.y;
+          mouse.lx = mouse.x;
+          mouse.ly = mouse.y;
+          mouse.set = true;
+        }
       },
       { passive: true }
     );
 
-    window.addEventListener("resize", resize);
-    resize();
-    requestAnimationFrame(frame);
-  }
-
-  /* =========================================================================
-   * 2. REACT BITS: GRADIENT TEXT (from GradientText-JS-CSS.json)
-   * ========================================================================= */
-  function initGradientTexts() {
-    const nodes = document.querySelectorAll("[data-rb-gradient-text]");
-    if (!nodes.length) return;
-
-    const items = [];
-    nodes.forEach((node) => {
-      if (node.dataset.rbGtReady === "1") return;
-      node.dataset.rbGtReady = "1";
-      const text = node.textContent;
-      const colors = (
-        node.dataset.colors || "#60A5FA,#C084FC,#38BDF8,#34D399,#818CF8"
-      )
-        .split(",")
-        .map((s) => s.trim());
-      const speed = parseFloat(node.dataset.speed || "6");
-      const glow = parseFloat(node.dataset.glow || "0.45");
-
-      node.classList.add("gradient-text");
-      node.style.setProperty("--gt-glow", String(glow));
-      node.innerHTML = `<span class="gradient-text__inner"><span class="gradient-text__content">${text}</span><span class="gradient-text__glow" aria-hidden="true">${text}</span></span>`;
-      items.push({ node, colors, speed, time: Math.random() * 4 });
-    });
-
-    if (!items.length) return;
-    let last = performance.now();
-    function tick(now) {
-      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
-      last = now;
-      items.forEach((it) => {
-        it.time += dt;
-        const cycle = it.time / it.speed;
-        const blobs = it.colors.map((color, i) => {
-          const spin = cycle * TAU;
-          const rate = 0.55 + ((i * 0.618) % 1) * 0.5;
-          const x = 50 + 44 * Math.sin(spin * rate + i * 2.1);
-          const y = 50 + 40 * Math.sin(spin * (rate * 0.83 + 0.21) + i * 1.3);
-          return `radial-gradient(ellipse 58% 145% at ${x.toFixed(1)}% ${y.toFixed(1)}%, ${color} 0%, transparent 100%)`;
+    window.addEventListener(
+      "pointerdown",
+      (e) => {
+        const rect = container.getBoundingClientRect();
+        ripples.push({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+          radius: 4,
+          alpha: 1,
         });
-        const image = `${blobs.join(", ")}, linear-gradient(125deg, ${it.colors.join(", ")})`;
-        it.node.style.setProperty("--gt-gradient", image);
-      });
-      if (!reduceMotion()) requestAnimationFrame(tick);
-    }
+        if (ripples.length > 6) ripples.shift();
+      },
+      { passive: true }
+    );
+
+    window.addEventListener("resize", setSize);
+    setSize();
     requestAnimationFrame(tick);
   }
 
   /* =========================================================================
-   * 3. REACT BITS: SHINY TEXT (from ShinyText-JS-CSS.json)
+   * 2. REACT BITS: PIXEL CARD (From PixelCard-JS-CSS.json)
+   *    Interactive twinkling pixel canvas inside the 3 main workspace cards
    * ========================================================================= */
-  function initShinyTexts() {
-    document.querySelectorAll("[data-rb-shiny]").forEach((el) => {
-      if (el.dataset.rbShinyReady === "1") return;
-      el.dataset.rbShinyReady = "1";
+  const PIXEL_VARIANTS = {
+    blue: {
+      gap: 6,
+      speed: 45,
+      colors: "#e0f2fe,#7dd3fc,#38bdf8,#0284c7",
+    },
+    purple: {
+      gap: 6,
+      speed: 45,
+      colors: "#f3e8ff,#d8b4fe,#c084fc,#9333ea",
+    },
+    emerald: {
+      gap: 6,
+      speed: 45,
+      colors: "#d1fae5,#6ee7b7,#34d399,#059669",
+    },
+  };
+
+  class PixelCell {
+    constructor(ctx, x, y, color, speed, delay) {
+      this.ctx = ctx;
+      this.x = x;
+      this.y = y;
+      this.color = color;
+      this.speed = (Math.random() * 0.8 + 0.15) * speed;
+      this.size = 0;
+      this.sizeStep = Math.random() * 0.45 + 0.18;
+      this.minSize = 0.6;
+      this.maxSizeInteger = 2.4;
+      this.maxSize = Math.random() * (this.maxSizeInteger - this.minSize) + this.minSize;
+      this.delay = delay;
+      this.counter = 0;
+      this.counterStep = Math.random() * 4 + 2.5;
+      this.isIdle = true;
+      this.isReverse = false;
+      this.isShimmer = false;
+      this.boost = 0;
+    }
+
+    draw() {
+      const centerOffset = this.maxSizeInteger * 0.5 - this.size * 0.5;
+      this.ctx.fillStyle = this.color;
+      this.ctx.globalAlpha = Math.min(1, 0.35 + (this.size / this.maxSizeInteger) * 0.55 + this.boost * 0.25);
+      this.ctx.fillRect(this.x + centerOffset, this.y + centerOffset, this.size, this.size);
+      this.ctx.globalAlpha = 1;
+      this.boost *= 0.92;
+    }
+
+    appear() {
+      this.isIdle = false;
+      if (this.counter <= this.delay) {
+        this.counter += this.counterStep;
+        return;
+      }
+      if (this.size >= this.maxSize) {
+        this.isShimmer = true;
+      }
+      if (this.isShimmer) {
+        this.shimmer();
+      } else {
+        this.size += this.sizeStep;
+      }
+      this.draw();
+    }
+
+    disappear() {
+      this.isShimmer = false;
+      this.counter = 0;
+      if (this.size <= 0) {
+        this.isIdle = true;
+        return;
+      } else {
+        this.size -= 0.12;
+      }
+      this.draw();
+    }
+
+    shimmer() {
+      if (this.size >= this.maxSize) {
+        this.isReverse = true;
+      } else if (this.size <= this.minSize) {
+        this.isReverse = false;
+      }
+      if (this.isReverse) {
+        this.size -= this.speed;
+      } else {
+        this.size += this.speed;
+      }
+    }
+
+    pulse(strength = 1) {
+      this.isIdle = false;
+      this.isShimmer = true;
+      this.size = Math.min(this.maxSizeInteger, Math.max(this.size, this.maxSize * 0.95));
+      this.boost = Math.max(this.boost, strength);
+    }
+  }
+
+  function getEffectiveSpeed(value, reduced) {
+    const throttle = 0.001;
+    if (value <= 0 || reduced) return 0;
+    if (value >= 100) return 100 * throttle;
+    return value * throttle;
+  }
+
+  function initPixelCards() {
+    const cards = document.querySelectorAll("[data-rb-pixel-card]");
+    const reduced = reduceMotion();
+
+    cards.forEach((card) => {
+      if (card.dataset.rbPixelBound === "1") return;
+      card.dataset.rbPixelBound = "1";
+
+      const canvas = card.querySelector(".pixel-canvas");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const variantName = card.dataset.pixelVariant || "blue";
+      const cfg = PIXEL_VARIANTS[variantName] || PIXEL_VARIANTS.blue;
+      const colorsArr = cfg.colors.split(",");
+      const effSpeed = getEffectiveSpeed(cfg.speed, reduced);
+
+      let pixels = [];
+      let rafId = null;
+      let activeMethod = "disappear";
+      let width = 0;
+      let height = 0;
+
+      function buildPixels(originX, originY) {
+        const rect = card.getBoundingClientRect();
+        width = Math.max(1, Math.floor(rect.width));
+        height = Math.max(1, Math.floor(rect.height));
+        canvas.width = width;
+        canvas.height = height;
+
+        const cx = originX ?? width / 2;
+        const cy = originY ?? height / 2;
+
+        pixels = [];
+        for (let x = 0; x < width; x += cfg.gap) {
+          for (let y = 0; y < height; y += cfg.gap) {
+            const color = colorsArr[Math.floor(Math.random() * colorsArr.length)];
+            const dist = Math.hypot(x - cx, y - cy);
+            const delay = reduced ? 0 : dist * 0.65;
+            pixels.push(new PixelCell(ctx, x, y, color, effSpeed, delay));
+          }
+        }
+      }
+
+      function step() {
+        ctx.clearRect(0, 0, width, height);
+        let allIdle = true;
+        for (let i = 0; i < pixels.length; i++) {
+          const p = pixels[i];
+          p[activeMethod]();
+          if (!p.isIdle) allIdle = false;
+        }
+        if (!allIdle) {
+          rafId = requestAnimationFrame(step);
+        } else {
+          rafId = null;
+        }
+      }
+
+      function startAnimation(method, originX, originY) {
+        activeMethod = method;
+        if (method === "appear" && typeof originX === "number") {
+          for (let i = 0; i < pixels.length; i++) {
+            const p = pixels[i];
+            p.delay = reduced ? 0 : Math.hypot(p.x - originX, p.y - originY) * 0.55;
+            p.counter = 0;
+          }
+        }
+        if (!rafId) rafId = requestAnimationFrame(step);
+      }
+
+      card.addEventListener("pointerenter", (e) => {
+        const rect = card.getBoundingClientRect();
+        if (!pixels.length || Math.abs(rect.width - width) > 4) {
+          buildPixels(e.clientX - rect.left, e.clientY - rect.top);
+        }
+        startAnimation("appear", e.clientX - rect.left, e.clientY - rect.top);
+      });
+
+      card.addEventListener("pointerleave", () => {
+        startAnimation("disappear");
+      });
+
+      card.addEventListener("pointerdown", (e) => {
+        const rect = card.getBoundingClientRect();
+        const ox = e.clientX - rect.left;
+        const oy = e.clientY - rect.top;
+        const radius = Math.max(width, height) * 0.45;
+        for (let i = 0; i < pixels.length; i++) {
+          const p = pixels[i];
+          const d = Math.hypot(p.x - ox, p.y - oy);
+          if (d <= radius) {
+            p.pulse(1 - d / radius);
+          }
+        }
+        startAnimation("appear", ox, oy);
+      });
+
+      const ro = new ResizeObserver(() => buildPixels());
+      ro.observe(card);
+      buildPixels();
+    });
+  }
+
+  /* =========================================================================
+   * 3. REACT BITS: GLARE HOVER (From GlareHover-JS-CSS.json)
+   *    Glossy diagonal specular light sweep across cards on hover
+   * ========================================================================= */
+  function initGlareHover(root = document) {
+    const targets = root.querySelectorAll(
+      "[data-rb-glare], .collapsible-section, .kpi-card, .citation-card, .chunk-card, .corpus-card"
+    );
+    targets.forEach((el) => {
+      if (el.dataset.rbGlareBound === "1") return;
+      el.dataset.rbGlareBound = "1";
+      el.classList.add("rb-glare-hover");
+    });
+  }
+
+  /* =========================================================================
+   * 4. REACT BITS: DOCK NAVIGATION (From Dock-JS-CSS.json)
+   *    Smooth proximity-scaled floating dock items
+   * ========================================================================= */
+  function initDockNav() {
+    const dock = document.querySelector("[data-rb-dock]");
+    if (!dock) return;
+    const items = Array.from(dock.querySelectorAll(".rb-dock-item"));
+    if (!items.length) return;
+
+    dock.addEventListener("pointermove", (e) => {
+      if (reduceMotion()) return;
+      items.forEach((item) => {
+        const rect = item.getBoundingClientRect();
+        const center = rect.left + rect.width / 2;
+        const dist = Math.abs(e.clientX - center);
+        const factor = Math.max(0, 1 - dist / 150);
+        const scale = 1 + factor * 0.08;
+        const lift = -factor * 3;
+        item.style.transform = `translateY(${lift.toFixed(2)}px) scale(${scale.toFixed(3)})`;
+      });
+    });
+
+    dock.addEventListener("pointerleave", () => {
+      items.forEach((item) => {
+        item.style.transform = "";
+      });
+    });
+  }
+
+  /* =========================================================================
+   * 5. REACT BITS: GRADIENT TEXT (From GradientText-JS-CSS.json)
+   * ========================================================================= */
+  function initGradientText(root = document) {
+    const els = root.querySelectorAll("[data-rb-gradient-text]");
+    els.forEach((el) => {
+      if (el.dataset.rbGradBound === "1") return;
+      el.dataset.rbGradBound = "1";
+
+      const text = el.textContent;
+      const colors = (el.dataset.colors || "#38BDF8,#818CF8,#C084FC,#34D399").split(",");
+      const speed = parseFloat(el.dataset.speed || "6");
+      const glow = parseFloat(el.dataset.glow || "0.38");
+
+      const palette = [...colors, colors[0]].join(", ");
+      const gradient = `linear-gradient(90deg, ${palette})`;
+
+      el.classList.add("gradient-text");
+      el.style.setProperty("--gt-gradient", gradient);
+      el.style.setProperty("--gt-glow", String(glow));
+      el.textContent = "";
+
+      const inner = document.createElement("span");
+      inner.className = "gradient-text__inner";
+
+      const glowSpan = document.createElement("span");
+      glowSpan.className = "gradient-text__glow";
+      glowSpan.setAttribute("aria-hidden", "true");
+      glowSpan.textContent = text;
+
+      const contentSpan = document.createElement("span");
+      contentSpan.className = "gradient-text__content";
+      contentSpan.textContent = text;
+
+      inner.appendChild(glowSpan);
+      inner.appendChild(contentSpan);
+      el.appendChild(inner);
+
+      let elapsed = 0;
+      let lastTime = null;
+      const animDuration = speed * 1000;
+
+      function step(time) {
+        if (lastTime === null) lastTime = time;
+        const dt = time - lastTime;
+        lastTime = time;
+        elapsed += dt;
+
+        const fullCycle = animDuration * 2;
+        const cycleTime = elapsed % fullCycle;
+        const p =
+          cycleTime < animDuration
+            ? (cycleTime / animDuration) * 100
+            : 100 - ((cycleTime - animDuration) / animDuration) * 100;
+
+        const pos = `${p.toFixed(2)}% 50%`;
+        contentSpan.style.backgroundPosition = pos;
+        glowSpan.style.backgroundPosition = pos;
+        contentSpan.style.backgroundSize = "300% 100%";
+        glowSpan.style.backgroundSize = "300% 100%";
+
+        if (!reduceMotion()) {
+          requestAnimationFrame(step);
+        }
+      }
+      requestAnimationFrame(step);
+    });
+  }
+
+  /* =========================================================================
+   * 6. REACT BITS: SHINY TEXT (From ShinyText-JS-CSS.json)
+   * ========================================================================= */
+  function initShinyText(root = document) {
+    const els = root.querySelectorAll("[data-rb-shiny]");
+    els.forEach((el) => {
+      if (el.dataset.rbShinyBound === "1") return;
+      el.dataset.rbShinyBound = "1";
       el.classList.add("rb-shiny-text");
     });
   }
 
   /* =========================================================================
-   * 4. REACT BITS: BLUR TEXT (from BlurText-JS-CSS.json)
+   * 7. REACT BITS: BLUR TEXT (From BlurText-JS-CSS.json)
    * ========================================================================= */
-  function initBlurTexts() {
-    document.querySelectorAll("[data-rb-blur-text]").forEach((el) => {
-      if (el.dataset.rbBlurReady === "1") return;
-      el.dataset.rbBlurReady = "1";
-      const raw = el.textContent.trim();
-      if (!raw) return;
-      const words = raw.split(/\s+/);
-      el.innerHTML = words
-        .map(
-          (w, i) =>
-            `<span class="rb-blur-word" style="animation-delay:${(i * 65).toFixed(0)}ms">${w}</span>`
-        )
-        .join(" ");
-    });
-  }
+  function initBlurText(root = document) {
+    const els = root.querySelectorAll("[data-rb-blur-text]");
+    els.forEach((el) => {
+      if (el.dataset.rbBlurBound === "1") return;
+      el.dataset.rbBlurBound = "1";
 
-  /* =========================================================================
-   * 5. REACT BITS: ROTATING TEXT (from RotatingText-JS-CSS.json)
-   * ========================================================================= */
-  function initRotatingTexts() {
-    document.querySelectorAll("[data-rb-rotating-text]").forEach((el) => {
-      if (el.dataset.rbRotReady === "1") return;
-      el.dataset.rbRotReady = "1";
-      const phrases = (el.dataset.phrases || "")
-        .split("|")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      if (phrases.length < 2) return;
+      const text = el.textContent.trim();
+      const words = text.split(/\s+/);
+      el.textContent = "";
+      el.classList.add("rb-blur-text");
 
-      const interval = parseInt(el.dataset.interval || "2600", 10);
-      let idx = 0;
-
-      const renderPhrase = (text) => {
-        el.innerHTML = Array.from(text)
-          .map((ch, i) =>
-            ch === " "
-              ? `<span class="rb-rot-space">&nbsp;</span>`
-              : `<span class="rb-rot-char" style="animation-delay:${i * 22}ms">${ch}</span>`
-          )
-          .join("");
-      };
-
-      renderPhrase(phrases[0]);
-      setInterval(() => {
-        if (document.hidden || reduceMotion()) return;
-        idx = (idx + 1) % phrases.length;
-        renderPhrase(phrases[idx]);
-      }, interval);
-    });
-  }
-
-  /* =========================================================================
-   * 6. REACT BITS: TRUE FOCUS (from TrueFocus-JS-CSS.json)
-   * ========================================================================= */
-  function initTrueFocus() {
-    const container = document.getElementById("rb-true-focus");
-    if (!container || container.dataset.rbFocusReady === "1") return;
-    container.dataset.rbFocusReady = "1";
-
-    const words = Array.from(container.querySelectorAll(".focus-word"));
-    const frame = container.querySelector(".focus-frame");
-    if (!words.length || !frame) return;
-
-    let activeIndex = 0;
-    let hovered = false;
-
-    function updateFocus(index) {
-      activeIndex = index;
-      words.forEach((w, i) => {
-        w.classList.toggle("active", i === activeIndex);
-      });
-      const target = words[activeIndex];
-      if (!target) return;
-      const padX = 10;
-      const padY = 6;
-      const x = target.offsetLeft - padX;
-      const y = target.offsetTop - padY;
-      const w = target.offsetWidth + padX * 2;
-      const h = target.offsetHeight + padY * 2;
-      frame.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-      frame.style.width = `${w}px`;
-      frame.style.height = `${h}px`;
-      frame.style.opacity = "1";
-    }
-
-    words.forEach((w, idx) => {
-      w.addEventListener("pointerenter", () => {
-        hovered = true;
-        updateFocus(idx);
-      });
-      w.addEventListener("pointerleave", () => {
-        hovered = false;
-      });
-    });
-
-    window.addEventListener("resize", () => updateFocus(activeIndex));
-    setTimeout(() => updateFocus(0), 60);
-
-    setInterval(() => {
-      if (hovered || document.hidden || reduceMotion()) return;
-      updateFocus((activeIndex + 1) % words.length);
-    }, 2200);
-  }
-
-  /* =========================================================================
-   * 7. REACT BITS: TILTED CARD (from TiltedCard-JS-CSS.json)
-   * ========================================================================= */
-  function initTiltedCards() {
-    document.querySelectorAll("[data-rb-tilted-card]").forEach((card) => {
-      if (card.dataset.rbTiltReady === "1") return;
-      card.dataset.rbTiltReady = "1";
-
-      const glare = document.createElement("span");
-      glare.className = "tilted-card__glare";
-      glare.setAttribute("aria-hidden", "true");
-      card.appendChild(glare);
-
-      const amplitude = parseFloat(card.dataset.tiltAmplitude || "9");
-      let rx = 0,
-        ry = 0,
-        tx = 0,
-        ty = 0,
-        scale = 1,
-        targetScale = 1,
-        glareAlpha = 0,
-        targetGlare = 0,
-        raf = 0;
-
-      function animate() {
-        raf = 0;
-        rx += (tx - rx) * 0.18;
-        ry += (ty - ry) * 0.18;
-        scale += (targetScale - scale) * 0.18;
-        glareAlpha += (targetGlare - glareAlpha) * 0.18;
-
-        card.style.transform = `perspective(900px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) scale3d(${scale.toFixed(3)}, ${scale.toFixed(3)}, 1)`;
-        card.style.setProperty("--tc-glare", glareAlpha.toFixed(3));
-
-        if (
-          Math.abs(tx - rx) > 0.05 ||
-          Math.abs(ty - ry) > 0.05 ||
-          Math.abs(targetScale - scale) > 0.002
-        ) {
-          raf = requestAnimationFrame(animate);
+      words.forEach((word, idx) => {
+        const span = document.createElement("span");
+        span.className = "rb-blur-word";
+        span.style.animationDelay = `${idx * 65}ms`;
+        span.textContent = word;
+        el.appendChild(span);
+        if (idx < words.length - 1) {
+          el.appendChild(document.createTextNode(" "));
         }
-      }
-
-      function wake() {
-        if (!raf && !reduceMotion()) raf = requestAnimationFrame(animate);
-      }
-
-      card.addEventListener("pointermove", (e) => {
-        const rect = card.getBoundingClientRect();
-        const nx = clamp(((e.clientX - rect.left) / rect.width) * 2 - 1, -1, 1);
-        const ny = clamp(((e.clientY - rect.top) / rect.height) * 2 - 1, -1, 1);
-        tx = -ny * amplitude;
-        ty = nx * amplitude;
-        targetScale = 1.024;
-        targetGlare = 1;
-        card.style.setProperty("--tc-gx", `${((nx + 1) * 50).toFixed(1)}%`);
-        card.style.setProperty("--tc-gy", `${((ny + 1) * 50).toFixed(1)}%`);
-        wake();
-      });
-
-      card.addEventListener("pointerleave", () => {
-        tx = 0;
-        ty = 0;
-        targetScale = 1;
-        targetGlare = 0;
-        wake();
       });
     });
   }
 
   /* =========================================================================
-   * 8. REACT BITS: DECRYPTED TEXT (from DecryptedText-JS-CSS.json)
+   * 8. REACT BITS: STAR BORDER (From StarBorder-JS-CSS.json)
    * ========================================================================= */
-  const CIPHER_POOL = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*+<>";
+  const STAR_BORDER_PAD = 28;
 
-  function bindDecryptedHover(root = document) {
-    root
-      .querySelectorAll(".chunk-id-tag, .state-pill, [data-rb-decrypt]")
-      .forEach((el) => {
-        if (el.dataset.rbDecryptBound === "1") return;
-        el.dataset.rbDecryptBound = "1";
-        el.addEventListener("pointerenter", () => {
-          if (reduceMotion() || el.dataset.rbDecryptRunning === "1") return;
-          const original = el.dataset.rbOrig || el.textContent;
-          el.dataset.rbOrig = original;
-          el.dataset.rbDecryptRunning = "1";
-          const chars = Array.from(original);
-          let iter = 0;
-          const maxIter = 9;
-          const timer = setInterval(() => {
-            iter++;
-            const revealedCount = Math.floor((iter / maxIter) * chars.length);
-            el.textContent = chars
-              .map((ch, idx) => {
-                if (/\s/.test(ch) || idx < revealedCount) return ch;
-                return CIPHER_POOL[Math.floor(Math.random() * CIPHER_POOL.length)];
-              })
-              .join("");
-            if (iter >= maxIter) {
-              clearInterval(timer);
-              el.textContent = original;
-              el.dataset.rbDecryptRunning = "0";
-            }
-          }, 28);
-        });
-      });
+  function parseStarColor(input) {
+    const probe = document.createElement("span");
+    probe.style.color = input;
+    probe.style.display = "none";
+    document.body.appendChild(probe);
+    const computed = getComputedStyle(probe).color;
+    document.body.removeChild(probe);
+    const match = computed.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
+    return match ? [+match[1], +match[2], +match[3]] : [96, 165, 250];
   }
 
-  /* =========================================================================
-   * 9. REACT BITS: SPOTLIGHT CARD (from SpotlightCard-JS-CSS.json)
-   * ========================================================================= */
-  const spotlightCards = new Set();
-  const globalPointer = { x: -9999, y: -9999, active: false };
-  let spotlightRaf = 0;
+  function pointOnRoundedRect(s, w, h, r) {
+    const R = Math.max(0, Math.min(r, w / 2, h / 2));
+    const top = w - 2 * R;
+    const right = h - 2 * R;
+    const arc = 0.5 * Math.PI * R;
+    const total = 2 * (top + right) + 4 * arc;
+    if (total <= 0) return { x: w / 2, y: h / 2, nx: 0, ny: -1 };
+    let d = ((s % total) + total) % total;
 
-  function registerSpotlightCards(root = document) {
-    const selectors = [
-      ".home-portal-card",
-      ".home-feature-card",
-      ".collapsible-section",
-      ".control-card",
-      ".citation-card",
-      ".chunk-card",
-      ".metric-card",
-      ".kpi-box",
-      ".doc-card",
-      ".card",
-    ];
-    root.querySelectorAll(selectors.join(",")).forEach((card) => {
-      if (card.dataset.rbSpotlight === "1") return;
-      card.dataset.rbSpotlight = "1";
-      card.classList.add("rb-spotlight-card");
-
-      const light = document.createElement("span");
-      light.className = "rb-spotlight__light";
-      light.setAttribute("aria-hidden", "true");
-
-      const edge = document.createElement("span");
-      edge.className = "rb-spotlight__edge";
-      edge.setAttribute("aria-hidden", "true");
-
-      card.insertBefore(light, card.firstChild);
-      card.appendChild(edge);
-
-      const isLarge =
-        card.classList.contains("collapsible-section") ||
-        card.classList.contains("card") ||
-        card.classList.contains("home-portal-card");
-      spotlightCards.add({
-        root: card,
-        light,
-        edge,
-        x: 0,
-        y: 0,
-        presence: 0,
-        size: isLarge ? 420 : 250,
-        proximity: isLarge ? 110 : 75,
-        intensity: isLarge ? 0.18 : 0.22,
-      });
-    });
-  }
-
-  function stepSpotlights() {
-    spotlightRaf = 0;
-    let keepAlive = false;
-
-    spotlightCards.forEach((item) => {
-      if (!document.body.contains(item.root)) {
-        spotlightCards.delete(item);
-        return;
-      }
-      const rect = item.root.getBoundingClientRect();
-      if (rect.bottom < -100 || rect.top > window.innerHeight + 100) return;
-
-      let tx = item.x;
-      let ty = item.y;
-      let target = 0;
-
-      if (globalPointer.active) {
-        tx = globalPointer.x - rect.left;
-        ty = globalPointer.y - rect.top;
-        const gap = Math.hypot(
-          Math.max(0, -tx, tx - rect.width),
-          Math.max(0, -ty, ty - rect.height)
-        );
-        if (gap === 0) target = 1;
-        else if (item.proximity > 0 && gap < item.proximity) {
-          target = Math.pow(1 - gap / item.proximity, 2);
-        }
-      }
-
-      if (item.presence < 0.02 && target > 0) {
-        item.x = tx;
-        item.y = ty;
-      } else {
-        item.x += (tx - item.x) * 0.28;
-        item.y += (ty - item.y) * 0.28;
-      }
-      item.presence += (target - item.presence) * (target > item.presence ? 0.26 : 0.14);
-      if (Math.abs(target - item.presence) < 0.003) item.presence = target;
-
-      if (item.presence > 0.002) {
-        item.light.style.background = `radial-gradient(circle ${item.size}px at ${item.x.toFixed(1)}px ${item.y.toFixed(1)}px, rgba(96, 165, 250, 0.22), rgba(139, 92, 246, 0.09) 45%, transparent 100%)`;
-        item.edge.style.background = `radial-gradient(circle ${(item.size * 0.65).toFixed(1)}px at ${item.x.toFixed(1)}px ${item.y.toFixed(1)}px, rgba(147, 197, 253, 0.85), rgba(167, 139, 250, 0.35) 50%, transparent 100%)`;
-        item.light.style.opacity = String(Math.min(1, item.presence * (item.intensity * 4.2)));
-        item.edge.style.opacity = String(Math.min(1, item.presence * 0.95));
-      } else {
-        item.light.style.opacity = "0";
-        item.edge.style.opacity = "0";
-      }
-
-      if (Math.abs(target - item.presence) > 0.004 || Math.hypot(tx - item.x, ty - item.y) > 0.5) {
-        keepAlive = true;
-      }
-    });
-
-    if (keepAlive) {
-      spotlightRaf = requestAnimationFrame(stepSpotlights);
+    if (d < top) return { x: R + d, y: 0, nx: 0, ny: -1 };
+    d -= top;
+    if (d < arc) {
+      const a = -Math.PI / 2 + d / R;
+      return { x: w - R + Math.cos(a) * R, y: R + Math.sin(a) * R, nx: Math.cos(a), ny: Math.sin(a) };
     }
-  }
-
-  function wakeSpotlights() {
-    if (!spotlightRaf) {
-      spotlightRaf = requestAnimationFrame(stepSpotlights);
+    d -= arc;
+    if (d < right) return { x: w, y: R + d, nx: 1, ny: 0 };
+    d -= right;
+    if (d < arc) {
+      const a = d / R;
+      return { x: w - R + Math.cos(a) * R, y: h - R + Math.sin(a) * R, nx: Math.cos(a), ny: Math.sin(a) };
     }
-  }
-
-  /* =========================================================================
-   * 10. REACT BITS: STAR BORDER (from StarBorder-JS-CSS.json)
-   * ========================================================================= */
-  const BLEED = 32;
-
-  function outlineRect(width, height, radius) {
-    const r = Math.max(0, Math.min(radius, width / 2, height / 2));
-    const arc = (Math.PI * r) / 2;
-    const across = Math.max(0, width - 2 * r);
-    const down = Math.max(0, height - 2 * r);
-    const segments = [
-      { length: across, x: r, y: 0, dx: 1, dy: 0, angle: null },
-      { length: arc, x: width - r, y: r, dx: 0, dy: 0, angle: -Math.PI / 2 },
-      { length: down, x: width, y: r, dx: 0, dy: 1, angle: null },
-      { length: arc, x: width - r, y: height - r, dx: 0, dy: 0, angle: 0 },
-      { length: across, x: width - r, y: height, dx: -1, dy: 0, angle: null },
-      { length: arc, x: r, y: height - r, dx: 0, dy: 0, angle: Math.PI / 2 },
-      { length: down, x: 0, y: height - r, dx: 0, dy: -1, angle: null },
-      { length: arc, x: r, y: r, dx: 0, dy: 0, angle: Math.PI },
-    ];
-    return {
-      r,
-      segments,
-      total: Math.max(
-        1,
-        segments.reduce((s, seg) => s + seg.length, 0)
-      ),
-    };
-  }
-
-  function pointOnOutline(shape, dist, out) {
-    let s = ((dist % shape.total) + shape.total) % shape.total;
-    for (const seg of shape.segments) {
-      if (seg.length > 0 && s <= seg.length) {
-        if (seg.angle === null) {
-          out.x = seg.x + seg.dx * s;
-          out.y = seg.y + seg.dy * s;
-          out.nx = seg.dy;
-          out.ny = -seg.dx;
-        } else {
-          const a = seg.angle + s / shape.r;
-          out.nx = Math.cos(a);
-          out.ny = Math.sin(a);
-          out.x = seg.x + out.nx * shape.r;
-          out.y = seg.y + out.ny * shape.r;
-        }
-        return out;
-      }
-      s -= seg.length;
+    d -= arc;
+    if (d < top) return { x: w - R - d, y: h, nx: 0, ny: 1 };
+    d -= top;
+    if (d < arc) {
+      const a = Math.PI / 2 + d / R;
+      return { x: R + Math.cos(a) * R, y: h - R + Math.sin(a) * R, nx: Math.cos(a), ny: Math.sin(a) };
     }
-    return out;
+    d -= arc;
+    if (d < right) return { x: 0, y: h - R - d, nx: -1, ny: 0 };
+    d -= right;
+    const a = Math.PI + (R > 0 ? d / R : 0);
+    return { x: R + Math.cos(a) * R, y: R + Math.sin(a) * R, nx: Math.cos(a), ny: Math.sin(a) };
   }
 
-  function attachStarBorder(btn, opts = {}) {
-    if (!btn || btn.dataset.rbStarBorder === "1") return;
-    btn.dataset.rbStarBorder = "1";
-    btn.classList.add("rb-star-border");
+  function attachStarBorder(el, color = "#60a5fa", speedSeconds = 6.5) {
+    if (!el || el.dataset.rbStarBound === "1") return;
+    el.dataset.rbStarBound = "1";
+    el.classList.add("rb-star-border");
 
     const canvas = document.createElement("canvas");
     canvas.className = "rb-star-border__canvas";
     canvas.setAttribute("aria-hidden", "true");
-    btn.appendChild(canvas);
+    el.appendChild(canvas);
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const headRgb = opts.headRgb || [147, 197, 253];
-    const tailRgb = opts.tailRgb || [139, 92, 246];
-    const duration = opts.duration || 3.4;
-    const radius = opts.radius || 10;
-    const thickness = 1.6;
-    const pt = { x: 0, y: 0, nx: 0, ny: -1 };
-    const dust = [];
+    const [r, g, b] = parseStarColor(color);
+    const hr = Math.min(255, Math.round(r + (255 - r) * 0.72));
+    const hg = Math.min(255, Math.round(g + (255 - g) * 0.72));
+    const hb = Math.min(255, Math.round(b + (255 - b) * 0.72));
 
     let width = 0;
     let height = 0;
+    let radius = 10;
+    let perimeter = 0;
     let dpr = 1;
-    let phase = Math.random() * 200;
-    let boost = 0;
-    let hovered = false;
-    let last = performance.now();
+    let phase = 0;
+    let lastTime = performance.now();
 
-    function measure() {
-      width = btn.offsetWidth;
-      height = btn.offsetHeight;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      const cs = getComputedStyle(el);
+      radius = parseFloat(cs.borderTopLeftRadius) || 10;
+      const R = Math.max(0, Math.min(radius, width / 2, height / 2));
+      perimeter = 2 * (width - 2 * R + (height - 2 * R)) + 2 * Math.PI * R;
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.round((width + BLEED * 2) * dpr));
-      canvas.height = Math.max(1, Math.round((height + BLEED * 2) * dpr));
-    }
+      canvas.width = Math.max(1, Math.round((width + STAR_BORDER_PAD * 2) * dpr));
+      canvas.height = Math.max(1, Math.round((height + STAR_BORDER_PAD * 2) * dpr));
+    };
 
-    btn.addEventListener("pointerenter", () => {
-      hovered = true;
-    });
-    btn.addEventListener("pointerleave", () => {
-      hovered = false;
-    });
-    new ResizeObserver(measure).observe(btn);
     measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
 
-    function frame(now) {
-      const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
-      last = now;
-
-      if (width > 4 && height > 4 && !document.hidden) {
-        const shape = outlineRect(
-          Math.max(1, width - thickness),
-          Math.max(1, height - thickness),
-          radius
-        );
-        const speed = (shape.total / duration) * (hovered ? 1.65 : 1);
-        phase = (phase + speed * dt) % shape.total;
-        boost += ((hovered ? 1 : 0) - boost) * 0.15;
-
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const offset = (BLEED + thickness / 2) * dpr;
-        ctx.setTransform(dpr, 0, 0, dpr, offset, offset);
-        ctx.globalCompositeOperation = "lighter";
-
-        const trailLen = shape.total * 0.32;
-        const steps = 36;
-        pointOnOutline(shape, phase, pt);
-        let px = pt.x;
-        let py = pt.y;
-
-        for (let i = 1; i <= steps; i++) {
-          pointOnOutline(shape, phase - trailLen * (i / steps), pt);
-          const u = 1 - i / steps;
-          const alpha = u * u * (0.75 + 0.25 * boost);
-          const r = Math.round(tailRgb[0] + (headRgb[0] - tailRgb[0]) * u);
-          const g = Math.round(tailRgb[1] + (headRgb[1] - tailRgb[1]) * u);
-          const b = Math.round(tailRgb[2] + (headRgb[2] - tailRgb[2]) * u);
-
-          ctx.strokeStyle = `rgba(${r},${g},${b},${(alpha * 0.28).toFixed(3)})`;
-          ctx.lineWidth = 5;
-          ctx.beginPath();
-          ctx.moveTo(px, py);
-          ctx.lineTo(pt.x, pt.y);
-          ctx.stroke();
-
-          ctx.strokeStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
-          ctx.lineWidth = thickness;
-          ctx.beginPath();
-          ctx.moveTo(px, py);
-          ctx.lineTo(pt.x, pt.y);
-          ctx.stroke();
-
-          px = pt.x;
-          py = pt.y;
-        }
-
-        // Star head bloom
-        pointOnOutline(shape, phase, pt);
-        const bloom = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, 18);
-        bloom.addColorStop(0, "rgba(255,255,255,0.95)");
-        bloom.addColorStop(0.3, `rgba(${headRgb[0]},${headRgb[1]},${headRgb[2]},0.55)`);
-        bloom.addColorStop(1, "rgba(59,130,246,0)");
-        ctx.fillStyle = bloom;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 18, 0, TAU);
-        ctx.fill();
-
-        if (Math.random() < (hovered ? 0.45 : 0.2) && dust.length < 24) {
-          dust.push({
-            x: pt.x,
-            y: pt.y,
-            vx: pt.nx * (6 + Math.random() * 10) + (Math.random() - 0.5) * 6,
-            vy: pt.ny * (6 + Math.random() * 10) + (Math.random() - 0.5) * 6,
-            age: 0,
-            life: 0.4 + Math.random() * 0.35,
-          });
-        }
-
-        for (let i = dust.length - 1; i >= 0; i--) {
-          const m = dust[i];
-          m.age += dt;
-          m.x += m.vx * dt;
-          m.y += m.vy * dt;
-          if (m.age >= m.life) {
-            dust.splice(i, 1);
-            continue;
-          }
-          const a = 1 - m.age / m.life;
-          ctx.fillStyle = `rgba(191,219,254,${(a * 0.85).toFixed(3)})`;
-          ctx.beginPath();
-          ctx.arc(m.x, m.y, 1.2 * a, 0, TAU);
-          ctx.fill();
-        }
+    const draw = (now) => {
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+      if (!reduceMotion()) {
+        phase = (phase + dt / speedSeconds) % 1;
       }
 
-      if (!reduceMotion()) requestAnimationFrame(frame);
-    }
+      if (width > 0 && height > 0 && perimeter > 0) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width + STAR_BORDER_PAD * 2, height + STAR_BORDER_PAD * 2);
+        ctx.save();
+        ctx.translate(STAR_BORDER_PAD, STAR_BORDER_PAD);
+        ctx.globalCompositeOperation = "lighter";
 
-    requestAnimationFrame(frame);
+        const headDist = phase * perimeter;
+        const trailLen = perimeter * 0.24;
+        const steps = 32;
+
+        for (let i = 0; i < 2; i++) {
+          const offset = i * (perimeter * 0.5);
+          const hDist = headDist + offset;
+          for (let j = steps - 1; j >= 0; j--) {
+            const u0 = j / steps;
+            const u1 = (j + 1) / steps;
+            const p0 = pointOnRoundedRect(hDist - u0 * trailLen, width, height, radius);
+            const p1 = pointOnRoundedRect(hDist - u1 * trailLen, width, height, radius);
+            const fade = Math.pow(1 - u0, 1.85);
+
+            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${fade * 0.7})`;
+            ctx.lineWidth = 1.6 * Math.pow(1 - u0, 0.45);
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.moveTo(p0.x, p0.y);
+            ctx.lineTo(p1.x, p1.y);
+            ctx.stroke();
+          }
+
+          const head = pointOnRoundedRect(hDist, width, height, radius);
+          const bloom = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, 12);
+          bloom.addColorStop(0, `rgba(${hr}, ${hg}, ${hb}, 0.9)`);
+          bloom.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, 0.35)`);
+          bloom.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+          ctx.fillStyle = bloom;
+          ctx.beginPath();
+          ctx.arc(head.x, head.y, 12, 0, TAU);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      requestAnimationFrame(draw);
+    };
+
+    requestAnimationFrame(draw);
+  }
+
+  function initStarBorders() {
+    document.querySelectorAll(".primary-btn").forEach((btn) => {
+      attachStarBorder(btn, "#60a5fa", 6.0);
+    });
   }
 
   /* =========================================================================
-   * 11. REACT BITS: CLICK SPARK (from ClickSpark-JS-CSS.json)
+   * 9. REACT BITS: CLICK SPARK (From ClickSpark-JS-CSS.json)
    * ========================================================================= */
   function initClickSpark() {
     const canvas = document.createElement("canvas");
     canvas.className = "rb-clickspark-canvas";
     canvas.setAttribute("aria-hidden", "true");
     document.body.appendChild(canvas);
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const sparks = [];
+    let rafId = 0;
     let dpr = 1;
-    function resize() {
+
+    const resize = () => {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
-    }
-    window.addEventListener("resize", resize);
-    resize();
-
-    const bursts = [];
-    const colors = ["#60A5FA", "#A78BFA", "#34D399", "#38BDF8", "#F472B6"];
-    let raf = 0;
-
-    function drawStar(x, y, radius, rot) {
-      const pinch = radius * 0.2;
-      ctx.beginPath();
-      ctx.moveTo(x + Math.cos(rot) * radius, y + Math.sin(rot) * radius);
-      for (let i = 1; i <= 4; i++) {
-        const a = rot + (i * Math.PI) / 2;
-        const mid = a - Math.PI / 4;
-        ctx.quadraticCurveTo(
-          x + Math.cos(mid) * pinch,
-          y + Math.sin(mid) * pinch,
-          x + Math.cos(a) * radius,
-          y + Math.sin(a) * radius
-        );
-      }
-      ctx.closePath();
-    }
-
-    function loop(now) {
-      raf = 0;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    };
+    resize();
+    window.addEventListener("resize", resize);
 
-      for (let b = bursts.length - 1; b >= 0; b--) {
-        const burst = bursts[b];
-        const p = (now - burst.start) / burst.duration;
-        if (p >= 1) {
-          bursts.splice(b, 1);
+    const colors = [
+      [56, 189, 248],
+      [192, 132, 252],
+      [52, 211, 153],
+    ];
+
+    const render = (now) => {
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const s = sparks[i];
+        const t = (now - s.startTime) / s.duration;
+        if (t >= 1) {
+          sparks.splice(i, 1);
           continue;
         }
-        const ease = 1 - Math.pow(1 - p, 3);
-        const fade = 1 - p;
+        const eased = 1 - Math.pow(1 - t, 3);
+        const fade = Math.pow(1 - t, 1.4);
+        const dist = eased * s.radius;
+        const len = s.size * (1 - eased * 0.55);
+        const cos = Math.cos(s.angle);
+        const sin = Math.sin(s.angle);
+        const hx = s.x + cos * (dist + len);
+        const hy = s.y + sin * (dist + len);
+        const tx = s.x + cos * dist;
+        const ty = s.y + sin * dist;
 
-        ctx.globalAlpha = fade * 0.45;
-        ctx.strokeStyle = burst.ringColor;
-        ctx.lineWidth = 1.5 * (1 - p);
+        const [cr, cg, cb] = s.rgb;
+        const grad = ctx.createLinearGradient(tx, ty, hx, hy);
+        grad.addColorStop(0, `rgba(${cr}, ${cg}, ${cb}, 0)`);
+        grad.addColorStop(0.6, `rgba(${cr}, ${cg}, ${cb}, ${fade * 0.9})`);
+        grad.addColorStop(1, `rgba(255, 255, 255, ${fade})`);
+
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 1.8 * (1 - t * 0.4);
+        ctx.lineCap = "round";
         ctx.beginPath();
-        ctx.arc(burst.x, burst.y, 4 + 26 * ease, 0, TAU);
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(hx, hy);
         ctx.stroke();
-
-        burst.sparks.forEach((sp) => {
-          const dist = sp.radius * ease;
-          const x1 = burst.x + Math.cos(sp.angle) * dist;
-          const y1 = burst.y + Math.sin(sp.angle) * dist;
-          const len = sp.size * Math.pow(1 - p, 1.3);
-          const x2 = burst.x + Math.cos(sp.angle) * (dist + len);
-          const y2 = burst.y + Math.sin(sp.angle) * (dist + len);
-
-          ctx.globalAlpha = fade;
-          ctx.strokeStyle = sp.color;
-          ctx.fillStyle = sp.color;
-          ctx.lineWidth = 1.8;
-          ctx.lineCap = "round";
-          ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x2, y2);
-          ctx.stroke();
-
-          if (sp.isStar) {
-            drawStar(x2, y2, 3.8 * (1 - p * 0.5), sp.angle + p * 2);
-            ctx.fill();
-          }
-        });
       }
 
-      if (bursts.length > 0) {
-        raf = requestAnimationFrame(loop);
+      ctx.restore();
+      if (sparks.length > 0) {
+        rafId = requestAnimationFrame(render);
+      } else {
+        rafId = 0;
       }
-    }
+    };
 
-    window.addEventListener("pointerdown", (e) => {
-      if (reduceMotion() || e.button !== 0) return;
-      const target = e.target.closest(
-        "button, .sample-chip, .tab-btn, summary, .cite-badge, .sort-btn, .home-portal-card, .topbar-brand"
-      );
-      if (!target) return;
-
-      const count = 10;
-      const sparks = Array.from({ length: count }, (_, i) => ({
-        angle: (TAU * i) / count + (Math.random() - 0.5) * 0.25,
-        radius: 22 + Math.random() * 18,
-        size: 8 + Math.random() * 7,
-        color: colors[i % colors.length],
-        isStar: i % 2 === 0,
-      }));
-      bursts.push({
-        x: e.clientX,
-        y: e.clientY,
-        start: performance.now(),
-        duration: 460,
-        ringColor: colors[Math.floor(Math.random() * colors.length)],
-        sparks,
-      });
-      if (!raf) raf = requestAnimationFrame(loop);
-    });
-  }
-
-  /* =========================================================================
-   * 12. REACT BITS: COUNT UP (Animated Numeric Counter)
-   * ========================================================================= */
-  window.animateCountUp = function (elOrId, targetValue, suffix = "", decimals = 0) {
-    const el = typeof elOrId === "string" ? document.getElementById(elOrId) : elOrId;
-    if (!el) return;
-    const end = Number(targetValue);
-    if (Number.isNaN(end) || reduceMotion()) {
-      el.textContent = `${Number(targetValue || 0).toFixed(decimals)}${suffix}`;
-      return;
-    }
-    const duration = 560;
-    const startTime = performance.now();
-    function step(now) {
-      const p = Math.min(1, (now - startTime) / duration);
-      const eased = 1 - Math.pow(1 - p, 3);
-      const val = end * eased;
-      el.textContent = `${val.toFixed(decimals)}${suffix}`;
-      if (p < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
-  };
-
-  /* =========================================================================
-   * BOOTSTRAP & MUTATION OBSERVER FOR DYNAMIC CARDS
-   * ========================================================================= */
-  function initAllReactBits() {
-    initAuroraBackdrop();
-    initGradientTexts();
-    initShinyTexts();
-    initBlurTexts();
-    initRotatingTexts();
-    initTrueFocus();
-    initTiltedCards();
-    registerSpotlightCards(document);
-    bindDecryptedHover(document);
-    initClickSpark();
-
-    // Animate Home Hero KPI counters on load
-    window.animateCountUp("home-kpi-recall", 100.0, "%", 1);
-    window.animateCountUp("home-kpi-accuracy", 97.5, "%", 1);
-    window.animateCountUp("home-kpi-faithfulness", 100.0, "%", 1);
-    window.animateCountUp("home-kpi-abstention", 100.0, "%", 0);
-
-    // Attach StarBorder to primary CTA buttons and Home portal buttons
-    attachStarBorder(document.getElementById("ask-submit-btn"), {
-      headRgb: [147, 197, 253],
-      tailRgb: [99, 102, 241],
-      radius: 10,
-      duration: 3.0,
-    });
-    attachStarBorder(document.getElementById("run-eval-btn"), {
-      headRgb: [56, 189, 248],
-      tailRgb: [139, 92, 246],
-      radius: 10,
-      duration: 3.6,
-    });
-    attachStarBorder(document.getElementById("ingest-submit-btn"), {
-      headRgb: [52, 211, 153],
-      tailRgb: [59, 130, 246],
-      radius: 10,
-      duration: 3.8,
-    });
-    document.querySelectorAll(".home-portal-cta").forEach((btn, i) => {
-      const palettes = [
-        { headRgb: [96, 165, 250], tailRgb: [139, 92, 246] },
-        { headRgb: [167, 139, 250], tailRgb: [56, 189, 248] },
-        { headRgb: [52, 211, 153], tailRgb: [59, 130, 246] },
-      ];
-      attachStarBorder(btn, {
-        ...palettes[i % palettes.length],
-        radius: 10,
-        duration: 3.2 + i * 0.3,
-      });
-    });
-
-    window.addEventListener(
-      "pointermove",
+    document.addEventListener(
+      "pointerdown",
       (e) => {
-        globalPointer.x = e.clientX;
-        globalPointer.y = e.clientY;
-        globalPointer.active = true;
-        wakeSpotlights();
+        if (reduceMotion() || e.button !== 0) return;
+        const now = performance.now();
+        const count = 9;
+        const rgb = colors[Math.floor(Math.random() * colors.length)];
+        for (let i = 0; i < count; i++) {
+          const base = (TAU * i) / count;
+          sparks.push({
+            x: e.clientX,
+            y: e.clientY,
+            angle: base + (Math.random() - 0.5) * 0.35,
+            radius: 26 * (0.8 + Math.random() * 0.45),
+            size: 11 * (0.8 + Math.random() * 0.4),
+            duration: 420 * (0.85 + Math.random() * 0.3),
+            startTime: now,
+            rgb,
+          });
+        }
+        if (!rafId) rafId = requestAnimationFrame(render);
       },
       { passive: true }
     );
-
-    window.addEventListener(
-      "scroll",
-      () => {
-        if (globalPointer.active) wakeSpotlights();
-      },
-      { passive: true, capture: true }
-    );
-
-    const observer = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        m.addedNodes.forEach((node) => {
-          if (node.nodeType === 1) {
-            registerSpotlightCards(node.parentElement || document);
-            bindDecryptedHover(node.parentElement || document);
-          }
-        });
-      }
-      wakeSpotlights();
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
   }
 
+  /* =========================================================================
+   * 10. REACT BITS: COUNT UP (Animated numeric counter)
+   * ========================================================================= */
+  function animateCountUp(el, targetValue, options = {}) {
+    if (!el) return;
+    const duration = options.duration || 520;
+    const decimals = options.decimals ?? 0;
+    const suffix = options.suffix || "";
+    const prefix = options.prefix || "";
+
+    if (reduceMotion() || Number.isNaN(targetValue)) {
+      el.textContent = `${prefix}${Number(targetValue).toFixed(decimals)}${suffix}`;
+      return;
+    }
+
+    const startTime = performance.now();
+    function tick(now) {
+      const progress = Math.min(1, (now - startTime) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const val = targetValue * eased;
+      el.textContent = `${prefix}${val.toFixed(decimals)}${suffix}`;
+      if (progress < 1) {
+        requestAnimationFrame(tick);
+      } else {
+        el.textContent = `${prefix}${Number(targetValue).toFixed(decimals)}${suffix}`;
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  /* =========================================================================
+   * BOOTSTRAP & PUBLIC HOOKS
+   * ========================================================================= */
+  function initAll() {
+    initWavesBackdrop();
+    initDockNav();
+    initPixelCards();
+    initGlareHover(document);
+    initGradientText(document);
+    initShinyText(document);
+    initBlurText(document);
+    initStarBorders();
+    initClickSpark();
+  }
+
+  window.ReactBitsFX = {
+    refreshDynamicCards(root = document) {
+      initGlareHover(root);
+      initPixelCards();
+      initGradientText(root);
+      initShinyText(root);
+    },
+    animateCountUp,
+  };
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initAllReactBits);
+    document.addEventListener("DOMContentLoaded", initAll);
   } else {
-    initAllReactBits();
+    initAll();
   }
 })();

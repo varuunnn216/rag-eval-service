@@ -10,252 +10,196 @@
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <!-- Official React Bits Aurora WebGL2 Backdrop + Ambient Grid -->
-  <div id="reactbits-aurora" class="aurora-backdrop" aria-hidden="true">
-    <canvas class="aurora-canvas"></canvas>
-    <div class="aurora-grid-mask"></div>
+  <!-- Official React Bits Waves Interactive Perlin-Noise Vector Backdrop -->
+  <div id="reactbits-waves" class="waves-backdrop" aria-hidden="true">
+    <canvas class="waves-canvas"></canvas>
+    <div class="waves-vignette"></div>
   </div>
 
-  <header class="topbar">
-    <div class="topbar-brand" id="brand-home-link" role="button" tabindex="0" title="Return to Home Overview">
-      <div class="logo-badge" aria-hidden="true">RAG</div>
-      <div>
-        <h1>
-          <span data-rb-gradient-text data-colors="#60A5FA,#C084FC,#38BDF8,#34D399,#818CF8" data-speed="6" data-glow="0.45">RAG Workbench</span>
-        </h1>
-        <p class="subtitle" data-rb-shiny>Hybrid Retrieval &bull; Cross-Encoder Reranking &bull; Verified Citations</p>
-      </div>
-    </div>
-    <div class="system-pills" id="health-pills" aria-live="polite">
-      <span class="pill pill-ok"><span class="dot"></span> <span data-rb-shiny>Online</span></span>
-      <span class="pill" id="pill-docs" data-rb-decrypt>7 Docs</span>
-      <span class="pill" id="pill-models" data-rb-decrypt>gemini-3.5-flash-lite</span>
-    </div>
-  </header>
-
-  <nav class="tab-nav" role="tablist" aria-label="Main Navigation">
-    <div class="tab-nav-inner">
-      <button class="tab-btn active" role="tab" aria-selected="true" data-tab="tab-home">
-        Home
+  <!-- Official React Bits Floating Dock Navigation -->
+  <nav class="tab-nav rb-dock-nav" role="tablist" aria-label="Main Navigation" data-rb-dock>
+    <div class="tab-nav-inner rb-dock-panel">
+      <button class="tab-btn rb-dock-item active" role="tab" aria-selected="true" data-tab="tab-home">
+        <span class="rb-dock-icon" aria-hidden="true">&#9672;</span>
+        <span class="rb-dock-label">Home</span>
+        <span class="rb-dock-dot" aria-hidden="true"></span>
       </button>
-      <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-playground">
-        Ask &amp; Citations
+      <button class="tab-btn rb-dock-item" role="tab" aria-selected="false" data-tab="tab-playground">
+        <span class="rb-dock-icon" aria-hidden="true">&#10022;</span>
+        <span class="rb-dock-label">Ask &amp; Citations</span>
+        <span class="rb-dock-dot" aria-hidden="true"></span>
       </button>
-      <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-eval">
-        Evaluation (40 QA)
+      <button class="tab-btn rb-dock-item" role="tab" aria-selected="false" data-tab="tab-eval">
+        <span class="rb-dock-icon" aria-hidden="true">&#9670;</span>
+        <span class="rb-dock-label">Evaluation (40 QA)</span>
+        <span class="rb-dock-dot" aria-hidden="true"></span>
       </button>
-      <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-corpus">
-        Documents &amp; Upload
+      <button class="tab-btn rb-dock-item" role="tab" aria-selected="false" data-tab="tab-corpus">
+        <span class="rb-dock-icon" aria-hidden="true">&#9635;</span>
+        <span class="rb-dock-label">Documents &amp; Upload</span>
+        <span class="rb-dock-dot" aria-hidden="true"></span>
       </button>
     </div>
   </nav>
 
   <main class="container">
     <!-- =====================================================================
-         TAB 0: LANDING PAGE / HOME OVERVIEW (REACT BITS SHOWCASE)
+         TAB 0: LANDING PAGE / HOME OVERVIEW (REACT BITS PIXELCARD + WAVES + GLAREHOVER)
          ===================================================================== -->
     <section id="tab-home" class="tab-panel active" role="tabpanel">
-      <!-- Hero Showcase -->
-      <div class="home-hero">
+      <!-- Clean Hero Showcase -->
+      <div class="home-hero" data-rb-glare>
         <div class="home-hero-badge">
           <span class="badge-dot"></span>
-          <span data-rb-shiny>PRODUCTION RAG SERVICE &bull; CLAIM-VERIFIED CITATION ENGINE</span>
+          <span data-rb-shiny>GROUNDED DOCUMENT INTELLIGENCE</span>
         </div>
 
-        <h2 class="home-hero-title">
-          <span data-rb-blur-text>Grounded Document Intelligence with</span><br />
-          <span class="home-rotating-wrap">
-            <span
-              class="home-rotating-pill"
-              data-rb-rotating-text
-              data-phrases="Hybrid RRF Search|Cross-Encoder Reranking|Claim-Verified Citations|40-QA Eval Benchmark"
-              data-interval="2600"
-            >Hybrid RRF Search</span>
-          </span>
-        </h2>
+        <h1 class="home-hero-title">
+          <span data-rb-blur-text>Verified Answers from Your Documents with</span><br />
+          <span data-rb-gradient-text data-colors="#38BDF8,#818CF8,#C084FC,#34D399" data-speed="5" data-glow="0.45">Sentence-Level Citations</span>
+        </h1>
 
         <p class="home-hero-lead">
-          Query your technical and operational documents with zero hallucinated fallbacks. Every claim is matched against its supporting sentence and verified before reaching the user.
+          Combine dense vector search, full-text keyword ranking, and cross-encoder reranking to answer questions accurately — with every claim linked to its exact supporting quote.
         </p>
 
-        <!-- React Bits TrueFocus Pipeline Stage Bar -->
-        <div class="true-focus-bar" id="rb-true-focus" aria-label="RAG Pipeline Stages">
-          <span class="focus-word active">01 Dense HNSW</span>
-          <span class="focus-word">02 Sparse FTS</span>
-          <span class="focus-word">03 Rerank Gate</span>
-          <span class="focus-word">04 Verified Citations</span>
-          <div class="focus-frame" aria-hidden="true">
-            <span class="focus-corner tl"></span>
-            <span class="focus-corner tr"></span>
-            <span class="focus-corner bl"></span>
-            <span class="focus-corner br"></span>
-          </div>
-        </div>
-
-        <!-- Live Benchmark Strip -->
-        <div class="home-kpi-strip">
-          <div class="home-kpi-item">
-            <span class="home-kpi-num" id="home-kpi-recall">100.0%</span>
-            <span class="home-kpi-label">Recall@5 (35 QA)</span>
-          </div>
-          <div class="home-kpi-divider"></div>
-          <div class="home-kpi-item">
-            <span class="home-kpi-num" id="home-kpi-accuracy">97.5%</span>
-            <span class="home-kpi-label">Answer Accuracy</span>
-          </div>
-          <div class="home-kpi-divider"></div>
-          <div class="home-kpi-item">
-            <span class="home-kpi-num" id="home-kpi-faithfulness">100.0%</span>
-            <span class="home-kpi-label">Citation Faithfulness</span>
-          </div>
-          <div class="home-kpi-divider"></div>
-          <div class="home-kpi-item">
-            <span class="home-kpi-num" id="home-kpi-abstention">100%</span>
-            <span class="home-kpi-label">Trap Abstention</span>
-          </div>
+        <div class="home-pill-row">
+          <span class="home-feature-pill"><span class="pill-spark"></span>Hybrid RRF Search</span>
+          <span class="home-feature-pill"><span class="pill-spark"></span>Cross-Encoder Reranking</span>
+          <span class="home-feature-pill"><span class="pill-spark"></span>Claim-Verified Quotes</span>
+          <span class="home-feature-pill"><span class="pill-spark"></span>Abstention Guardrails</span>
         </div>
       </div>
 
-      <!-- The 3 Main Interactive Destination Cards (React Bits TiltedCard + SpotlightCard + StarBorder) -->
+      <!-- The 3 Main Interactive Options (React Bits PixelCard + GlareHover) -->
       <div class="home-section-header">
-        <span class="home-eyebrow">WORKSPACE MODULES</span>
-        <h3>Choose a Workspace to Begin</h3>
+        <span class="home-eyebrow">GET STARTED</span>
+        <h2>Select a Workspace</h2>
       </div>
 
       <div class="home-portals-grid">
         <!-- Option 1: Ask & Grounded Citations -->
         <article
-          class="home-portal-card"
-          data-rb-tilted-card
-          data-tilt-amplitude="8"
+          class="home-portal-card pixel-card"
+          data-rb-pixel-card
+          data-pixel-variant="blue"
+          data-rb-glare
           data-goto-tab="tab-playground"
           tabindex="0"
           role="button"
           aria-label="Open Ask with Grounded Inline Citations"
         >
-          <div class="portal-top">
-            <span class="portal-step-tag" data-rb-decrypt>01 // INTERACTIVE QA</span>
-            <span class="portal-icon portal-icon-blue" aria-hidden="true">&#10022;</span>
-          </div>
-          <h4 class="portal-title">
-            <span data-rb-gradient-text data-colors="#60A5FA,#93C5FD,#C084FC" data-speed="6" data-glow="0.3">Ask &amp; Grounded Citations</span>
-          </h4>
-          <p class="portal-desc">
-            Ask natural-language questions against your indexed documents. Inspect per-chunk Dense, Sparse, RRF, and Rerank scores alongside sentence-verified <code>[n]</code> inline citations.
-          </p>
-          <ul class="portal-bullets">
-            <li>Clickable <code>[n]</code> markers linked to exact supporting quotes</li>
-            <li>Configurable retrieval mode, rerank thresholds &amp; document scope</li>
-            <li>Explicit amber abstention when documents lack evidence</li>
-          </ul>
-          <div class="portal-footer">
-            <button type="button" class="primary-btn home-portal-cta" data-goto-tab="tab-playground">
-              Launch Ask Workbench <span aria-hidden="true">&rarr;</span>
-            </button>
+          <canvas class="pixel-canvas" aria-hidden="true"></canvas>
+          <div class="portal-card-content">
+            <div class="portal-top">
+              <span class="portal-step-tag">01 / ASK</span>
+              <span class="portal-icon portal-icon-blue" aria-hidden="true">&#10022;</span>
+            </div>
+            <h3 class="portal-title">
+              <span data-rb-gradient-text data-colors="#38BDF8,#93C5FD,#818CF8" data-speed="6" data-glow="0.3">Ask &amp; Citations</span>
+            </h3>
+            <p class="portal-desc">
+              Ask questions across your documents and get grounded answers with clickable <code>[n]</code> citations, exact supporting quotes, and chunk retrieval scores.
+            </p>
+            <div class="portal-footer">
+              <button type="button" class="primary-btn home-portal-cta" data-goto-tab="tab-playground">
+                Open Ask &amp; Citations <span aria-hidden="true">&rarr;</span>
+              </button>
+            </div>
           </div>
         </article>
 
         <!-- Option 2: 40-Question Evaluation Harness -->
         <article
-          class="home-portal-card"
-          data-rb-tilted-card
-          data-tilt-amplitude="8"
+          class="home-portal-card pixel-card"
+          data-rb-pixel-card
+          data-pixel-variant="purple"
+          data-rb-glare
           data-goto-tab="tab-eval"
           tabindex="0"
           role="button"
           aria-label="Open 40-Question Evaluation Harness"
         >
-          <div class="portal-top">
-            <span class="portal-step-tag" data-rb-decrypt>02 // BENCHMARK SUITE</span>
-            <span class="portal-icon portal-icon-purple" aria-hidden="true">&#9670;</span>
-          </div>
-          <h4 class="portal-title">
-            <span data-rb-gradient-text data-colors="#C084FC,#818CF8,#38BDF8" data-speed="6" data-glow="0.3">40-Question Eval Harness</span>
-          </h4>
-          <p class="portal-desc">
-            Run automated ablation benchmarks comparing Dense-only, Sparse-only, Hybrid RRF, and Cross-Encoder Reranking across 40 ground-truth QA pairs.
-          </p>
-          <ul class="portal-bullets">
-            <li>Recall@1/3/5, MRR@5, and NDCG@5 retrieval metrics</li>
-            <li>Answer accuracy, citation recall &amp; faithfulness scoring</li>
-            <li>One-click <em>Test Live</em> from any benchmark question</li>
-          </ul>
-          <div class="portal-footer">
-            <button type="button" class="primary-btn home-portal-cta" data-goto-tab="tab-eval">
-              Open Eval Dashboard <span aria-hidden="true">&rarr;</span>
-            </button>
+          <canvas class="pixel-canvas" aria-hidden="true"></canvas>
+          <div class="portal-card-content">
+            <div class="portal-top">
+              <span class="portal-step-tag portal-step-purple">02 / EVALUATE</span>
+              <span class="portal-icon portal-icon-purple" aria-hidden="true">&#9670;</span>
+            </div>
+            <h3 class="portal-title">
+              <span data-rb-gradient-text data-colors="#C084FC,#A78BFA,#38BDF8" data-speed="6" data-glow="0.3">Evaluation (40 QA)</span>
+            </h3>
+            <p class="portal-desc">
+              Benchmark retrieval and answer quality across 40 test questions. Compare Dense, Sparse, Hybrid RRF, and Reranked pipelines side by side.
+            </p>
+            <div class="portal-footer">
+              <button type="button" class="primary-btn home-portal-cta" data-goto-tab="tab-eval">
+                Open Evaluation <span aria-hidden="true">&rarr;</span>
+              </button>
+            </div>
           </div>
         </article>
 
-        <!-- Option 3: Corpus & Document Ingestion -->
+        <!-- Option 3: Documents & Upload -->
         <article
-          class="home-portal-card"
-          data-rb-tilted-card
-          data-tilt-amplitude="8"
+          class="home-portal-card pixel-card"
+          data-rb-pixel-card
+          data-pixel-variant="emerald"
+          data-rb-glare
           data-goto-tab="tab-corpus"
           tabindex="0"
           role="button"
           aria-label="Open Documents and Upload"
         >
-          <div class="portal-top">
-            <span class="portal-step-tag" data-rb-decrypt>03 // KNOWLEDGE BASE</span>
-            <span class="portal-icon portal-icon-emerald" aria-hidden="true">&#9635;</span>
-          </div>
-          <h4 class="portal-title">
-            <span data-rb-gradient-text data-colors="#34D399,#38BDF8,#60A5FA" data-speed="6" data-glow="0.3">Documents &amp; Upload</span>
-          </h4>
-          <p class="portal-desc">
-            Browse the indexed document corpus or upload your own Markdown, text, JSON, or CSV files for instant heading-aware chunking and hybrid indexing.
-          </p>
-          <ul class="portal-bullets">
-            <li>Automatic <code># H1 / ## H2</code> hierarchy preservation</li>
-            <li>Merges tiny subsections (&lt;80 tokens) into parent sections</li>
-            <li>Idempotent upsert re-indexing without duplicate chunks</li>
-          </ul>
-          <div class="portal-footer">
-            <button type="button" class="primary-btn home-portal-cta" data-goto-tab="tab-corpus">
-              Manage Documents <span aria-hidden="true">&rarr;</span>
-            </button>
+          <canvas class="pixel-canvas" aria-hidden="true"></canvas>
+          <div class="portal-card-content">
+            <div class="portal-top">
+              <span class="portal-step-tag portal-step-emerald">03 / CORPUS</span>
+              <span class="portal-icon portal-icon-emerald" aria-hidden="true">&#9635;</span>
+            </div>
+            <h3 class="portal-title">
+              <span data-rb-gradient-text data-colors="#34D399,#38BDF8,#60A5FA" data-speed="6" data-glow="0.3">Documents &amp; Upload</span>
+            </h3>
+            <p class="portal-desc">
+              Browse indexed documents or upload new Markdown, text, JSON, or CSV files for automatic section-aware chunking and vector indexing.
+            </p>
+            <div class="portal-footer">
+              <button type="button" class="primary-btn home-portal-cta" data-goto-tab="tab-corpus">
+                Open Documents <span aria-hidden="true">&rarr;</span>
+              </button>
+            </div>
           </div>
         </article>
       </div>
 
-      <!-- Core Architecture & Features Grid -->
+      <!-- Concise 3-Column Feature Summary (React Bits GlareHover) -->
       <div class="home-section-header">
-        <span class="home-eyebrow">ARCHITECTURE HIGHLIGHTS</span>
-        <h3>Built for Verifiable Precision</h3>
+        <span class="home-eyebrow">KEY FEATURES</span>
+        <h2>How It Works</h2>
       </div>
 
       <div class="home-features-grid">
-        <div class="home-feature-card">
-          <div class="feature-tag" data-rb-decrypt>HYBRID RRF (k=60)</div>
-          <h4>Dense pgvector + Sparse FTS</h4>
+        <div class="home-feature-card" data-rb-glare>
+          <div class="feature-tag">HYBRID RETRIEVAL</div>
+          <h3>Vector + Keyword Fusion</h3>
           <p>
-            Fuses 768-dim L2-normalized cosine similarity with PostgreSQL English <code>websearch_to_tsquery</code> cover-density ranking so both exact terms and semantic concepts surface at #1.
+            Combines semantic vector similarity with full-text search using Reciprocal Rank Fusion so both exact terms and concepts rank accurately.
           </p>
         </div>
 
-        <div class="home-feature-card">
-          <div class="feature-tag" data-rb-decrypt>CONTEXT GATE</div>
-          <h4>Cross-Encoder Rerank Filtering</h4>
+        <div class="home-feature-card" data-rb-glare>
+          <div class="feature-tag">RERANK &amp; ABSTAIN</div>
+          <h3>Cross-Encoder Filtering</h3>
           <p>
-            Applies <code>ms-marco-MiniLM-L-6-v2</code> with a calibrated minimum floor (<code>0.25</code>), relative ratio cutoff (<code>0.60 &times; top</code>), and content-hash deduplication before LLM generation.
+            Scores candidate chunks with a cross-encoder and automatically abstains when no document contains sufficient evidence.
           </p>
         </div>
 
-        <div class="home-feature-card">
-          <div class="feature-tag" data-rb-decrypt>CLAIM VERIFICATION</div>
-          <h4>Sentence-Level Grounded Quotes</h4>
+        <div class="home-feature-card" data-rb-glare>
+          <div class="feature-tag">GROUNDED CITATIONS</div>
+          <h3>Verified Inline Quotes</h3>
           <p>
-            Every <code>[n]</code> citation in the Gemini response is checked against the highest-similarity sentence inside chunk <code>n</code>, reporting verified claim counts and exact quotes.
-          </p>
-        </div>
-
-        <div class="home-feature-card">
-          <div class="feature-tag" data-rb-decrypt>GUARDRAILS</div>
-          <h4>Strict Abstention &amp; Real Telemetry</h4>
-          <p>
-            When top reranked evidence falls below the threshold, the pipeline skips LLM generation and returns a clean abstention state — never pasting raw unrelated chunks.
+            Every <code>[n]</code> citation is matched against the source chunk sentence to surface the exact supporting quote and similarity badge.
           </p>
         </div>
       </div>
