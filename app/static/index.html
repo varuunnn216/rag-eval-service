@@ -3,90 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RAG Service &amp; Evaluation Harness Workbench</title>
+  <title>RAG Workbench</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <!-- REACT BITS: GradientASCII Full-Viewport Interactive Canvas Background -->
-  <canvas id="gradient-ascii-bg" class="gradient-ascii-canvas" aria-hidden="true"></canvas>
-
   <header class="topbar">
     <div class="topbar-brand">
       <div class="logo-badge" aria-hidden="true">RAG</div>
       <div>
-        <h1 data-ascii-heading="RAG SERVICE // EVAL HARNESS">RAG SERVICE // EVAL HARNESS</h1>
-        <p class="subtitle">FastAPI &bull; pgvector HNSW &bull; Hybrid RRF &bull; Cross-Encoder Reranking &bull; Claim-Verified Citations</p>
+        <h1>RAG Workbench</h1>
+        <p class="subtitle">Grounded QA with Verified Citations</p>
       </div>
     </div>
     <div class="system-pills" id="health-pills" aria-live="polite">
-      <span class="pill pill-ok"><span class="dot"></span> System Online</span>
-      <span class="pill" id="pill-docs">Loading Corpus...</span>
-      <span class="pill" id="pill-models">Gemini &bull; MiniLM CrossEncoder</span>
-      <button type="button" class="pill pill-fx-toggle" id="ascii-fx-toggle" aria-pressed="true" title="Toggle Gradient ASCII &amp; ASCII Text Animations">
-        ASCII FX: ON
-      </button>
+      <span class="pill pill-ok"><span class="dot"></span> Online</span>
+      <span class="pill" id="pill-docs">7 Docs</span>
+      <span class="pill" id="pill-models">gemini-3.5-flash-lite</span>
     </div>
   </header>
 
-  <nav class="tab-nav" role="tablist" aria-label="Workbench Sections">
+  <nav class="tab-nav" role="tablist" aria-label="Main Navigation">
     <button class="tab-btn active" role="tab" aria-selected="true" data-tab="tab-playground">
-      1. Ask with Grounded Inline Citations
+      Ask &amp; Citations
     </button>
     <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-eval">
-      2. 40-Question Eval Harness
+      Evaluation (40 QA)
     </button>
     <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-corpus">
-      3. Corpus &amp; Document Ingestion
+      Documents &amp; Upload
     </button>
   </nav>
 
   <main class="container">
-    <!-- =====================================================================
-         REACT BITS HOME HERO BANNER (ASCIIText + TiltedCards + Spotlight)
-         ===================================================================== -->
-    <section class="ascii-hero-banner" id="ascii-hero-banner" aria-label="RAG Architecture Hero">
-      <div class="hero-top-grid">
-        <div class="hero-left">
-          <div class="shiny-pill">
-            <span class="ascii-bracket">[</span>
-            <span class="shiny-text">REACT BITS // GRADIENT ASCII &amp; ASCII TEXT</span>
-            <span class="ascii-bracket">]</span>
-          </div>
-          <div class="ascii-hero-stage" id="ascii-hero-stage" title="Hover to tilt &amp; scramble • Click to cycle ASCII title">
-            <canvas id="ascii-hero-canvas" height="128" aria-label="RAG // EVAL Interactive ASCII Heading"></canvas>
-            <div class="ascii-stage-hint">HOVER TO SCRAMBLE &bull; CLICK TO CYCLE GLYPHS [RAG // EVAL &rarr; PGVECTOR &rarr; HYBRID RRF]</div>
-          </div>
-          <p class="hero-lead" data-ascii-heading="Production Hybrid Retrieval + Cross-Encoder Reranking + Claim-Level Grounded Citations">
-            Production Hybrid Retrieval + Cross-Encoder Reranking + Claim-Level Grounded Citations
-          </p>
-        </div>
-
-        <!-- 4 Interactive 3D TiltedCards (@react-bits/TiltedCard + SpotlightCard) -->
-        <div class="hero-tilt-grid">
-          <div class="tilt-card" data-rb-tilt>
-            <div class="tilt-ascii-tag">[01 // DENSE_HNSW]</div>
-            <div class="tilt-title" data-ascii-heading="pgvector Cosine">pgvector Cosine</div>
-            <div class="tilt-desc">768-dim L2-normalized embeddings with HNSW graph index (<code>1 - &lt;=&gt;</code>).</div>
-          </div>
-          <div class="tilt-card" data-rb-tilt>
-            <div class="tilt-ascii-tag">[02 // SPARSE_FTS]</div>
-            <div class="tilt-title" data-ascii-heading="Hybrid RRF (k=60)">Hybrid RRF (k=60)</div>
-            <div class="tilt-desc">English <code>websearch_to_tsquery</code> cover-density fused via Reciprocal Rank Fusion.</div>
-          </div>
-          <div class="tilt-card" data-rb-tilt>
-            <div class="tilt-ascii-tag">[03 // RERANK_GATE]</div>
-            <div class="tilt-title" data-ascii-heading="Cross-Encoder Gate">Cross-Encoder Gate</div>
-            <div class="tilt-desc">Unified abstain floor (<code>0.25</code>) &amp; relative ratio (<code>0.60 &times; top</code>) before LLM call.</div>
-          </div>
-          <div class="tilt-card" data-rb-tilt>
-            <div class="tilt-ascii-tag">[04 // CLAIM_VERIFY]</div>
-            <div class="tilt-title" data-ascii-heading="Verified Citations">Verified Citations</div>
-            <div class="tilt-desc">Sentence-level claim similarity checks with exact supporting quotes.</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- =====================================================================
          TAB 1: ASK WITH GROUNDED INLINE CITATIONS
          ===================================================================== -->
@@ -96,11 +47,8 @@
       <details class="collapsible-section" id="section-ask" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">01</span>
-            <div>
-              <h2><span class="ascii-prefix">//</span> <span data-ascii-heading="ASK_PIPELINE">ASK_PIPELINE</span></h2>
-              <p class="section-subtitle">Query the indexed corpus with claim-level citation verification</p>
-            </div>
+            <span class="section-step-num">1</span>
+            <h2>Ask a Question</h2>
           </div>
           <span class="chevron-icon" aria-hidden="true"></span>
         </summary>
@@ -111,13 +59,13 @@
               <label for="question-input" class="sr-only">Question</label>
               <textarea
                 id="question-input"
-                rows="3"
-                placeholder="Ask a question grounded in your indexed documents (Press Cmd/Ctrl + Enter to run)..."
+                rows="2"
+                placeholder="Ask a question about your documents..."
                 required
               >What time does the cafe open on Sunday?</textarea>
               <div class="textarea-actions">
-                <span class="shortcut-hint">Press <kbd>⌘/Ctrl</kbd> + <kbd>Enter</kbd> to run</span>
-                <button type="submit" id="ask-submit-btn" class="primary-btn star-border-btn">
+                <span class="shortcut-hint"><kbd>⌘/Ctrl</kbd> + <kbd>Enter</kbd> to run</span>
+                <button type="submit" id="ask-submit-btn" class="primary-btn">
                   <span id="ask-submit-label">Run</span>
                   <kbd class="btn-kbd">⌘↵</kbd>
                 </button>
@@ -125,41 +73,39 @@
             </div>
           </form>
 
-          <!-- Sample Query Chips -->
+          <!-- Compact Sample Query Chips -->
           <div class="sample-queries-block" aria-label="Sample Queries">
-            <div class="sample-queries-label">Sample Queries (click to test):</div>
             <div class="sample-chips-grid">
               <button type="button" class="sample-chip" data-preset="What time does the cafe open on Sunday?">
-                <span class="chip-title">Bluebird: Sunday Opening Time</span>
-                <span class="chip-tag">Tests: Exact Fact Lookup &bull; chunk_000</span>
+                <span class="chip-title">Sunday Opening Time</span>
+                <span class="chip-tag">Exact Lookup</span>
               </button>
               <button type="button" class="sample-chip" data-preset="A customer wants a 700 rupee refund. Who must approve it?">
-                <span class="chip-title">Bluebird: ₹700 Refund Approval</span>
-                <span class="chip-tag">Tests: Threshold Reasoning &bull; Refund Policy</span>
+                <span class="chip-title">₹700 Refund Approval</span>
+                <span class="chip-tag">Policy Rule</span>
               </button>
               <button type="button" class="sample-chip chip-trap" data-preset="What is the wifi password?">
-                <span class="chip-title">Bluebird: Wifi Password</span>
-                <span class="chip-tag">Tests: Unanswerable Trap &bull; Abstention Guard</span>
+                <span class="chip-title">Wifi Password</span>
+                <span class="chip-tag">Unanswerable Trap</span>
               </button>
               <button type="button" class="sample-chip" data-preset="How should a barista handle a customer who reports a nut allergy?">
-                <span class="chip-title">Bluebird: Nut Allergy Handling</span>
-                <span class="chip-tag">Tests: Multi-Clause Safety Protocol &bull; Allergy Safety</span>
+                <span class="chip-title">Nut Allergy Handling</span>
+                <span class="chip-tag">Safety Protocol</span>
               </button>
               <button type="button" class="sample-chip" data-preset="What are the default values of m and ef_construction when creating a pgvector HNSW index?">
-                <span class="chip-title">pgvector: HNSW Build Defaults</span>
-                <span class="chip-tag">Tests: Technical Identifiers &bull; Hybrid RRF</span>
+                <span class="chip-title">pgvector HNSW Defaults</span>
+                <span class="chip-tag">Technical Lookup</span>
               </button>
               <button type="button" class="sample-chip" data-preset="Why does Reciprocal Rank Fusion use rank positions rather than adding raw cosine and ts_rank_cd scores directly?">
-                <span class="chip-title">Hybrid Search: RRF Score Calibration</span>
-                <span class="chip-tag">Tests: Conceptual Explanation &bull; Cross-Encoder</span>
+                <span class="chip-title">RRF Score Fusion</span>
+                <span class="chip-tag">Conceptual</span>
               </button>
             </div>
           </div>
 
-          <!-- Inline Loading Indicator inside Ask Section -->
           <div id="ask-inline-loading" class="inline-loading-bar hidden" role="status" aria-live="polite">
             <div class="spinner"></div>
-            <span>Executing hybrid retrieval, cross-encoder reranking, and grounded Gemini generation...</span>
+            <span>Retrieving context and generating grounded answer...</span>
           </div>
         </div>
       </details>
@@ -168,18 +114,11 @@
       <details class="collapsible-section" id="section-settings">
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">02</span>
-            <div>
-              <h2>
-                <span class="ascii-prefix">//</span>
-                <span data-ascii-heading="PIPELINE_SETTINGS">PIPELINE_SETTINGS</span>
-                <span class="advanced-tag">Advanced</span>
-              </h2>
-              <p class="section-subtitle">Configure retrieval mode, document scope, reranker thresholds, and LLM parameters</p>
-            </div>
+            <span class="section-step-num">2</span>
+            <h2>Pipeline Settings <span class="advanced-tag">Advanced</span></h2>
           </div>
           <div class="summary-right">
-            <span id="settings-diff-summary" class="diff-summary-pill">Defaults active</span>
+            <span id="settings-diff-summary" class="diff-summary-pill">Defaults</span>
             <span class="chevron-icon" aria-hidden="true"></span>
           </div>
         </summary>
@@ -187,7 +126,7 @@
         <div class="section-body">
           <div class="settings-toolbar">
             <div id="modified-settings-list" class="modified-list-text">
-              All pipeline parameters match calibrated defaults.
+              Using default pipeline settings.
             </div>
             <button type="button" id="reset-settings-btn" class="secondary-btn">
               Reset to defaults
@@ -203,16 +142,15 @@
               </div>
               <select id="mode-select">
                 <option value="hybrid" selected>Hybrid RRF (Dense + Sparse)</option>
-                <option value="dense">Dense only (pgvector HNSW)</option>
-                <option value="sparse">Sparse only (English tsvector)</option>
+                <option value="dense">Dense only (pgvector)</option>
+                <option value="sparse">Sparse only (tsvector)</option>
               </select>
-              <span class="helper-text">Fuses cosine similarity and English lexical cover-density (`k=60`).</span>
             </div>
 
             <!-- Control 2: Cross-Encoder Reranker Toggle Switch -->
             <div class="control-card" data-setting-card="useReranker">
               <div class="control-header">
-                <label for="reranker-toggle" class="control-label">Cross-Encoder Reranker</label>
+                <label for="reranker-toggle" class="control-label">Reranker</label>
                 <span class="diff-badge hidden" id="diff-useReranker">Modified</span>
               </div>
               <div class="toggle-row">
@@ -222,7 +160,7 @@
                 </label>
                 <span id="reranker-state-label" class="toggle-status-text">Enabled</span>
               </div>
-              <span class="helper-text" id="reranker-model-helper">Model: <code>cross-encoder/ms-marco-MiniLM-L-6-v2</code></span>
+              <span class="helper-text" id="reranker-model-helper"><code>ms-marco-MiniLM-L-6-v2</code></span>
             </div>
 
             <!-- Control 3: Document Scope Multi-Select Dropdown -->
@@ -242,24 +180,20 @@
                   <span id="doc-scope-summary">All documents</span>
                   <span class="dropdown-caret" aria-hidden="true">&#9662;</span>
                 </button>
-                <div id="doc-scope-menu" class="multiselect-menu hidden" role="listbox" aria-multiselectable="true">
-                  <!-- Populated dynamically from GET /api/v1/documents -->
-                </div>
+                <div id="doc-scope-menu" class="multiselect-menu hidden" role="listbox" aria-multiselectable="true"></div>
               </div>
-              <span class="helper-text">Filter retrieval to specific ingested documents or search across all.</span>
             </div>
 
             <!-- Control 4: Top-K Chunks (1-10) -->
             <div class="control-card" data-setting-card="topK">
               <div class="control-header">
                 <label for="topk-slider" class="control-label">
-                  Top-K Retrieved: <strong id="topk-val">5</strong>
+                  Top-K: <strong id="topk-val">5</strong>
                 </label>
                 <span class="diff-badge hidden" id="diff-topK">Modified</span>
               </div>
               <input type="range" id="topk-slider" min="1" max="10" step="1" value="5" />
               <div class="range-scale"><span>1</span><span>5</span><span>10</span></div>
-              <span class="helper-text">Number of reranked chunks returned for inspection (`1–10`).</span>
             </div>
 
             <!-- Control 5: Candidate Pool (5-50, >= Top-K) -->
@@ -272,14 +206,13 @@
               </div>
               <input type="range" id="pool-slider" min="5" max="50" step="1" value="20" />
               <div class="range-scale"><span>5</span><span>25</span><span>50</span></div>
-              <span class="helper-text" id="pool-helper-text">Initial retrieval pool before reranking (enforced &ge; Top-K).</span>
             </div>
 
             <!-- Control 6: Unified Rerank Min Score & Abstain Floor Slider + Tooltip -->
             <div class="control-card" data-setting-card="rerankMinScore">
               <div class="control-header">
                 <label for="rerank-min-slider" class="control-label">
-                  Min Score &amp; Abstain Floor: <strong id="rerank-min-val">0.25</strong>
+                  Min Score / Abstain: <strong id="rerank-min-val">0.25</strong>
                 </label>
                 <div class="header-badges">
                   <span class="diff-badge hidden" id="diff-rerankMinScore">Modified</span>
@@ -287,77 +220,70 @@
                     <span class="tooltip-icon">?</span>
                     <span class="tooltip-popup" role="tooltip">
                       <strong>Unified Min Score &amp; Abstain Floor:</strong><br/>
-                      Merges the pre-LLM abstain floor and minimum chunk threshold into one rule:<br/>
-                      1. If the <strong>top-1</strong> chunk scores below this value, the pipeline immediately abstains without calling the LLM.<br/>
-                      2. Subsequent chunks (2..N) must also score &ge; this threshold to be selected.
+                      If top-1 is below this score, the pipeline abstains immediately. Chunks 2..N must also score &ge; this value.
                     </span>
                   </span>
                 </div>
               </div>
               <input type="range" id="rerank-min-slider" min="0.05" max="0.70" step="0.05" value="0.25" />
-              <div class="range-scale"><span>0.05</span><span>0.25 (Calibrated)</span><span>0.70</span></div>
-              <span class="helper-text">Abstains if top-1 &lt; threshold; drops rank 2..N below threshold.</span>
+              <div class="range-scale"><span>0.05</span><span>0.25</span><span>0.70</span></div>
             </div>
 
             <!-- Control 7: Rerank Ratio vs Top Score Slider + Tooltip -->
             <div class="control-card" data-setting-card="rerankRelativeFactor">
               <div class="control-header">
                 <label for="rerank-ratio-slider" class="control-label">
-                  Ratio vs. Top Score: <strong id="rerank-ratio-val">0.60</strong>
+                  Ratio vs. Top: <strong id="rerank-ratio-val">0.60</strong>
                 </label>
                 <div class="header-badges">
                   <span class="diff-badge hidden" id="diff-rerankRelativeFactor">Modified</span>
                   <span class="tooltip-wrap" tabindex="0" aria-label="Explanation of ratio versus top score">
                     <span class="tooltip-icon">?</span>
                     <span class="tooltip-popup" role="tooltip">
-                      <strong>Relative Cutoff vs. Top-1:</strong><br/>
-                      Chunks 2..N are kept only when <code>score &ge; Ratio &times; top_1_score</code>. Prevents weak secondary chunks from diluting a strong top-1 match.
+                      <strong>Relative Cutoff:</strong><br/>
+                      Chunks 2..N must score &ge; <code>Ratio &times; Top-1 Score</code> to be included.
                     </span>
                   </span>
                 </div>
               </div>
               <input type="range" id="rerank-ratio-slider" min="0.20" max="0.95" step="0.05" value="0.60" />
               <div class="range-scale"><span>0.20</span><span>0.60</span><span>0.95</span></div>
-              <span class="helper-text">Requires secondary chunks to score &ge; <code>ratio &times; top_score</code>.</span>
             </div>
 
             <!-- Control 8: Max Context Chunks Slider + Tooltip -->
             <div class="control-card" data-setting-card="rerankMaxChunks">
               <div class="control-header">
                 <label for="rerank-max-slider" class="control-label">
-                  Max Context Chunks: <strong id="rerank-max-val">3</strong>
+                  Max Chunks: <strong id="rerank-max-val">3</strong>
                 </label>
                 <div class="header-badges">
                   <span class="diff-badge hidden" id="diff-rerankMaxChunks">Modified</span>
                   <span class="tooltip-wrap" tabindex="0" aria-label="Explanation of max context chunks cap">
                     <span class="tooltip-icon">?</span>
                     <span class="tooltip-popup" role="tooltip">
-                      <strong>Context Window Cap:</strong><br/>
-                      Maximum number of deduplicated chunks sent to the LLM after threshold filtering (default 3).
+                      Maximum number of chunks passed to the LLM prompt.
                     </span>
                   </span>
                 </div>
               </div>
               <input type="range" id="rerank-max-slider" min="1" max="6" step="1" value="3" />
               <div class="range-scale"><span>1</span><span>3</span><span>6</span></div>
-              <span class="helper-text">Hard cap on selected chunks passed into the LLM prompt.</span>
             </div>
 
             <!-- Control 9: LLM Model + Temperature -->
             <div class="control-card" data-setting-card="llmModelTemp">
               <div class="control-header">
                 <label for="llm-model-select" class="control-label">
-                  LLM Model &amp; Temp (<strong id="temp-val">0.00</strong>)
+                  LLM &amp; Temp (<strong id="temp-val">0.00</strong>)
                 </label>
                 <span class="diff-badge hidden" id="diff-llmModelTemp">Modified</span>
               </div>
               <select id="llm-model-select" class="compact-select">
-                <option value="gemini-3.5-flash-lite" selected>gemini-3.5-flash-lite (Fast Grounded Default)</option>
-                <option value="gemini-2.5-flash">gemini-2.5-flash (Auto-Upgrades if Deprecated)</option>
+                <option value="gemini-3.5-flash-lite" selected>gemini-3.5-flash-lite</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
                 <option value="gemini-3.8-flash">gemini-3.8-flash</option>
               </select>
               <input type="range" id="temperature-slider" min="0.0" max="1.0" step="0.05" value="0.0" aria-label="LLM Temperature" />
-              <div class="range-scale"><span>0.0 (Deterministic)</span><span>0.5</span><span>1.0</span></div>
             </div>
           </div>
         </div>
@@ -367,11 +293,8 @@
       <details class="collapsible-section" id="section-answer" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">03</span>
-            <div>
-              <h2><span class="ascii-prefix">//</span> <span data-ascii-heading="GROUNDED_ANSWER">GROUNDED_ANSWER</span></h2>
-              <p class="section-subtitle">Grounded synthesis with clickable <code>[n]</code> markers linked to verified citations</p>
-            </div>
+            <span class="section-step-num">3</span>
+            <h2>Answer</h2>
           </div>
           <div class="summary-right">
             <span id="answer-state-pill" class="state-pill">Ready</span>
@@ -380,21 +303,17 @@
         </summary>
 
         <div class="section-body">
-          <!-- Loading Skeleton -->
           <div id="answer-loading" class="skeleton-block hidden" aria-hidden="true">
             <div class="skeleton-line w-85"></div>
             <div class="skeleton-line w-65"></div>
           </div>
 
-          <!-- Empty State -->
           <div id="answer-empty" class="empty-state-box">
-            Enter a question above and click <strong>Run</strong> (or choose a sample chip) to generate a grounded answer.
+            Enter a question above and click <strong>Run</strong>.
           </div>
 
-          <!-- Error State -->
           <div id="answer-error" class="error-callout hidden" role="alert"></div>
 
-          <!-- Distinct Amber Abstention Callout -->
           <div id="answer-abstain-box" class="abstain-callout hidden" role="status">
             <div class="abstain-icon" aria-hidden="true">&#9888;</div>
             <div>
@@ -406,10 +325,8 @@
             </div>
           </div>
 
-          <!-- Normal Grounded Answer Box -->
           <div id="answer-output" class="answer-box hidden"></div>
 
-          <!-- Action Buttons & Collapsible Prompt Viewer -->
           <div class="answer-actions-bar">
             <div class="action-buttons-left">
               <button type="button" id="copy-answer-btn" class="secondary-btn" disabled>
@@ -431,11 +348,8 @@
       <details class="collapsible-section" id="section-citations" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">04</span>
-            <div>
-              <h2><span class="ascii-prefix">//</span> <span data-ascii-heading="VERIFIED_CITATIONS">VERIFIED_CITATIONS</span></h2>
-              <p class="section-subtitle">Claim-level verification matching each answer sentence against supporting chunk sentences</p>
-            </div>
+            <span class="section-step-num">4</span>
+            <h2>Citations</h2>
           </div>
           <div class="summary-right">
             <span id="citation-count" class="state-pill">Verified 0/0 citations</span>
@@ -458,11 +372,8 @@
       <details class="collapsible-section" id="section-context" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">05</span>
-            <div>
-              <h2><span class="ascii-prefix">//</span> <span data-ascii-heading="RETRIEVED_CONTEXT">RETRIEVED_CONTEXT</span> (<span id="chunk-count">0</span>)</h2>
-              <p class="section-subtitle">Candidate chunks with USED / DROPPED selection status, reasons, and multi-stage score bars</p>
-            </div>
+            <span class="section-step-num">5</span>
+            <h2>Retrieved Context (<span id="chunk-count">0</span>)</h2>
           </div>
           <div class="summary-right">
             <span id="context-used-summary" class="state-pill">0 used / 0 retrieved</span>
@@ -472,7 +383,6 @@
 
         <div class="section-body">
           <div class="context-toolbar">
-            <span class="muted-text">Each card shows Dense, Sparse, RRF, and Cross-Encoder Rerank scores + ranks.</span>
             <div class="sort-toggle-group" role="group" aria-label="Sort retrieved chunks">
               <span class="sort-label">Sort by:</span>
               <button type="button" class="sort-btn active" data-sort="final_rank" id="sort-final-btn">
@@ -490,7 +400,7 @@
           </div>
           <div id="chunks-error" class="error-callout hidden"></div>
           <div id="chunks-list" class="chunks-list">
-            <div class="empty-state-box">Run a query to inspect retrieved and reranked chunks.</div>
+            <div class="empty-state-box">Run a query to inspect retrieved chunks.</div>
           </div>
         </div>
       </details>
@@ -499,11 +409,8 @@
       <details class="collapsible-section" id="section-metrics" open>
         <summary class="section-summary">
           <div class="section-title-group">
-            <span class="section-step-num">06</span>
-            <div>
-              <h2><span class="ascii-prefix">//</span> <span data-ascii-heading="RUN_METRICS">RUN_METRICS</span></h2>
-              <p class="section-subtitle">Per-request stage latencies and LLM token telemetry</p>
-            </div>
+            <span class="section-step-num">6</span>
+            <h2>Run Metrics</h2>
           </div>
           <div class="summary-right">
             <span id="metrics-total-pill" class="state-pill">0 ms</span>
@@ -518,9 +425,9 @@
           <div id="metrics-error" class="error-callout hidden"></div>
           <div id="metrics-grid" class="metrics-grid">
             <div class="metric-card">
-              <div class="metric-label">Retrieval + Rerank</div>
+              <div class="metric-label">Retrieval</div>
               <div class="metric-value" id="metric-retrieval-ms">&mdash;</div>
-              <div class="metric-sub" id="metric-rerank-sub">Hybrid RRF + Cross-Encoder</div>
+              <div class="metric-sub" id="metric-rerank-sub">Rerank: 0 ms</div>
             </div>
             <div class="metric-card">
               <div class="metric-label">LLM Generation</div>
@@ -528,12 +435,12 @@
               <div class="metric-sub" id="metric-model-sub">gemini-3.5-flash-lite</div>
             </div>
             <div class="metric-card">
-              <div class="metric-label">Total Latency</div>
+              <div class="metric-label">Total Time</div>
               <div class="metric-value" id="metric-total-ms">&mdash;</div>
-              <div class="metric-sub" id="metric-status-sub">End-to-end pipeline</div>
+              <div class="metric-sub" id="metric-status-sub">End-to-end</div>
             </div>
             <div class="metric-card">
-              <div class="metric-label">Total Tokens</div>
+              <div class="metric-label">Tokens</div>
               <div class="metric-value" id="metric-tokens-total">&mdash;</div>
               <div class="metric-sub" id="metric-tokens-sub">Prompt: 0 &bull; Completion: 0</div>
             </div>
@@ -549,25 +456,25 @@
       <div class="card">
         <div class="card-header-row">
           <div>
-            <h2>40-Question Golden Evaluation Harness</h2>
+            <h2>40-Question Evaluation Harness</h2>
             <p class="muted-text">
-              Benchmarks retrieval (Recall@K, MRR@5, NDCG@5) and generation (Answer Accuracy, Faithfulness, Citation Precision/Recall, Abstention) across 4 ablation configurations.
+              Retrieval (Recall@K, MRR@5, NDCG@5) and generation accuracy across 4 ablation configurations.
             </p>
           </div>
           <div class="eval-actions">
             <select id="ablation-config-select" aria-label="Select Ablation Configuration">
-              <option value="hybrid_rrf_rerank" selected>View Details: Hybrid (RRF) + Cross-Encoder Rerank</option>
-              <option value="hybrid_rrf">View Details: Hybrid Search (RRF)</option>
-              <option value="sparse_only">View Details: Sparse Only (tsvector)</option>
-              <option value="dense_only">View Details: Dense Only (pgvector)</option>
+              <option value="hybrid_rrf_rerank" selected>Hybrid (RRF) + Cross-Encoder Rerank</option>
+              <option value="hybrid_rrf">Hybrid Search (RRF)</option>
+              <option value="sparse_only">Sparse Only (tsvector)</option>
+              <option value="dense_only">Dense Only (pgvector)</option>
             </select>
-            <button id="run-eval-btn" class="primary-btn">Re-Run All 40 Questions</button>
+            <button id="run-eval-btn" class="primary-btn">Re-Run 40 Questions</button>
           </div>
         </div>
 
         <div id="eval-kpi-grid" class="kpi-grid"></div>
 
-        <h3>Ablation Comparison Scorecard</h3>
+        <h3>Ablation Comparison</h3>
         <div class="table-wrap">
           <table class="data-table" id="ablation-table">
             <thead>
@@ -589,13 +496,13 @@
           </table>
         </div>
 
-        <h3>Breakdown by Question Category</h3>
+        <h3>By Question Category</h3>
         <div id="category-cards" class="category-grid"></div>
       </div>
 
       <div class="card">
         <div class="card-header-row">
-          <h3>Per-Question Evaluation Inspector (40 Golden QA Pairs)</h3>
+          <h3>Per-Question Results</h3>
           <div class="filter-bar">
             <select id="eval-category-filter" aria-label="Filter by Question Category">
               <option value="all">All Categories (40)</option>
@@ -604,7 +511,7 @@
               <option value="multi_hop">Multi-Hop Synthesis (7)</option>
               <option value="unanswerable">Unanswerable Trap (5)</option>
             </select>
-            <input type="text" id="eval-search-filter" placeholder="Filter questions or chunk IDs..." aria-label="Search Evaluation Questions" />
+            <input type="text" id="eval-search-filter" placeholder="Filter questions..." aria-label="Search Evaluation Questions" />
           </div>
         </div>
         <div class="table-wrap">
@@ -636,48 +543,45 @@
         <div class="col-answer">
           <div class="card">
             <div class="card-header-row">
-              <h3>Indexed Technical Corpus</h3>
-              <button id="refresh-docs-btn" class="secondary-btn">Refresh List</button>
+              <h3>Indexed Documents</h3>
+              <button id="refresh-docs-btn" class="secondary-btn">Refresh</button>
             </div>
-            <p class="muted-text">
-              Documents are split along Markdown heading hierarchies (<code>H1 &gt; H2 &gt; H3</code>) with a 350-token window, 50-token overlap, and automatic merging of subsections under ~80 tokens into their parent section.
-            </p>
             <div id="documents-list" class="documents-list"></div>
           </div>
         </div>
 
         <div class="col-chunks">
           <div class="card">
-            <h3>Upload or Paste a Document (<code>POST /api/v1/ingest</code>)</h3>
+            <h3>Upload or Paste a Document</h3>
             <p class="muted-text">
-              Upload a file (<code>.md</code>, <code>.txt</code>, <code>.json</code>, <code>.csv</code>, <code>.py</code>) or paste Markdown below. Title falls back from <strong>Form Title &rarr; Markdown H1 &rarr; Filename</strong>.
+              Upload a file or paste Markdown below to index it into the search corpus.
             </p>
             <div class="file-upload-dropzone" id="file-dropzone">
               <input type="file" id="file-upload-input" accept=".md,.txt,.markdown,.json,.csv,.py,.log,.yaml,.yml,.html" aria-label="Upload document file" />
               <div class="dropzone-label">
-                <strong>Choose a file from your Mac</strong> or drag &amp; drop it here
-                <div class="muted-text" id="uploaded-file-status">Supports .md, .txt, .json, .csv, .py, .yaml</div>
+                <strong>Choose a file</strong> or drag &amp; drop it here
+                <div class="muted-text" id="uploaded-file-status">.md, .txt, .json, .csv, .py, .yaml</div>
               </div>
             </div>
             <form id="ingest-form" class="ingest-form">
               <label>
-                <span>Document ID (optional &mdash; falls back to filename slug if empty)</span>
+                <span>Document ID (optional)</span>
                 <input type="text" id="ingest-id" placeholder="e.g. doc_08_bluebird_cafe" value="" />
               </label>
               <label>
-                <span>Document Title (optional &mdash; falls back to H1 heading, then filename)</span>
-                <input type="text" id="ingest-title" placeholder="Leave blank to auto-detect from # H1 or filename" value="" />
+                <span>Document Title (optional &mdash; falls back to # H1, then filename)</span>
+                <input type="text" id="ingest-title" placeholder="e.g. Bluebird Cafe Staff Handbook" value="" />
               </label>
               <label>
-                <span>Source Path / URL (optional &mdash; falls back to filename if empty)</span>
+                <span>Source (optional)</span>
                 <input type="text" id="ingest-source" placeholder="e.g. upload/08_bluebird_cafe.md" value="" />
               </label>
               <label>
-                <span>Markdown Content</span>
-                <textarea id="ingest-content" rows="9" required placeholder="Paste Markdown content or choose a file above..."></textarea>
+                <span>Content</span>
+                <textarea id="ingest-content" rows="8" required placeholder="Paste Markdown content or choose a file above..."></textarea>
               </label>
               <button type="submit" id="ingest-submit-btn" class="primary-btn">
-                Chunk, Embed &amp; Index Document
+                Index Document
               </button>
               <div id="ingest-feedback" class="ingest-feedback hidden" role="status"></div>
             </form>
@@ -687,7 +591,6 @@
     </section>
   </main>
 
-  <script src="/static/reactbits_fx.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

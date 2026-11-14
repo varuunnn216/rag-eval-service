@@ -61,11 +61,10 @@ async function fetchHealth() {
     const docsPill = document.getElementById("pill-docs");
     const modelsPill = document.getElementById("pill-models");
     if (docsPill) {
-      docsPill.textContent = `${data.documents_count} Docs / ${data.chunks_count} Chunks`;
+      docsPill.textContent = `${data.documents_count} Docs`;
     }
     if (modelsPill) {
-      const rerankShort = (data.reranker_model || "").split("/").pop();
-      modelsPill.textContent = `${data.generation_model} • ${rerankShort}`;
+      modelsPill.textContent = `${data.generation_model}`;
     }
     const helper = document.getElementById("reranker-model-helper");
     if (helper && data.reranker_model) {
@@ -639,13 +638,13 @@ function renderCitationsSection(data, citSummary) {
     .map((c) => {
       const sim = Number(c.similarity_score || 0);
       let badgeClass = "sim-red";
-      let badgeText = `LOW SIMILARITY • UNVERIFIED (${sim.toFixed(2)})`;
+      let badgeText = `Unverified (${sim.toFixed(2)})`;
       if (c.verified && sim >= 0.5) {
         badgeClass = "sim-green";
-        badgeText = `HIGH SIMILARITY • VERIFIED (${sim.toFixed(2)})`;
+        badgeText = `Verified (${sim.toFixed(2)})`;
       } else if (c.verified && sim >= 0.25) {
         badgeClass = "sim-amber";
-        badgeText = `MODERATE SIMILARITY • VERIFIED (${sim.toFixed(2)})`;
+        badgeText = `Verified (${sim.toFixed(2)})`;
       }
 
       return `
@@ -712,24 +711,24 @@ function renderChunksSection(data) {
       const denseVal = c.dense_score != null ? Math.max(0, Number(c.dense_score)) : 0;
       const densePct = Math.min(100, Math.round(denseVal * 100));
       const denseLabel =
-        c.dense_rank != null ? `#${c.dense_rank} (${denseVal.toFixed(3)})` : "—";
+        c.dense_rank != null ? `#${c.dense_rank} (${denseVal.toFixed(2)})` : "—";
 
       const sparseVal = c.sparse_score != null ? Math.max(0, Number(c.sparse_score)) : 0;
       const sparsePct = Math.min(100, Math.round(sparseVal * 100));
       const sparseLabel =
-        c.sparse_rank != null ? `#${c.sparse_rank} (${sparseVal.toFixed(3)})` : "—";
+        c.sparse_rank != null ? `#${c.sparse_rank} (${sparseVal.toFixed(2)})` : "—";
 
       const rrfVal = Number(c.rrf_score || 0);
       const rrfPct = rrfVal > 0 ? Math.min(100, Math.round((rrfVal / maxRrf) * 100)) : 0;
-      const rrfLabel = rrfVal > 0 ? `#${c._finalRank} (${rrfVal.toFixed(4)})` : "—";
+      const rrfLabel = rrfVal > 0 ? `#${c._finalRank} (${rrfVal.toFixed(3)})` : "—";
 
       const rerankVal = c.rerank_score != null ? Math.max(0, Number(c.rerank_score)) : null;
       const rerankPct = rerankVal != null ? Math.min(100, Math.round(rerankVal * 100)) : 0;
       const rerankLabel =
-        rerankVal != null ? `#${c._finalRank} (${rerankVal.toFixed(4)})` : "Disabled";
+        rerankVal != null ? `#${c._finalRank} (${rerankVal.toFixed(3)})` : "Off";
 
       const contentId = `chunk-text-${c._finalRank}`;
-      const needsExpand = (c.content || "").length > 160;
+      const needsExpand = (c.content || "").length > 180;
 
       return `
         <div class="chunk-card" id="chunk-card-${cardIdNum}">
@@ -737,7 +736,7 @@ function renderChunksSection(data) {
             <div class="chunk-header-left">
               ${statusBadge}
               <strong>${escapeHtml(c.document_title)}</strong>
-              <span class="muted-text" style="font-size:0.76rem;">Rank #${c._finalRank} &bull; ${c.token_count} tokens</span>
+              <span class="muted-text" style="font-size:0.78rem;">Rank #${c._finalRank}</span>
             </div>
             <span class="chunk-id-tag">${escapeHtml(c.chunk_id)}</span>
           </div>
@@ -755,19 +754,19 @@ function renderChunksSection(data) {
           }
           <div class="score-bars-grid">
             <div class="score-bar-item">
-              <div class="score-bar-top"><span>Dense Cosine</span><strong>${denseLabel}</strong></div>
+              <div class="score-bar-top"><span>Dense</span><strong>${denseLabel}</strong></div>
               <div class="score-bar-track"><div class="score-bar-fill fill-dense" style="width:${densePct}%"></div></div>
             </div>
             <div class="score-bar-item">
-              <div class="score-bar-top"><span>Sparse tsvector</span><strong>${sparseLabel}</strong></div>
+              <div class="score-bar-top"><span>Sparse</span><strong>${sparseLabel}</strong></div>
               <div class="score-bar-track"><div class="score-bar-fill fill-sparse" style="width:${sparsePct}%"></div></div>
             </div>
             <div class="score-bar-item">
-              <div class="score-bar-top"><span>RRF Fusion</span><strong>${rrfLabel}</strong></div>
+              <div class="score-bar-top"><span>RRF</span><strong>${rrfLabel}</strong></div>
               <div class="score-bar-track"><div class="score-bar-fill fill-rrf" style="width:${rrfPct}%"></div></div>
             </div>
             <div class="score-bar-item">
-              <div class="score-bar-top"><span>Rerank Score</span><strong>${rerankLabel}</strong></div>
+              <div class="score-bar-top"><span>Rerank</span><strong>${rerankLabel}</strong></div>
               <div class="score-bar-track"><div class="score-bar-fill fill-rerank" style="width:${rerankPct}%"></div></div>
             </div>
           </div>
@@ -786,33 +785,26 @@ window.toggleChunkText = function (contentId, btnEl) {
 
 function renderMetricsSection(data) {
   const retMs = Number(data.retrieval_latency_ms || 0);
-  const rerankMs = Number(data.rerank_latency_ms || 0).toFixed(2);
+  const rerankMs = Number(data.rerank_latency_ms || 0).toFixed(1);
   const llmMs = Number(data.generation_latency_ms || 0);
   const totalMs = Number(data.total_latency_ms || 0);
   const pTok = Number(data.prompt_tokens || 0);
   const cTok = Number(data.completion_tokens || 0);
   const totTok = Number(data.total_tokens || pTok + cTok);
 
-  document.getElementById("metrics-total-pill").textContent = `${totalMs.toFixed(2)} ms • ${totTok} tokens`;
-  if (window.animateCountUp) {
-    window.animateCountUp("metric-retrieval-ms", retMs, " ms", 2);
-    window.animateCountUp("metric-llm-ms", llmMs, " ms", 2);
-    window.animateCountUp("metric-total-ms", totalMs, " ms", 2);
-    window.animateCountUp("metric-tokens-total", totTok, "", 0);
-  } else {
-    document.getElementById("metric-retrieval-ms").textContent = `${retMs.toFixed(2)} ms`;
-    document.getElementById("metric-llm-ms").textContent = `${llmMs.toFixed(2)} ms`;
-    document.getElementById("metric-total-ms").textContent = `${totalMs.toFixed(2)} ms`;
-    document.getElementById("metric-tokens-total").textContent = String(totTok);
-  }
-  document.getElementById("metric-rerank-sub").textContent = `Rerank stage: ${rerankMs} ms`;
+  document.getElementById("metrics-total-pill").textContent = `${totalMs.toFixed(0)} ms • ${totTok} tokens`;
+  document.getElementById("metric-retrieval-ms").textContent = `${retMs.toFixed(1)} ms`;
+  document.getElementById("metric-llm-ms").textContent = `${llmMs.toFixed(0)} ms`;
+  document.getElementById("metric-total-ms").textContent = `${totalMs.toFixed(0)} ms`;
+  document.getElementById("metric-tokens-total").textContent = String(totTok);
+  document.getElementById("metric-rerank-sub").textContent = `Rerank: ${rerankMs} ms`;
   document.getElementById("metric-model-sub").textContent =
     (data.effective_settings && data.effective_settings.llm_model) || currentSettings.llmModel;
   document.getElementById("metric-status-sub").textContent = data.abstained
-    ? "Abstained (guard triggered)"
-    : "Grounded generation complete";
+    ? "Abstained"
+    : "Grounded";
   document.getElementById("metric-tokens-sub").textContent =
-    `Prompt: ${pTok} • Completion: ${cTok}`;
+    `${pTok} prompt / ${cTok} out`;
 }
 
 function escapeHtml(str) {
