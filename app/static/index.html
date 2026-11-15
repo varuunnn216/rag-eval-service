@@ -1193,6 +1193,10 @@
         <div class="col-chunks">
           <div class="card">
             <h2 data-rb-blur-text>Upload documents</h2>
+            <div id="docs-demo-banner" class="info-banner hidden" role="status">
+              Public demo: the document library is read-only. Browse the indexed documents, view their chunks, and ask questions on the Ask page.
+            </div>
+            <div id="ingest-upload-panel">
             <p class="muted-text">
               Upload a file or paste Markdown below to index it into the search corpus.
             </p>
@@ -1234,11 +1238,45 @@
               </button>
               <div id="ingest-feedback" class="ingest-feedback hidden" role="status"></div>
             </form>
+            </div>
           </div>
         </div>
       </div>
     </section>
   </main>
+
+  <footer class="app-footer">
+    <span class="muted-text">RAG Workbench</span>
+    <div class="footer-admin-controls">
+      <span id="admin-badge" class="badge badge-accent hidden">Admin</span>
+      <button type="button" id="admin-logout-btn" class="footer-link-btn hidden">Sign out</button>
+      <button type="button" id="admin-login-link" class="footer-link-btn hidden">Admin</button>
+    </div>
+  </footer>
+
+  <!-- Modal for Admin Sign-In -->
+  <div id="admin-login-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="admin-login-title">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <h3 id="admin-login-title">Admin Sign In</h3>
+        <button type="button" class="secondary-btn btn-xs" id="close-admin-modal-btn">Close</button>
+      </div>
+      <form id="admin-login-form">
+        <div class="modal-body">
+          <p class="muted-text">Enter the server admin token to unlock document uploads, deletion, and eval runs.</p>
+          <label class="admin-token-label">
+            <span>Admin Token</span>
+            <input type="password" id="admin-token-input" autocomplete="current-password" required placeholder="Enter admin token..." />
+          </label>
+          <div id="admin-login-error" class="error-callout hidden" role="alert"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="secondary-btn" id="cancel-admin-btn">Cancel</button>
+          <button type="submit" class="primary-btn" id="submit-admin-btn">Sign in</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- Modal for "View chunks" per document (A.5) -->
   <div id="doc-chunks-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="doc-chunks-modal-title">

@@ -2612,6 +2612,78 @@ input[type="range"] {
   background: var(--success-soft);
   border: 1px solid var(--success);
   color: var(--success);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ingest-feedback.is-success {
+  background: var(--success-soft);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.ingest-feedback.is-error {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.info-banner {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--info-soft);
+  border: 1px solid var(--info);
+  color: var(--text);
+  margin-bottom: var(--space-4);
+}
+
+.app-footer {
+  margin-top: var(--space-6);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.footer-admin-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.footer-link-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.footer-link-btn:hover {
+  color: var(--text);
+}
+
+.admin-token-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.admin-token-label input {
+  width: 100%;
 }
 
 /* ============================================================================
@@ -2694,6 +2766,17 @@ input[type="range"] {
   font-weight: 600;
   box-shadow: 0 12px 28px var(--shadow-elevated);
   transition: opacity 240ms ease, transform 240ms ease;
+}
+
+.toast-item.is-success {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.toast-item.is-error {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .toast-item.toast-exit {

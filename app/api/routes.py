@@ -1,9 +1,9 @@
-import hmac
 import json
+import os
 import time
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Header, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
@@ -17,13 +17,21 @@ from app.ingestion.service import (
 from app.retrieval.hybrid import retrieve_candidates, retrieve_candidates_with_timing
 from app.schemas import (
     AskRequest,
-    AskResponse,
     IngestRequest,
     IngestResponse,
     SearchRequest,
     SearchResponse,
 )
-from app.security import sanitize_ask_payload_for_demo, sanitize_documents_for_demo
+from app.security import (
+    ADMIN_COOKIE_NAME,
+    ADMIN_SESSION_TTL_SECONDS,
+    check_login_rate_limit,
+    create_admin_session_value,
+    is_admin_authenticated,
+    sanitize_ask_payload_for_demo,
+    sanitize_documents_for_demo,
+    verify_admin_token,
+)
 from eval.question_bank import (
     add_manual_question,
     bulk_update_status,
@@ -42,40 +50,80 @@ from eval.runner import run_evaluation_suite
 router = APIRouter(prefix="/api/v1", tags=["rag"])
 
 
-def _require_admin(x_admin_token: Optional[str], authorization: Optional[str]) -> None:
+def _require_admin(request: Request) -> None:
+    if not is_admin_authenticated(request.headers, request.cookies):
+        raise HTTPException(
+            status_code=401,
+            detail="Read-only in DEMO_MODE (admin sign-in or X-Admin-Token required)",
+        )
+
+
+def _is_https_request(request: Request) -> bool:
+    proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "").lower()
+    return proto == "https" or os.getenv("VERCEL") == "1"
+
+
+@router.get("/admin/status")
+def admin_status_endpoint(request: Request) -> Dict[str, Any]:
     settings = get_settings()
-    if not settings.demo_mode:
-        return
-    token = (settings.admin_token or "").strip()
-    if not token:
-        raise HTTPException(status_code=403, detail="Read-only in DEMO_MODE (admin token required)")
-    hdr_token = (x_admin_token or "").strip()
-    auth_hdr = (authorization or "").strip()
-    if auth_hdr.lower().startswith("bearer "):
-        auth_hdr = auth_hdr[7:].strip()
-    ok = (
-        (bool(hdr_token) and hmac.compare_digest(hdr_token, token))
-        or (bool(auth_hdr) and hmac.compare_digest(auth_hdr, token))
+    return {
+        "demo_mode": settings.demo_mode,
+        "is_admin": is_admin_authenticated(request.headers, request.cookies),
+    }
+
+
+@router.post("/admin/login")
+def admin_login_endpoint(
+    request: Request,
+    response: Response,
+    payload: Dict[str, Any] = Body(...),
+) -> Dict[str, Any]:
+    client_ip = request.client.host if request.client else "unknown"
+    if not check_login_rate_limit(client_ip):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many login attempts. Please wait 15 minutes and try again.",
+        )
+    token = str(payload.get("token") or "")
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    session_val = create_admin_session_value()
+    response.set_cookie(
+        key=ADMIN_COOKIE_NAME,
+        value=session_val,
+        max_age=ADMIN_SESSION_TTL_SECONDS,
+        path="/",
+        httponly=True,
+        samesite="strict",
+        secure=_is_https_request(request),
     )
-    if not ok:
-        raise HTTPException(status_code=403, detail="Read-only in DEMO_MODE (admin token required)")
+    return {"authenticated": True, "is_admin": True}
+
+
+@router.post("/admin/logout")
+def admin_logout_endpoint(request: Request, response: Response) -> Dict[str, Any]:
+    response.delete_cookie(
+        key=ADMIN_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        samesite="strict",
+        secure=_is_https_request(request),
+    )
+    return {"authenticated": False, "is_admin": False}
 
 
 @router.post("/ingest", response_model=IngestResponse)
-def ingest_endpoint(
-    payload: IngestRequest,
-    x_admin_token: Optional[str] = Header(default=None),
-    authorization: Optional[str] = Header(default=None),
-) -> IngestResponse:
+def ingest_endpoint(payload: IngestRequest, request: Request) -> IngestResponse:
     """Chunk, embed, and index a batch of documents into PostgreSQL + pgvector."""
-    _require_admin(x_admin_token, authorization)
+    _require_admin(request)
     return ingest_documents(payload.documents)
 
 
 @router.get("/documents")
-def list_documents_endpoint() -> List[Dict[str, Any]]:
+def list_documents_endpoint(request: Request) -> List[Dict[str, Any]]:
     """List all indexed documents and their chunk counts."""
-    return sanitize_documents_for_demo(list_documents())
+    is_admin = is_admin_authenticated(request.headers, request.cookies)
+    return sanitize_documents_for_demo(list_documents(), is_admin=is_admin)
 
 
 @router.get("/documents/{document_id}/chunks")
@@ -85,24 +133,16 @@ def get_document_chunks_endpoint(document_id: str) -> List[Dict[str, Any]]:
 
 
 @router.delete("/documents/{document_id}")
-def delete_document_endpoint(
-    document_id: str,
-    x_admin_token: Optional[str] = Header(default=None),
-    authorization: Optional[str] = Header(default=None),
-) -> Dict[str, Any]:
+def delete_document_endpoint(document_id: str, request: Request) -> Dict[str, Any]:
     """Delete a document and its indexed chunks."""
-    _require_admin(x_admin_token, authorization)
+    _require_admin(request)
     return delete_document(document_id)
 
 
 @router.post("/documents/{document_id}/delete")
-def delete_document_post_endpoint(
-    document_id: str,
-    x_admin_token: Optional[str] = Header(default=None),
-    authorization: Optional[str] = Header(default=None),
-) -> Dict[str, Any]:
+def delete_document_post_endpoint(document_id: str, request: Request) -> Dict[str, Any]:
     """Delete a document and its indexed chunks (POST compatibility)."""
-    _require_admin(x_admin_token, authorization)
+    _require_admin(request)
     return delete_document(document_id)
 
 
@@ -128,14 +168,16 @@ def search_endpoint(payload: SearchRequest) -> SearchResponse:
 
 
 @router.post("/ask")
-def ask_endpoint(payload: AskRequest) -> Dict[str, Any]:
+def ask_endpoint(payload: AskRequest, request: Request) -> Dict[str, Any]:
     """Retrieve, rerank, and generate a grounded answer with verified inline citations."""
-    return sanitize_ask_payload_for_demo(answer_question(payload).to_dict())
+    is_admin = is_admin_authenticated(request.headers, request.cookies)
+    return sanitize_ask_payload_for_demo(answer_question(payload).to_dict(), is_admin=is_admin)
 
 
 @router.post("/ask/stream")
-def ask_stream_endpoint(payload: AskRequest) -> StreamingResponse:
+def ask_stream_endpoint(payload: AskRequest, request: Request) -> StreamingResponse:
     """Stream retrieval, reranking, and generation progress over Server-Sent Events."""
+    is_admin = is_admin_authenticated(request.headers, request.cookies)
 
     def event_stream():
         yield f"data: {json.dumps({'stage': 'retrieving'})}\n\n"
@@ -165,7 +207,7 @@ def ask_stream_endpoint(payload: AskRequest) -> StreamingResponse:
                 accum.extend(words[i : i + step])
                 yield f"data: {json.dumps({'stage': 'delta', 'text': ' '.join(accum)})}\n\n"
                 time.sleep(0.015)
-        yield f"data: {json.dumps({'stage': 'done', 'response': sanitize_ask_payload_for_demo(resp.to_dict())}, default=str)}\n\n"
+        yield f"data: {json.dumps({'stage': 'done', 'response': sanitize_ask_payload_for_demo(resp.to_dict(), is_admin=is_admin)}, default=str)}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -195,22 +237,14 @@ def list_eval_questions_endpoint() -> Dict[str, Any]:
 
 
 @router.post("/eval/questions", status_code=201)
-def create_eval_question_endpoint(
-    payload: Dict[str, Any] = Body(...),
-    x_admin_token: Optional[str] = Header(default=None),
-    authorization: Optional[str] = Header(default=None),
-) -> Dict[str, Any]:
-    _require_admin(x_admin_token, authorization)
+def create_eval_question_endpoint(request: Request, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    _require_admin(request)
     return add_manual_question(payload)
 
 
 @router.post("/eval/questions/bulk")
-def bulk_update_eval_questions_endpoint(
-    payload: Dict[str, Any] = Body(...),
-    x_admin_token: Optional[str] = Header(default=None),
-    authorization: Optional[str] = Header(default=None),
-) -> Dict[str, Any]:
-    _require_admin(x_admin_token, authorization)
+def bulk_update_eval_questions_endpoint(request: Request, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    _require_admin(request)
     qids = [str(x) for x in (payload.get("ids") or [])]
     new_status = str(payload.get("status") or "approved")
     count = bulk_update_status(qids, new_status)
@@ -220,11 +254,10 @@ def bulk_update_eval_questions_endpoint(
 @router.post("/eval/questions/{qid}")
 def update_eval_question_endpoint(
     qid: str,
+    request: Request,
     payload: Dict[str, Any] = Body(...),
-    x_admin_token: Optional[str] = Header(default=None),
-    authorization: Optional[str] = Header(default=None),
 ) -> Dict[str, Any]:
-    _require_admin(x_admin_token, authorization)
+    _require_admin(request)
     updated = update_question(qid, payload)
     if updated is None:
         raise HTTPException(status_code=404, detail=f"Question {qid} not found")
@@ -232,24 +265,16 @@ def update_eval_question_endpoint(
 
 
 @router.delete("/eval/questions/{qid}")
-def delete_eval_question_endpoint(
-    qid: str,
-    x_admin_token: Optional[str] = Header(default=None),
-    authorization: Optional[str] = Header(default=None),
-) -> Dict[str, Any]:
-    _require_admin(x_admin_token, authorization)
+def delete_eval_question_endpoint(qid: str, request: Request) -> Dict[str, Any]:
+    _require_admin(request)
     if delete_question(qid):
         return {"deleted": True, "id": qid}
     raise HTTPException(status_code=404, detail="Question not found or cannot delete golden question")
 
 
 @router.post("/eval/generate")
-def generate_eval_questions_endpoint(
-    payload: Dict[str, Any] = Body(...),
-    x_admin_token: Optional[str] = Header(default=None),
-    authorization: Optional[str] = Header(default=None),
-) -> Dict[str, Any]:
-    _require_admin(x_admin_token, authorization)
+def generate_eval_questions_endpoint(request: Request, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    _require_admin(request)
     doc_id = str(payload.get("doc_id") or "")
     if not doc_id:
         raise HTTPException(status_code=400, detail="doc_id is required")
@@ -284,12 +309,11 @@ def get_eval_report_endpoint() -> Dict[str, Any]:
 
 @router.post("/eval/run")
 def trigger_eval_run_endpoint(
+    request: Request,
     payload: Optional[Dict[str, Any]] = Body(default=None),
-    x_admin_token: Optional[str] = Header(default=None),
-    authorization: Optional[str] = Header(default=None),
 ) -> Dict[str, Any]:
     """Re-run the evaluation suite across all 4 ablation configs or a single selected config."""
-    _require_admin(x_admin_token, authorization)
+    _require_admin(request)
     selected = (payload or {}).get("config")
     question_set = str((payload or {}).get("question_set") or "golden_only")
     doc_id = (payload or {}).get("doc_id") or None

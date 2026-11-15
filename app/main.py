@@ -19,6 +19,7 @@ from app.security import (
     check_rate_limit,
     friendly_error_payload,
     get_allowed_origins,
+    is_admin_authenticated,
 )
 
 logging.basicConfig(
@@ -104,7 +105,7 @@ def serve_favicon() -> FileResponse:
 
 
 @app.get("/health", tags=["system"])
-def health_check() -> Dict[str, Any]:
+def health_check(request: Request) -> Dict[str, Any]:
     """Verify API and PostgreSQL + pgvector connectivity and corpus counts."""
     settings = get_settings()
     try:
@@ -134,4 +135,5 @@ def health_check() -> Dict[str, Any]:
         "generator_model": settings.generator_model,
         "reranker_model": settings.reranker_model,
         "demo_mode": settings.demo_mode,
+        "is_admin": is_admin_authenticated(request.headers, request.cookies),
     }

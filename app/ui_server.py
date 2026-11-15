@@ -33,12 +33,19 @@ from app.ingestion.service import (
 from app.retrieval.hybrid import retrieve_candidates, retrieve_candidates_with_timing
 from app.schemas import AskRequest, AskResponse, DocumentInput
 from app.security import (
+    ADMIN_COOKIE_NAME,
+    ADMIN_SESSION_TTL_SECONDS,
     MAX_REQUEST_BODY_BYTES,
     SECURITY_HEADERS,
+    build_session_cookie_header,
+    check_login_rate_limit,
     check_rate_limit,
+    create_admin_session_value,
     friendly_error_payload,
+    is_admin_authenticated,
     sanitize_ask_payload_for_demo,
     sanitize_documents_for_demo,
+    verify_admin_token,
 )
 from eval.question_bank import (
     add_manual_question,
@@ -60,24 +67,10 @@ logger = logging.getLogger(__name__)
 
 
 def _is_admin_authorized(headers: Any) -> bool:
-    settings = get_settings()
-    if not settings.demo_mode:
-        return True
-    token = (settings.admin_token or "").strip()
-    if not token:
-        return False
-    hdr_token = (headers.get("X-Admin-Token") or "").strip()
-    auth_hdr = (headers.get("Authorization") or "").strip()
-    if auth_hdr.lower().startswith("bearer "):
-        auth_hdr = auth_hdr[7:].strip()
-    return (
-        bool(hdr_token) and hmac.compare_digest(hdr_token, token)
-    ) or (
-        bool(auth_hdr) and hmac.compare_digest(auth_hdr, token)
-    )
+    return is_admin_authenticated(headers)
 
 
-def _get_health_payload() -> Dict[str, Any]:
+def _get_health_payload(headers: Any = None) -> Dict[str, Any]:
     settings = get_settings()
     docs = list_documents()
     doc_count = len(docs)
@@ -93,6 +86,7 @@ def _get_health_payload() -> Dict[str, Any]:
         "generator_model": settings.generator_model,
         "reranker_model": settings.reranker_model,
         "demo_mode": settings.demo_mode,
+        "is_admin": is_admin_authenticated(headers) if headers is not None else not settings.demo_mode,
     }
 
 
@@ -148,12 +142,14 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
         for k, v in SECURITY_HEADERS.items():
             self.send_header(k, v)
 
-    def _send_json(self, payload: Any, status: int = 200) -> None:
+    def _send_json(self, payload: Any, status: int = 200, extra_headers: Dict[str, str] | None = None) -> None:
         raw = json.dumps(payload, default=str).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
         self._send_security_headers()
+        for k, v in (extra_headers or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(raw)
 
@@ -206,10 +202,14 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"detail": "Forbidden"}, status=403)
             return
         if path == "/health":
-            self._send_json(_get_health_payload())
+            self._send_json(_get_health_payload(self.headers))
+            return
+        if path == "/api/v1/admin/status":
+            settings = get_settings()
+            self._send_json({"demo_mode": settings.demo_mode, "is_admin": _is_admin_authorized(self.headers)})
             return
         if path == "/api/v1/documents":
-            self._send_json(sanitize_documents_for_demo(list_documents()))
+            self._send_json(sanitize_documents_for_demo(list_documents(), is_admin=_is_admin_authorized(self.headers)))
             return
         if path.startswith("/api/v1/documents/") and path.endswith("/chunks"):
             parts = path.split("/")
@@ -266,7 +266,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
         path = parsed.path
         if path.startswith("/api/v1/eval/questions/"):
             if not _is_admin_authorized(self.headers):
-                self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=401)
                 return
             qid = unquote(path[len("/api/v1/eval/questions/") :].strip("/"))
             if qid and delete_question(qid):
@@ -276,7 +276,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
             return
         if path.startswith("/api/v1/documents/"):
             if not _is_admin_authorized(self.headers):
-                self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=401)
                 return
             doc_id = unquote(path[len("/api/v1/documents/") :].strip("/"))
             if doc_id:
@@ -293,10 +293,37 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
             return
         try:
             body = self._read_json_body()
+            if path == "/api/v1/admin/login":
+                if not check_login_rate_limit(client_ip):
+                    self._send_json({"detail": "Too many login attempts. Please wait 15 minutes."}, status=429)
+                    return
+                token = str(body.get("token") or "")
+                if not verify_admin_token(token):
+                    self._send_json({"detail": "Invalid admin token"}, status=401)
+                    return
+                is_https = (self.headers.get("X-Forwarded-Proto") or "").lower() == "https"
+                cookie_hdr = build_session_cookie_header(create_admin_session_value(), secure=is_https)
+                self._send_json(
+                    {"authenticated": True, "is_admin": True},
+                    status=200,
+                    extra_headers={"Set-Cookie": cookie_hdr},
+                )
+                return
+
+            if path == "/api/v1/admin/logout":
+                is_https = (self.headers.get("X-Forwarded-Proto") or "").lower() == "https"
+                cookie_hdr = build_session_cookie_header("", max_age=0, secure=is_https)
+                self._send_json(
+                    {"authenticated": False, "is_admin": False},
+                    status=200,
+                    extra_headers={"Set-Cookie": cookie_hdr},
+                )
+                return
+
             if path == "/api/v1/ask":
                 req = _parse_ask_request(body)
                 resp = answer_question(req)
-                self._send_json(sanitize_ask_payload_for_demo(resp.to_dict()))
+                self._send_json(sanitize_ask_payload_for_demo(resp.to_dict(), is_admin=_is_admin_authorized(self.headers)))
                 return
 
             if path == "/api/v1/ask/stream":
@@ -344,7 +371,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                         accum.extend(words[i : i + step])
                         self._send_sse_event({"stage": "delta", "text": " ".join(accum)})
                         time.sleep(0.018)
-                self._send_sse_event({"stage": "done", "response": sanitize_ask_payload_for_demo(resp.to_dict())})
+                self._send_sse_event({"stage": "done", "response": sanitize_ask_payload_for_demo(resp.to_dict(), is_admin=_is_admin_authorized(self.headers))})
                 return
 
             if path == "/api/v1/search":
@@ -385,7 +412,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
 
             if path == "/api/v1/ingest":
                 if not _is_admin_authorized(self.headers):
-                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=401)
                     return
                 raw_docs = body.get("documents")
                 if raw_docs is None and "content" in body:
@@ -407,7 +434,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
 
             if path.startswith("/api/v1/documents/") and path.endswith("/delete"):
                 if not _is_admin_authorized(self.headers):
-                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=401)
                     return
                 parts = path.split("/")
                 if len(parts) >= 5:
@@ -417,7 +444,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
 
             if path == "/api/v1/eval/generate":
                 if not _is_admin_authorized(self.headers):
-                    self._send_json({"detail": "Generation disabled in DEMO_MODE (admin token required)"}, status=403)
+                    self._send_json({"detail": "Generation disabled in DEMO_MODE (admin token required)"}, status=401)
                     return
                 doc_id = str(body.get("doc_id") or "")
                 if not doc_id:
@@ -439,7 +466,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
 
             if path == "/api/v1/eval/questions":
                 if not _is_admin_authorized(self.headers):
-                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=401)
                     return
                 rec = add_manual_question(body)
                 self._send_json(rec, status=201)
@@ -447,7 +474,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
 
             if path == "/api/v1/eval/questions/bulk":
                 if not _is_admin_authorized(self.headers):
-                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=401)
                     return
                 qids = [str(x) for x in (body.get("ids") or [])]
                 new_status = str(body.get("status") or "approved")
@@ -457,7 +484,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
 
             if path.startswith("/api/v1/eval/questions/"):
                 if not _is_admin_authorized(self.headers):
-                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=401)
                     return
                 qid = unquote(path[len("/api/v1/eval/questions/") :].strip("/"))
                 updated = update_question(qid, body)
@@ -469,7 +496,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
 
             if path == "/api/v1/eval/run":
                 if not _is_admin_authorized(self.headers):
-                    self._send_json({"detail": "Eval run disabled in DEMO_MODE (admin token required)"}, status=403)
+                    self._send_json({"detail": "Eval run disabled in DEMO_MODE (admin token required)"}, status=401)
                     return
                 selected_cfg = body.get("config") if isinstance(body, dict) else None
                 question_set = str(body.get("question_set") or "golden_only") if isinstance(body, dict) else "golden_only"

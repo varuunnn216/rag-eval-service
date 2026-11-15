@@ -170,3 +170,23 @@ BASE_URL=http://127.0.0.1:8000 python3 -m unittest tests/test_security.py -v
 - **Public Read-Only Mode (`DEMO_MODE=true`):** Disables `/docs`, `/redoc`, and `/openapi.json`, hides the LLM system prompt (`prompt_sent`) and internal file paths from API responses and UI, and requires `ADMIN_TOKEN` (`X-Admin-Token` or `Authorization: Bearer`) on all mutating endpoints (`POST /api/v1/ingest`, `DELETE /api/v1/documents/{id}`, `POST /api/v1/eval/run`, `POST /api/v1/eval/generate`, and question bank edits).
 - **Headers, CORS & Guardrails:** Enforces `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, HSTS, strict `ALLOWED_ORIGINS` CORS, `10 MB` request body limit, per-IP rate limiting, parameterized SQL queries, and escaped Markdown rendering.
 - **Rotating Keys:** Generate a new `GEMINI_API_KEY` (Google AI Studio) or `ADMIN_TOKEN`, update it in your host environment variables (e.g. Vercel Project Settings → Environment Variables) and local `.env` (never committed), and redeploy.
+
+### 8. Adding documents to the live demo
+In `DEMO_MODE=true`, public visitors have read-only access to the Document Library. You can add documents either through the UI or via the CLI helper:
+
+- **Via the UI:** Click **Admin** in the page footer, enter your `ADMIN_TOKEN` (stored in a 2-hour `HttpOnly`, `SameSite=Strict` session cookie, never `localStorage`), and upload or manage documents directly from the **Documents** tab.
+- **Via the CLI (`scripts/ingest_remote.py`):**
+  ```bash
+  export ADMIN_TOKEN="your-admin-token"
+  python3 scripts/ingest_remote.py \
+    --base-url https://rag-eval-service.vercel.app \
+    --file data/corpus/14_meridian_transit_handbook.md
+  ```
+  To ingest an entire folder of Markdown/text files:
+  ```bash
+  ADMIN_TOKEN="your-admin-token" python3 scripts/ingest_remote.py \
+    --base-url https://rag-eval-service.vercel.app \
+    --dir data/corpus
+  ```
+  (`ADMIN_TOKEN` is read from the environment only and sent via the `X-Admin-Token` header.)
+

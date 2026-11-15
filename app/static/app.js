@@ -627,6 +627,10 @@ async function fetchHealth() {
   try {
     const res = await fetch("/health");
     const data = await res.json();
+    window.__demoMode = Boolean(data.demo_mode);
+    window.__isAdmin = Boolean(data.is_admin);
+    updateAdminUI();
+
     const docsEl = document.getElementById("status-docs-count");
     const chunksEl = document.getElementById("status-chunks-count");
     const llmEl = document.getElementById("status-llm-model");
@@ -1480,10 +1484,10 @@ function renderAnswerSection(data) {
   document.getElementById("copy-json-btn").disabled = false;
   const promptDrawer = document.getElementById("prompt-drawer");
   if (promptDrawer) {
-    promptDrawer.classList.toggle("hidden", Boolean(window.__demoMode));
+    promptDrawer.classList.toggle("hidden", isReadOnlyVisitor());
   }
   document.getElementById("prompt-sent-content").textContent =
-    window.__demoMode ? "" : (data.prompt_sent || "(No LLM prompt sent)");
+    isReadOnlyVisitor() ? "" : (data.prompt_sent || "(No LLM prompt sent)");
 
   const citSummary =
     data.citation_summary ||
@@ -2354,15 +2358,20 @@ function initCorpusControls() {
       progFill.style.width = "100%";
       progLabel.textContent = `Indexed ${data.chunks_created} chunks.`;
 
+      feedback.classList.remove("is-error", "is-success");
+      feedback.classList.add("is-success");
       feedback.textContent = `Indexed ${data.documents_ingested} document (${data.chunks_created} chunks created): ${data.document_ids.join(", ")}`;
       feedback.classList.remove("hidden");
-      showToast(`Indexed document (${data.chunks_created} chunks created)`);
+      showToast(`Indexed document (${data.chunks_created} chunks created)`, "success");
 
       await loadDocuments();
       await fetchHealth();
     } catch (err) {
-      feedback.textContent = `Error: ${err.message}`;
+      feedback.classList.remove("is-error", "is-success");
+      feedback.classList.add("is-error");
+      feedback.textContent = `⚠ Error: ${err.message}`;
       feedback.classList.remove("hidden");
+      showToast(`Upload failed: ${err.message}`, "error");
     } finally {
       setTimeout(() => {
         progBox.classList.add("hidden");
@@ -2409,14 +2418,40 @@ function updateCorpusSummaryLine() {
   if (statusChunks) statusChunks.textContent = `${totalChunks} chunks`;
 }
 
+function isReadOnlyVisitor() {
+  return Boolean(window.__demoMode && !window.__isAdmin);
+}
+
+function updateAdminUI() {
+  const readOnly = isReadOnlyVisitor();
+  document.getElementById("docs-demo-banner")?.classList.toggle("hidden", !readOnly);
+  document.getElementById("ingest-upload-panel")?.classList.toggle("hidden", readOnly);
+  document.getElementById("admin-login-link")?.classList.toggle("hidden", !(window.__demoMode && !window.__isAdmin));
+  document.getElementById("admin-badge")?.classList.toggle("hidden", !window.__isAdmin);
+  document.getElementById("admin-logout-btn")?.classList.toggle("hidden", !window.__isAdmin);
+  document.getElementById("prompt-drawer")?.classList.toggle("hidden", readOnly);
+
+  const demoBadge = document.getElementById("qb-demo-badge");
+  const approveAllBtn = document.getElementById("qb-approve-visible-btn");
+  const addBtn = document.getElementById("qb-add-toggle-btn");
+  demoBadge?.classList.toggle("hidden", !readOnly);
+  if (approveAllBtn) approveAllBtn.disabled = readOnly;
+  if (addBtn) addBtn.disabled = readOnly;
+
+  renderDocumentsList();
+}
+
 function renderDocumentsList() {
   const container = document.getElementById("documents-list");
   if (!container) return;
 
+  const readOnly = isReadOnlyVisitor();
   const query = (document.getElementById("doc-search-input")?.value || "").trim().toLowerCase();
   const filtered = indexedDocuments.filter((d) => {
     if (!query) return true;
-    const hay = `${d.title} ${d.id} ${d.source}`.toLowerCase();
+    const hay = readOnly
+      ? `${d.title} ${d.id}`.toLowerCase()
+      : `${d.title} ${d.id} ${d.source || ""}`.toLowerCase();
     return hay.includes(query);
   });
 
@@ -2425,33 +2460,20 @@ function renderDocumentsList() {
     return;
   }
 
-  // Identical card layout for every doc: 1. Title, 2. ID chip, 3. Source & chunk count, 4. Actions
+  // Identical card layout for every doc: 1. Title, 2. ID chip, 3. Source (admin/local only) & chunk count, 4. Actions
   container.innerHTML = filtered
-    .map(
-      (d) => `
-      <div class="doc-card" data-doc-id="${escapeHtml(d.id)}">
-        <div class="doc-card-title">${escapeHtml(d.title)}</div>
-        <div class="doc-card-id-row">
-          <span class="chunk-id-tag">${escapeHtml(d.id)}</span>
-        </div>
-        <div class="doc-card-meta">
-          <span>Source: <code>${escapeHtml(d.source)}</code></span>
-          <span class="status-sep">&middot;</span>
-          <span><strong>${d.chunk_count}</strong> chunks</span>
-        </div>
-        <div class="doc-card-actions">
-          <button
-            type="button"
-            class="secondary-btn btn-xs"
-            onclick="openDocumentChunksModal(${JSON.stringify(d.id).replace(/"/g, "&quot;")}, ${JSON.stringify(d.title).replace(/"/g, "&quot;")})"
-          >
-            View chunks
-          </button>
+    .map((d) => {
+      const showSource = !readOnly && Boolean(d.source);
+      const sourceHtml = showSource
+        ? `<span>Source: <code>${escapeHtml(d.source)}</code></span><span class="status-sep">&middot;</span>`
+        : "";
+      const adminActionsHtml = readOnly
+        ? ""
+        : `
           <button
             type="button"
             class="secondary-btn btn-xs doc-generate-btn"
             data-gen-doc-id="${escapeHtml(d.id)}"
-            ${window.__demoMode ? "disabled title='Disabled in DEMO_MODE'" : ""}
             onclick="startDocQuestionGeneration(${JSON.stringify(d.id).replace(/"/g, "&quot;")}, this)"
           >
             Generate Questions
@@ -2462,12 +2484,31 @@ function renderDocumentsList() {
             onclick="promptDeleteDocument(${JSON.stringify(d.id).replace(/"/g, "&quot;")}, ${JSON.stringify(d.title).replace(/"/g, "&quot;")})"
           >
             Delete
-          </button>
+          </button>`;
+
+      return `
+      <div class="doc-card" data-doc-id="${escapeHtml(d.id)}">
+        <div class="doc-card-title">${escapeHtml(d.title)}</div>
+        <div class="doc-card-id-row">
+          <span class="chunk-id-tag">${escapeHtml(d.id)}</span>
+        </div>
+        <div class="doc-card-meta">
+          ${sourceHtml}
+          <span><strong>${d.chunk_count}</strong> chunks</span>
+        </div>
+        <div class="doc-card-actions">
+          <button
+            type="button"
+            class="secondary-btn btn-xs"
+            onclick="openDocumentChunksModal(${JSON.stringify(d.id).replace(/"/g, "&quot;")}, ${JSON.stringify(d.title).replace(/"/g, "&quot;")})"
+          >
+            View chunks
+          </button>${adminActionsHtml}
         </div>
         <div class="doc-gen-progress muted-text hidden" id="doc-gen-status-${escapeHtml(d.id)}"></div>
       </div>
-    `
-    )
+    `;
+    })
     .join("");
 }
 
@@ -2511,11 +2552,11 @@ function initModals() {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         delModal.classList.add("hidden");
-        showToast(`Deleted document "${docId}"`);
+        showToast(`Deleted document "${docId}"`, "success");
         await loadDocuments();
         await fetchHealth();
       } catch (err) {
-        showToast(`Failed to delete document: ${err.message}`);
+        showToast(`Failed to delete document: ${err.message}`, "error");
       } finally {
         pendingDeleteDocId = null;
         confirmDelBtn.disabled = false;
@@ -2524,10 +2565,94 @@ function initModals() {
     });
   }
 
+  const adminModal = document.getElementById("admin-login-modal");
+  const adminLink = document.getElementById("admin-login-link");
+  const closeAdminBtn = document.getElementById("close-admin-login-btn");
+  const cancelAdminBtn = document.getElementById("cancel-admin-login-btn");
+  const adminForm = document.getElementById("admin-login-form");
+  const adminTokenInput = document.getElementById("admin-token-input");
+  const adminErrorEl = document.getElementById("admin-login-error");
+  const adminLogoutBtn = document.getElementById("admin-logout-btn");
+
+  const closeAdminModal = () => {
+    adminModal?.classList.add("hidden");
+    if (adminTokenInput) adminTokenInput.value = "";
+    if (adminErrorEl) {
+      adminErrorEl.textContent = "";
+      adminErrorEl.classList.add("hidden");
+    }
+  };
+
+  if (adminLink && adminModal) {
+    adminLink.addEventListener("click", () => {
+      if (adminErrorEl) {
+        adminErrorEl.textContent = "";
+        adminErrorEl.classList.add("hidden");
+      }
+      adminModal.classList.remove("hidden");
+      adminTokenInput?.focus();
+    });
+  }
+  closeAdminBtn?.addEventListener("click", closeAdminModal);
+  cancelAdminBtn?.addEventListener("click", closeAdminModal);
+  adminModal?.addEventListener("click", (e) => {
+    if (e.target === adminModal) closeAdminModal();
+  });
+
+  if (adminForm) {
+    adminForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const token = (adminTokenInput?.value || "").trim();
+      if (!token) return;
+      const submitBtn = document.getElementById("admin-login-submit-btn");
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Signing in...";
+      }
+      try {
+        const res = await fetch("/api/v1/admin/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.detail || `HTTP ${res.status}`);
+        }
+        closeAdminModal();
+        showToast("Signed in as Admin", "success");
+        await Promise.all([fetchHealth(), loadDocuments(), loadQuestionBank()]);
+      } catch (err) {
+        if (adminErrorEl) {
+          adminErrorEl.textContent = `⚠ ${err.message}`;
+          adminErrorEl.classList.remove("hidden");
+        }
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Sign in";
+        }
+      }
+    });
+  }
+
+  if (adminLogoutBtn) {
+    adminLogoutBtn.addEventListener("click", async () => {
+      try {
+        await fetch("/api/v1/admin/logout", { method: "POST" });
+        showToast("Signed out of Admin session", "success");
+        await Promise.all([fetchHealth(), loadDocuments(), loadQuestionBank()]);
+      } catch (err) {
+        showToast(`Sign out failed: ${err.message}`, "error");
+      }
+    });
+  }
+
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       chunksModal?.classList.add("hidden");
       delModal?.classList.add("hidden");
+      closeAdminModal();
     }
   });
 }
@@ -2582,12 +2707,13 @@ window.promptDeleteDocument = function (docId, docTitle) {
   modal?.classList.remove("hidden");
 };
 
-function showToast(message) {
+function showToast(message, type = "success") {
   const container = document.getElementById("toast-container");
   if (!container) return;
   const toast = document.createElement("div");
-  toast.className = "toast-item";
-  toast.textContent = message;
+  const isError = type === "error";
+  toast.className = `toast-item ${isError ? "is-error" : "is-success"}`;
+  toast.textContent = isError && !String(message).startsWith("⚠") ? `⚠ ${message}` : message;
   container.appendChild(toast);
   setTimeout(() => {
     toast.classList.add("toast-exit");
@@ -2600,12 +2726,13 @@ function showToast(message) {
    QUESTION BANK, GENERATION JOBS & EVAL SET SWITCHING
    ===================================================================== */
 window.__demoMode = false;
+window.__isAdmin = false;
 let qbQuestions = [];
 let qbActiveId = null;
 
 window.startDocQuestionGeneration = async function (docId, btnEl) {
-  if (window.__demoMode) {
-    showToast("Question generation is disabled in DEMO_MODE.");
+  if (isReadOnlyVisitor()) {
+    showToast("Question generation is disabled in DEMO_MODE.", "error");
     return;
   }
   const statusEl = document.getElementById(`doc-gen-status-${docId}`);
@@ -2634,7 +2761,11 @@ window.startDocQuestionGeneration = async function (docId, btnEl) {
         setTimeout(poll, 900);
       } else {
         if (btnEl) btnEl.disabled = false;
-        showToast(st.status === "completed" ? `Generated questions for ${docId}: ${st.message}` : `Generation failed: ${st.error || "error"}`);
+        if (st.status === "completed") {
+          showToast(`Generated questions for ${docId}: ${st.message}`, "success");
+        } else {
+          showToast(`Generation failed: ${st.error || "error"}`, "error");
+        }
         await loadQuestionBank();
       }
     };
@@ -2642,7 +2773,7 @@ window.startDocQuestionGeneration = async function (docId, btnEl) {
   } catch (err) {
     if (btnEl) btnEl.disabled = false;
     if (statusEl) statusEl.textContent = `Error: ${err.message}`;
-    showToast(`Generation failed: ${err.message}`);
+    showToast(`Generation failed: ${err.message}`, "error");
   }
 };
 
@@ -2679,9 +2810,10 @@ async function loadQuestionBank() {
     const demoBadge = document.getElementById("qb-demo-badge");
     const approveAllBtn = document.getElementById("qb-approve-visible-btn");
     const addBtn = document.getElementById("qb-add-toggle-btn");
-    demoBadge?.classList.toggle("hidden", !window.__demoMode);
-    if (approveAllBtn) approveAllBtn.disabled = window.__demoMode;
-    if (addBtn) addBtn.disabled = window.__demoMode;
+    const readOnly = isReadOnlyVisitor();
+    demoBadge?.classList.toggle("hidden", !readOnly);
+    if (approveAllBtn) approveAllBtn.disabled = readOnly;
+    if (addBtn) addBtn.disabled = readOnly;
 
     const c = data.counts || {};
     const draftPill = document.getElementById("qb-draft-pill");
@@ -2748,7 +2880,7 @@ function renderQuestionBank() {
     tbody.innerHTML = `<tr><td colspan="6" class="empty-table-cell">No questions match current filters.</td></tr>`;
     return;
   }
-  const ro = window.__demoMode ? "disabled" : "";
+  const ro = isReadOnlyVisitor() ? "disabled" : "";
   tbody.innerHTML = rows.map((q) => {
     const srcCls = q.source === "golden" ? "badge-golden" : "badge-synthetic";
     const statusLabel = q.document_missing ? "doc missing" : (q.needs_review ? "needs review" : q.status);
@@ -2830,7 +2962,7 @@ async function openQuestionPreview(q) {
 }
 
 window.setQuestionStatus = async function (qid, status) {
-  if (window.__demoMode) return;
+  if (isReadOnlyVisitor()) return;
   const res = await fetch(`/api/v1/eval/questions/${encodeURIComponent(qid)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2861,7 +2993,7 @@ function initQuestionBank() {
   });
 
   document.getElementById("qb-approve-visible-btn")?.addEventListener("click", async () => {
-    if (window.__demoMode) return;
+    if (isReadOnlyVisitor()) return;
     const ids = getFilteredQuestionBank().filter((q) => q.status !== "approved").map((q) => q.id);
     if (!ids.length) {
       showToast("No unapproved visible questions.");
@@ -2890,7 +3022,7 @@ function initQuestionBank() {
 
   document.getElementById("qb-add-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (window.__demoMode) return;
+    if (isReadOnlyVisitor()) return;
     const q = document.getElementById("qb-new-question").value.trim();
     const type = document.getElementById("qb-new-type").value;
     const doc_id = document.getElementById("qb-new-doc").value;
@@ -2913,7 +3045,7 @@ function initQuestionBank() {
 
   document.getElementById("qb-edit-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!qbActiveId || window.__demoMode) return;
+    if (!qbActiveId || isReadOnlyVisitor()) return;
     const question = document.getElementById("qb-edit-question").value.trim();
     const expected_answer = document.getElementById("qb-edit-answer").value.trim();
     const key_facts = document.getElementById("qb-edit-facts").value.split(",").map((s) => s.trim()).filter(Boolean);
