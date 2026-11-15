@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from app.config import get_settings
 from app.db import get_db_connection
-from app.ingestion.chunker import ChunkData, chunk_document
+from app.ingestion.chunker import ChunkData, chunk_document, format_contextual_chunk_text
 from app.ingestion.embedder import EmbeddingService
 from app.schemas import DocumentInput, IngestResponse
 
@@ -36,8 +36,15 @@ def ingest_documents(documents: List[DocumentInput]) -> IngestResponse:
         )
         all_chunks.extend(doc_chunks)
 
+    doc_title_map = {doc.id: doc.title for doc in documents}
     texts_to_embed = [
-        f"{c.heading}\n{c.content}" if c.heading else c.content for c in all_chunks
+        format_contextual_chunk_text(
+            doc_title_map.get(c.document_id, ""),
+            c.heading,
+            c.content,
+            linearize=True,
+        )
+        for c in all_chunks
     ]
     embeddings = embedder.embed_documents(texts_to_embed)
 

@@ -7,16 +7,20 @@ import re
 from typing import Any, List, Optional
 
 from app.config import get_settings
+from app.ingestion.chunker import format_contextual_chunk_text
+from app.retrieval.query_expansion import get_synonym_stems
 from app.schemas import RetrievedChunk
 
 logger = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r"[a-z0-9_]+")
 _STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "does",
-    "for", "from", "how", "in", "into", "is", "it", "of", "on", "or", "should",
-    "that", "the", "their", "there", "these", "this", "to", "was", "were",
-    "what", "when", "where", "which", "who", "why", "with", "would",
+    "a", "already", "an", "and", "are", "as", "at", "be", "by", "can", "do",
+    "does", "down", "for", "from", "get", "got", "how", "in", "into", "is",
+    "it", "its", "itself", "keep", "keeps", "kept", "my", "of", "off", "on",
+    "or", "our", "out", "should", "that", "the", "their", "there", "these",
+    "this", "to", "up", "was", "were", "what", "when", "where", "which",
+    "who", "why", "with", "would", "you", "your",
 }
 
 _cross_encoder_instance: Any = None
@@ -80,15 +84,20 @@ def compute_pair_interaction_score(
         return 0.0
 
     q_stems = [_stem(t) for t in q_tokens]
-    # Use leaf section heading + content so shared document title doesn't inflate unrelated sections
+    contextual_text = format_contextual_chunk_text(
+        chunk.document_title,
+        chunk.heading,
+        chunk.content,
+        linearize=True,
+    )
     leaf_heading = chunk.heading.split(">")[-1].strip() if chunk.heading else ""
-    doc_text = f"{leaf_heading}\n{chunk.content}".lower()
+    doc_text = contextual_text.lower()
     doc_tokens = [t for t in _TOKEN_RE.findall(doc_text) if t not in _STOPWORDS]
     doc_stems = [_stem(t) for t in doc_tokens]
     doc_stem_set = set(doc_stems)
     doc_token_set = set(doc_tokens)
 
-    # 1. Weighted term & identifier coverage (with candidate-pool IDF specificity)
+    # 1. Weighted term & identifier coverage (with candidate-pool IDF specificity + synonym equivalence)
     total_weight = 0.0
     matched_weight = 0.0
     matched_count = 0
@@ -98,11 +107,15 @@ def compute_pair_interaction_score(
         idf_w = token_idf.get(stem_t, 1.0) if token_idf else 1.0
         w = base_w * idf_w
         total_weight += w
+        equiv_stems = get_synonym_stems(stem_t)
         if raw_t in doc_token_set:
             matched_weight += w
             matched_count += 1
         elif stem_t in doc_stem_set:
             matched_weight += 0.90 * w
+            matched_count += 1
+        elif equiv_stems & doc_stem_set:
+            matched_weight += 0.85 * w
             matched_count += 1
 
     if matched_count == 0:
@@ -110,7 +123,7 @@ def compute_pair_interaction_score(
 
     coverage = matched_weight / max(total_weight, 1e-6)
 
-    # 2. Best single-sentence concentration of query stems
+    # 2. Best single-sentence concentration of query stems (with synonym equivalence)
     sentences = re.split(r"[.!?\n]+", doc_text)
     max_sentence_coverage = 0.0
     unique_q_stems = set(q_stems)
@@ -118,7 +131,8 @@ def compute_pair_interaction_score(
         s_stems = {_stem(t) for t in _TOKEN_RE.findall(sent) if t not in _STOPWORDS}
         if not s_stems:
             continue
-        overlap = len(unique_q_stems & s_stems) / len(unique_q_stems)
+        hits = sum(1 for qs in unique_q_stems if get_synonym_stems(qs) & s_stems)
+        overlap = hits / len(unique_q_stems)
         if overlap > max_sentence_coverage:
             max_sentence_coverage = overlap
 
@@ -138,8 +152,8 @@ def compute_pair_interaction_score(
     # 5. Small RRF tie-breaker scaled by coverage so unrelated chunks stay near 0
     prior = chunk.rrf_score if chunk.rrf_score > 0 else (chunk.dense_score or chunk.sparse_score or 0.0)
     raw_score = (
-        0.52 * coverage
-        + 0.26 * max_sentence_coverage
+        0.52 * (coverage ** 1.35)
+        + 0.26 * (max_sentence_coverage * coverage)
         + 0.12 * heading_overlap
         + 0.05 * bigram_score
         + 0.05 * coverage * min(1.0, prior * 30.0)
@@ -159,6 +173,7 @@ def rerank_chunks(
     query: str,
     candidates: List[RetrievedChunk],
     top_k: int = 5,
+    expanded_queries: Optional[List[str]] = None,
 ) -> List[RetrievedChunk]:
     """
     Re-score and sort candidate chunks using the local CrossEncoder (or cross-interaction scorer).
@@ -172,15 +187,24 @@ def rerank_chunks(
     reranked: List[RetrievedChunk] = [c.clone() for c in candidates]
 
     if model is not None:
-        pairs = [
-            (query, f"{c.heading}\n{c.content}" if c.heading else c.content)
+        contextual_docs = [
+            format_contextual_chunk_text(c.document_title, c.heading, c.content, linearize=True)
             for c in reranked
         ]
+        pairs = [(query, doc_text) for doc_text in contextual_docs]
         raw_scores = model.predict(pairs)
-        for chunk, raw_val in zip(reranked, raw_scores):
-            norm_score = round(_sigmoid(float(raw_val)), 6)
-            chunk.rerank_score = norm_score
-            chunk.final_score = norm_score
+        best_scores = [_sigmoid(float(v)) for v in raw_scores]
+
+        if expanded_queries:
+            for eq in expanded_queries[:2]:
+                eq_scores = model.predict([(eq, doc_text) for doc_text in contextual_docs])
+                for idx, val in enumerate(eq_scores):
+                    best_scores[idx] = max(best_scores[idx], 0.96 * _sigmoid(float(val)))
+
+        for chunk, norm_score in zip(reranked, best_scores):
+            rounded = round(norm_score, 6)
+            chunk.rerank_score = rounded
+            chunk.final_score = rounded
     else:
         # Compute candidate-pool IDF so rare/distinguishing query terms carry higher weight
         q_stems = [
@@ -191,11 +215,14 @@ def rerank_chunks(
         n_docs = len(reranked)
         token_idf: dict[str, float] = {}
         for qs in set(q_stems):
+            equiv = get_synonym_stems(qs)
             df = 0
             for c in reranked:
-                leaf_h = c.heading.split(">")[-1].strip() if c.heading else ""
-                c_stems = {_stem(t) for t in _TOKEN_RE.findall(f"{leaf_h}\n{c.content}".lower())}
-                if qs in c_stems:
+                ctx_text = format_contextual_chunk_text(
+                    c.document_title, c.heading, c.content, linearize=True
+                ).lower()
+                c_stems = {_stem(t) for t in _TOKEN_RE.findall(ctx_text)}
+                if equiv & c_stems:
                     df += 1
             token_idf[qs] = 1.0 + math.log((n_docs + 1.0) / (df + 1.0))
 

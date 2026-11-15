@@ -3,6 +3,7 @@ const STORAGE_KEY = "rag_pipeline_settings_v1";
 const DEFAULT_SETTINGS = {
   mode: "hybrid",
   useReranker: true,
+  queryExpansion: true,
   topK: 5,
   candidatePool: 20,
   documentIds: [], // empty = All documents
@@ -719,6 +720,14 @@ function syncSettingsToUI() {
     ? "Enabled"
     : "Disabled";
 
+  const qeToggle = document.getElementById("query-expansion-toggle");
+  if (qeToggle) {
+    const qeOn = currentSettings.queryExpansion !== false;
+    qeToggle.checked = qeOn;
+    const qeLabel = document.getElementById("query-expansion-state-label");
+    if (qeLabel) qeLabel.textContent = qeOn ? "On" : "Off";
+  }
+
   const topkSlider = document.getElementById("topk-slider");
   topkSlider.value = String(currentSettings.topK);
   document.getElementById("topk-val").textContent = String(currentSettings.topK);
@@ -774,6 +783,11 @@ function updateSettingsDiffIndicators() {
     "useReranker",
     currentSettings.useReranker !== DEFAULT_SETTINGS.useReranker,
     `Reranker (Off)`
+  );
+  checkDiff(
+    "queryExpansion",
+    (currentSettings.queryExpansion !== false) !== DEFAULT_SETTINGS.queryExpansion,
+    `Query expansion (Off)`
   );
   checkDiff(
     "documentIds",
@@ -872,6 +886,30 @@ function initPlaygroundControls() {
     saveSettingsToStorage();
     updateSettingsDiffIndicators();
   });
+
+  // Query expansion switch
+  const qeToggleEl = document.getElementById("query-expansion-toggle");
+  if (qeToggleEl) {
+    qeToggleEl.addEventListener("change", (e) => {
+      currentSettings.queryExpansion = e.target.checked;
+      const qeLabel = document.getElementById("query-expansion-state-label");
+      if (qeLabel) qeLabel.textContent = currentSettings.queryExpansion ? "On" : "Off";
+      saveSettingsToStorage();
+      updateSettingsDiffIndicators();
+    });
+  }
+
+  // Show retrieved chunks anyway link on abstention card
+  const showAbstainChunksBtn = document.getElementById("show-abstain-chunks-btn");
+  if (showAbstainChunksBtn) {
+    showAbstainChunksBtn.addEventListener("click", () => {
+      const chunksSec = document.getElementById("section-chunks");
+      if (chunksSec) {
+        chunksSec.open = true;
+        chunksSec.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }
 
   // Top-K & Candidate Pool
   const topkSlider = document.getElementById("topk-slider");
@@ -1181,6 +1219,10 @@ function clearPlaygroundResults() {
   });
   const promptEl = document.getElementById("prompt-sent-content");
   if (promptEl) promptEl.textContent = "";
+  const eqRow = document.getElementById("expanded-queries-row");
+  const eqList = document.getElementById("expanded-queries-list");
+  if (eqRow) eqRow.classList.add("hidden");
+  if (eqList) eqList.textContent = "";
 
   const copyAnsBtn = document.getElementById("copy-answer-btn");
   const copyJsonBtn = document.getElementById("copy-json-btn");
@@ -1270,6 +1312,7 @@ async function runAskQuery() {
     top_k: currentSettings.topK,
     candidate_pool: currentSettings.candidatePool,
     use_reranker: currentSettings.useReranker,
+    query_expansion: currentSettings.queryExpansion !== false,
     document_ids: currentSettings.documentIds.length ? currentSettings.documentIds : null,
     rerank_min_score: currentSettings.rerankMinScore,
     rerank_relative_factor: currentSettings.rerankRelativeFactor,
@@ -1452,10 +1495,24 @@ function renderAnswerSection(data) {
     statePill.textContent = "Not found in documents";
     document.getElementById("abstain-message-text").textContent =
       data.answer || "I don’t have enough information in the provided documents.";
-    const topChunk = (data.retrieved_chunks || [])[0];
-    const reasonText = topChunk
-      ? formatPlainSelectionReason(topChunk.selection_reason)
-      : "No matching chunks passed the minimum score threshold.";
+    let reasonText = data.abstain_reason || "";
+    if (!reasonText) {
+      const chunks = data.retrieved_chunks || [];
+      const usedChunks = chunks.filter((c) => Boolean(c.selected) || c.selection_status === "used");
+      if (usedChunks.length > 0) {
+        reasonText = `The model found no supporting evidence in the ${usedChunks.length} chunks it was given`;
+      } else {
+        const minSc = Number(
+          (data.effective_settings && data.effective_settings.rerank_min_score) ??
+            currentSettings.rerankMinScore
+        );
+        const bestSc = chunks.reduce(
+          (mx, c) => Math.max(mx, Number(c.rerank_score ?? c.final_score ?? 0)),
+          0
+        );
+        reasonText = `No relevant passage found (best rerank score ${bestSc.toFixed(2)}, below the ${minSc.toFixed(2)} minimum)`;
+      }
+    }
     document.getElementById("abstain-reason-detail").textContent = reasonText;
     abstainBox.classList.remove("hidden");
   } else {
@@ -1768,6 +1825,19 @@ function renderMetricsSection(data) {
     : "Grounded";
   document.getElementById("metric-tokens-sub").textContent =
     `${pTok} prompt / ${cTok} out`;
+
+  const eqRow = document.getElementById("expanded-queries-row");
+  const eqList = document.getElementById("expanded-queries-list");
+  if (eqRow && eqList) {
+    const rewrites = Array.isArray(data.expanded_queries) ? data.expanded_queries : [];
+    if (rewrites.length > 0) {
+      eqList.textContent = rewrites.join(" · ");
+      eqRow.classList.remove("hidden");
+    } else {
+      eqList.textContent = "";
+      eqRow.classList.add("hidden");
+    }
+  }
 }
 
 window.highlightCitation = function (num) {

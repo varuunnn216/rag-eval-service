@@ -20,6 +20,100 @@ class ChunkData:
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 _WORD_RE = re.compile(r"\S+")
+_TABLE_SEP_RE = re.compile(r"^\s*\|?(?:\s*:?-{2,}:?\s*\|)+\s*(?::?-{2,}:?\s*\|?)?$")
+
+
+def _is_pipe_row(line: str) -> bool:
+    s = line.strip()
+    return s.startswith("|") and "|" in s[1:]
+
+
+def _is_markdown_table(text: str) -> bool:
+    lines = [ln for ln in text.strip().splitlines() if ln.strip()]
+    if len(lines) < 2:
+        return False
+    return _is_pipe_row(lines[0]) and bool(_TABLE_SEP_RE.match(lines[1]))
+
+
+def _parse_pipe_cells(line: str) -> List[str]:
+    s = line.strip()
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|"):
+        s = s[:-1]
+    return [c.strip() for c in s.split("|")]
+
+
+def linearize_tables(text: str) -> str:
+    """
+    Convert Markdown tables into natural-language sentences per row for embedding,
+    reranking, and LLM comprehension. Handles ragged rows / missing cells safely.
+    Original table text is preserved separately for UI display.
+    """
+    if not text or "|" not in text:
+        return text
+
+    lines = text.splitlines()
+    out_lines: List[str] = []
+    i = 0
+    while i < len(lines):
+        if (
+            i + 1 < len(lines)
+            and _is_pipe_row(lines[i])
+            and _TABLE_SEP_RE.match(lines[i + 1])
+        ):
+            headers = _parse_pipe_cells(lines[i])
+            i += 2
+            row_sentences: List[str] = []
+            while i < len(lines) and _is_pipe_row(lines[i]):
+                if not _TABLE_SEP_RE.match(lines[i]):
+                    cells = _parse_pipe_cells(lines[i])
+                    parts: List[str] = []
+                    for col_idx, cell in enumerate(cells):
+                        if not cell:
+                            continue
+                        if col_idx < len(headers) and headers[col_idx]:
+                            parts.append(f"{headers[col_idx]}: {cell}")
+                        else:
+                            parts.append(cell)
+                    if parts:
+                        row_sentences.append(". ".join(parts) + ".")
+                i += 1
+            if row_sentences:
+                out_lines.extend(row_sentences)
+            continue
+
+        out_lines.append(lines[i])
+        i += 1
+
+    return "\n".join(out_lines)
+
+
+def format_contextual_chunk_text(
+    document_title: str,
+    heading: str,
+    content: str,
+    linearize: bool = True,
+) -> str:
+    """
+    Build contextual chunk text:
+        "<doc title> > <heading path>\\n<chunk text>"
+    Avoids duplicating `document_title` when `heading` already starts with it.
+    """
+    title = (document_title or "").strip()
+    hd = (heading or "").strip()
+    if title and hd:
+        if hd.lower().startswith(title.lower()):
+            header = hd
+        else:
+            header = f"{title} > {hd}"
+    else:
+        header = title or hd
+
+    body = linearize_tables(content) if linearize else (content or "")
+    if header:
+        return f"{header}\n{body}" if body else header
+    return body
 
 
 def estimate_token_count(text: str) -> int:
@@ -188,7 +282,7 @@ def chunk_document(
         # Break any oversized single paragraph into sentence units
         units: List[Tuple[str, int, int]] = []
         for para_text, p_start, p_end in paragraphs:
-            if estimate_token_count(para_text) <= max_tokens:
+            if _is_markdown_table(para_text) or estimate_token_count(para_text) <= max_tokens:
                 units.append((para_text, p_start, p_end))
             else:
                 sentences = re.split(r"(?<=[.!?])\s+", para_text)

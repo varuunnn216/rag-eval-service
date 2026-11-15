@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 
 from app.config import get_settings
-from app.ingestion.chunker import estimate_token_count
+from app.ingestion.chunker import estimate_token_count, linearize_tables
 from app.ingestion.embedder import _deterministic_feature_embedding
 from app.retrieval.hybrid import retrieve_candidates, retrieve_candidates_with_timing
 from app.schemas import AskRequest, AskResponse, Citation, RetrievedChunk
@@ -30,9 +30,10 @@ ABSTENTION_MESSAGE = "I don't have enough information in the provided documents.
 
 SYSTEM_PROMPT = """You are a precise question-answering assistant. Follow these rules strictly:
 1. Answer ONLY from the numbered context chunks [1], [2], etc. provided below. Do not use outside knowledge or assumptions.
-2. Be concise and direct.
-3. Cite your sources as [n] immediately after each factual claim (for example: "The cafe opens at 9:00 AM on Sunday [1].").
-4. If the provided context chunks lack the information needed to answer the question, reply with the exact text:
+2. Treat synonyms and different wording as equivalent (for example flashing and blinking). If the context contains the answer, answer it even when wording differs. Abstain only when the information is truly missing.
+3. Be concise and direct.
+4. Cite your sources as [n] immediately after each factual claim (for example: "The cafe opens at 9:00 AM on Sunday [1].").
+5. If the provided context chunks lack the information needed to answer the question, reply with the exact text:
 I don't have enough information in the provided documents."""
 
 
@@ -235,9 +236,10 @@ def format_context_prompt(question: str, selected_chunks: List[RetrievedChunk]) 
     blocks: List[str] = []
     for idx, chunk in enumerate(selected_chunks, start=1):
         section_info = f" | Section: {chunk.heading}" if chunk.heading else ""
+        body_text = linearize_tables(chunk.content)
         blocks.append(
             f"[{idx}] Document: {chunk.document_title} (ID: {chunk.chunk_id}{section_info})\n"
-            f"{chunk.content}"
+            f"{body_text}"
         )
     joined_blocks = "\n\n---\n\n".join(blocks)
     return (
@@ -445,9 +447,15 @@ def find_best_supporting_sentence(claim: str, chunk_content: str) -> Tuple[str, 
     Returns `(best_sentence, similarity_score)`. Never blindly defaults to sentence 0
     when a later sentence has higher support similarity.
     """
+    searchable = linearize_tables(chunk_content) if "|" in chunk_content else chunk_content
     raw_lines = [
         re.sub(r"^\s*(?:[-*+•]|\d+[.)])\s+", "", s.strip())
-        for s in re.split(r"(?<=[.!?])\s+|\n+", chunk_content)
+        for line in searchable.splitlines()
+        for s in (
+            [line]
+            if ("|" in chunk_content and ": " in line and line.endswith("."))
+            else re.split(r"(?<=[.!?])\s+", line)
+        )
         if s.strip() and not s.strip().startswith("#")
     ]
     sentences = [s for s in raw_lines if s]
@@ -581,6 +589,7 @@ def answer_question(request: AskRequest) -> AskResponse:
     """
     t_start = time.perf_counter()
     settings = get_settings()
+    expanded_queries: List[str] = []
     raw_chunks, retrieval_ms, rerank_ms = retrieve_candidates_with_timing(
         query=request.question,
         mode=request.mode,
@@ -588,6 +597,8 @@ def answer_question(request: AskRequest) -> AskResponse:
         candidate_pool=request.candidate_pool,
         use_reranker=request.use_reranker,
         document_ids=request.document_ids,
+        query_expansion=request.query_expansion,
+        expanded_queries_out=expanded_queries,
     )
 
     annotated_chunks, selected_chunks, abstain_pre_llm = select_context_chunks(
@@ -602,6 +613,7 @@ def answer_question(request: AskRequest) -> AskResponse:
         "top_k": request.top_k,
         "candidate_pool": max(request.top_k, request.candidate_pool),
         "use_reranker": request.use_reranker,
+        "query_expansion": request.query_expansion,
         "document_ids": request.document_ids or [],
         "rerank_min_score": (
             request.rerank_min_score
@@ -623,6 +635,17 @@ def answer_question(request: AskRequest) -> AskResponse:
     }
 
     if abstain_pre_llm or not selected_chunks:
+        min_sc = float(eff_settings["rerank_min_score"])
+        best_sc = max(
+            (
+                float(c.rerank_score if c.rerank_score is not None else c.final_score)
+                for c in annotated_chunks
+            ),
+            default=0.0,
+        )
+        pre_abstain_reason = (
+            f"No relevant passage found (best rerank score {best_sc:.2f}, below the {min_sc:.2f} minimum)"
+        )
         total_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
         _log_request_telemetry(
             query=request.question,
@@ -639,6 +662,7 @@ def answer_question(request: AskRequest) -> AskResponse:
             question=request.question,
             answer=ABSTENTION_MESSAGE,
             abstained=True,
+            abstain_reason=pre_abstain_reason,
             error=None,
             citations=[],
             verified_citations_count=0,
@@ -653,6 +677,7 @@ def answer_question(request: AskRequest) -> AskResponse:
             completion_tokens=0,
             total_tokens=0,
             prompt_sent="(Skipped LLM call: top-1 rerank score fell below minimum threshold / abstain floor)",
+            expanded_queries=expanded_queries,
             effective_settings=eff_settings,
         )
 
@@ -705,12 +730,56 @@ def answer_question(request: AskRequest) -> AskResponse:
     gen_ms = round((time.perf_counter() - t_gen) * 1000.0, 2)
 
     # Check if the LLM itself abstained
-    norm_raw = raw_answer.strip()
-    if (
-        norm_raw == ABSTENTION_MESSAGE
-        or norm_raw.upper().startswith("ABSTAIN")
-        or "don't have enough information in the provided documents" in norm_raw.lower()
-    ):
+    def _is_abstain_text(txt: str) -> bool:
+        norm = txt.strip()
+        return (
+            norm == ABSTENTION_MESSAGE
+            or norm.upper().startswith("ABSTAIN")
+            or "don't have enough information in the provided documents" in norm.lower()
+        )
+
+    if _is_abstain_text(raw_answer):
+        min_sc = float(eff_settings["rerank_min_score"])
+        has_above_min = any(
+            float(c.rerank_score if c.rerank_score is not None else c.final_score) >= min_sc
+            for c in annotated_chunks
+        )
+        # Adaptive fallback: if at least one candidate is above min_score and there are more
+        # candidates in top 5 (dropped by ratio/max_chunks/min_score cuts), retry once with top 5.
+        if has_above_min and len(annotated_chunks) > len(selected_chunks):
+            fallback_chunks = [c for c in annotated_chunks[:5]]
+            fallback_prompt = format_context_prompt(request.question, fallback_chunks)
+            fallback_display = f"[System Instruction]\n{SYSTEM_PROMPT}\n\n[User Prompt]\n{fallback_prompt}"
+            try:
+                t_retry = time.perf_counter()
+                retry_raw, retry_p_tok, retry_c_tok = call_gemini_llm(
+                    fallback_prompt,
+                    SYSTEM_PROMPT,
+                    model_override=request.llm_model,
+                    temperature=request.temperature,
+                )
+                gen_ms = round(gen_ms + (time.perf_counter() - t_retry) * 1000.0, 2)
+                prompt_tok += retry_p_tok
+                completion_tok += retry_c_tok
+                full_prompt_display = fallback_display
+                if not _is_abstain_text(retry_raw):
+                    raw_answer = retry_raw
+                    selected_chunks = fallback_chunks
+                    for idx_fc, fc in enumerate(fallback_chunks, start=1):
+                        fc.selected = True
+                        fc.selection_status = "used"
+                        fc.context_index = idx_fc
+                        if not str(fc.selection_reason).startswith("Used:"):
+                            fc.selection_reason = "Used: adaptive fallback (top 5 candidates)"
+                else:
+                    selected_chunks = fallback_chunks
+            except LLMGenerationError:
+                pass
+
+    if _is_abstain_text(raw_answer):
+        llm_abstain_reason = (
+            f"The model found no supporting evidence in the {len(selected_chunks)} chunks it was given"
+        )
         total_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
         _log_request_telemetry(
             query=request.question,
@@ -727,6 +796,7 @@ def answer_question(request: AskRequest) -> AskResponse:
             question=request.question,
             answer=ABSTENTION_MESSAGE,
             abstained=True,
+            abstain_reason=llm_abstain_reason,
             error=None,
             citations=[],
             verified_citations_count=0,
@@ -741,6 +811,7 @@ def answer_question(request: AskRequest) -> AskResponse:
             completion_tokens=completion_tok,
             total_tokens=prompt_tok + completion_tok,
             prompt_sent=full_prompt_display,
+            expanded_queries=expanded_queries,
             effective_settings=eff_settings,
         )
 
@@ -781,6 +852,7 @@ def answer_question(request: AskRequest) -> AskResponse:
         completion_tokens=completion_tok,
         total_tokens=prompt_tok + completion_tok,
         prompt_sent=full_prompt_display,
+        expanded_queries=expanded_queries,
         effective_settings=eff_settings,
     )
 

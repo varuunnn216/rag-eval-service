@@ -298,7 +298,7 @@ def _get_in_memory_corpus_index() -> List[Tuple[RetrievedChunk, List[float]]]:
     if _in_memory_cache is not None:
         return _in_memory_cache
 
-    from app.ingestion.chunker import chunk_document
+    from app.ingestion.chunker import chunk_document, format_contextual_chunk_text
     from app.ingestion.seed import load_corpus_documents
 
     settings = get_settings()
@@ -323,7 +323,15 @@ def _get_in_memory_corpus_index() -> List[Tuple[RetrievedChunk, List[float]]]:
             )
         )
     embedder = EmbeddingService()
-    texts = [f"{c.heading}\n{c.content}" if c.heading else c.content for c in raw_chunks]
+    texts = [
+        format_contextual_chunk_text(
+            docs_by_id[c.document_id].title,
+            c.heading,
+            c.content,
+            linearize=True,
+        )
+        for c in raw_chunks
+    ]
     vectors = embedder.embed_documents(texts)
 
     entries: List[Tuple[RetrievedChunk, List[float]]] = []
@@ -405,13 +413,16 @@ def _in_memory_sparse_search(
     df_counts: Dict[str, int] = {q_stem: 0 for q_stem, _ in query_stems}
     n_chunks = len(filtered_entries)
 
+    from app.ingestion.chunker import linearize_tables
+
     for base_chunk, _ in filtered_entries:
         h_raw = [
             t for t in _QUERY_TOKEN_RE.findall(base_chunk.heading.lower())
             if t not in _SPARSE_STOPWORDS
         ]
+        body_for_sparse = linearize_tables(base_chunk.content).lower()
         b_raw = [
-            t for t in _QUERY_TOKEN_RE.findall(base_chunk.content.lower())
+            t for t in _QUERY_TOKEN_RE.findall(body_for_sparse)
             if t not in _SPARSE_STOPWORDS
         ]
         h_stems = {_stem_token(t) for t in h_raw} | set(h_raw)
@@ -516,6 +527,112 @@ def reciprocal_rank_fusion(
     return fused
 
 
+def _single_query_candidates(
+    query: str,
+    mode: RetrievalMode,
+    pool_size: int,
+    embedder: EmbeddingService,
+    clean_doc_ids: Optional[List[str]],
+    min_sparse_score: Optional[float],
+    settings: Any,
+) -> List[RetrievedChunk]:
+    """Run dense, sparse, or hybrid retrieval for a single query string."""
+    try:
+        with get_db_connection() as conn:
+            if mode == "dense":
+                q_vec = embedder.embed_query(query)
+                return dense_search(conn, q_vec, limit=pool_size, document_ids=clean_doc_ids)
+            if mode == "sparse":
+                return sparse_search(
+                    conn,
+                    query,
+                    limit=pool_size,
+                    document_ids=clean_doc_ids,
+                    min_sparse_score=min_sparse_score,
+                )
+            q_vec = embedder.embed_query(query)
+            dense_list = dense_search(conn, q_vec, limit=pool_size, document_ids=clean_doc_ids)
+            sparse_list = sparse_search(
+                conn,
+                query,
+                limit=pool_size,
+                document_ids=clean_doc_ids,
+                min_sparse_score=min_sparse_score,
+            )
+            return reciprocal_rank_fusion(
+                dense_results=dense_list,
+                sparse_results=sparse_list,
+                k=settings.rrf_k,
+                dense_weight=settings.dense_weight,
+                sparse_weight=settings.sparse_weight,
+                top_n=pool_size,
+            )
+    except Exception:
+        if mode == "dense":
+            q_vec = embedder.embed_query(query)
+            return _in_memory_dense_search(q_vec, limit=pool_size, document_ids=clean_doc_ids)
+        if mode == "sparse":
+            return _in_memory_sparse_search(
+                query,
+                limit=pool_size,
+                document_ids=clean_doc_ids,
+                min_sparse_score=min_sparse_score,
+            )
+        q_vec = embedder.embed_query(query)
+        dense_list = _in_memory_dense_search(q_vec, limit=pool_size, document_ids=clean_doc_ids)
+        sparse_list = _in_memory_sparse_search(
+            query,
+            limit=pool_size,
+            document_ids=clean_doc_ids,
+            min_sparse_score=min_sparse_score,
+        )
+        return reciprocal_rank_fusion(
+            dense_results=dense_list,
+            sparse_results=sparse_list,
+            k=settings.rrf_k,
+            dense_weight=settings.dense_weight,
+            sparse_weight=settings.sparse_weight,
+            top_n=pool_size,
+        )
+
+
+def _merge_expanded_candidates_rrf(
+    ranked_lists: List[List[RetrievedChunk]],
+    rrf_k: int,
+    top_n: int,
+) -> List[RetrievedChunk]:
+    """Merge ranked candidate lists from [original_query, *rewrites] via weighted RRF."""
+    by_id: Dict[str, RetrievedChunk] = {}
+    rrf_scores: Dict[str, float] = {}
+
+    for list_idx, c_list in enumerate(ranked_lists):
+        weight = 1.0 if list_idx == 0 else 0.75
+        for rank_idx, item in enumerate(c_list, start=1):
+            cid = item.chunk_id
+            if cid not in by_id:
+                by_id[cid] = item.clone()
+            else:
+                # Preserve original dense/sparse scores if found in a rewrite
+                existing = by_id[cid]
+                if existing.dense_score is None and item.dense_score is not None:
+                    existing.dense_score = item.dense_score
+                    existing.dense_rank = item.dense_rank
+                if existing.sparse_score is None and item.sparse_score is not None:
+                    existing.sparse_score = item.sparse_score
+                    existing.sparse_rank = item.sparse_rank
+            rrf_scores[cid] = rrf_scores.get(cid, 0.0) + weight * (1.0 / (rrf_k + rank_idx))
+
+    merged: List[RetrievedChunk] = []
+    for cid, chunk in by_id.items():
+        score = round(rrf_scores[cid], 6)
+        chunk.rrf_score = score
+        chunk.final_score = score
+        merged.append(chunk)
+
+    merged.sort(key=lambda c: (-c.rrf_score, c.chunk_id))
+    return merged[:top_n]
+
+
 def retrieve_candidates_with_timing(
     query: str,
     mode: RetrievalMode = "hybrid",
@@ -524,82 +641,51 @@ def retrieve_candidates_with_timing(
     use_reranker: bool = True,
     document_ids: Optional[List[str]] = None,
     min_sparse_score: Optional[float] = None,
+    query_expansion: bool = True,
+    expanded_queries_out: Optional[List[str]] = None,
 ) -> Tuple[List[RetrievedChunk], float, float]:
     """
     Execute retrieval in `dense`, `sparse`, or `hybrid` (RRF) mode, with optional
-    cross-encoder reranking over the candidate pool.
+    query expansion and cross-encoder reranking over the candidate pool.
     Returns `(top_k_chunks, retrieval_latency_ms, rerank_latency_ms)`.
     """
+    from app.retrieval.query_expansion import expand_query
+
     t0 = time.perf_counter()
     settings = get_settings()
     pool_size = max(top_k, candidate_pool)
     embedder = EmbeddingService()
     clean_doc_ids = [d for d in (document_ids or []) if d and d != "all"] or None
 
-    try:
-        with get_db_connection() as conn:
-            if mode == "dense":
-                q_vec = embedder.embed_query(query)
-                candidates = dense_search(conn, q_vec, limit=pool_size, document_ids=clean_doc_ids)
-            elif mode == "sparse":
-                candidates = sparse_search(
-                    conn,
-                    query,
-                    limit=pool_size,
-                    document_ids=clean_doc_ids,
-                    min_sparse_score=min_sparse_score,
-                )
-            else:
-                q_vec = embedder.embed_query(query)
-                dense_list = dense_search(conn, q_vec, limit=pool_size, document_ids=clean_doc_ids)
-                sparse_list = sparse_search(
-                    conn,
-                    query,
-                    limit=pool_size,
-                    document_ids=clean_doc_ids,
-                    min_sparse_score=min_sparse_score,
-                )
-                candidates = reciprocal_rank_fusion(
-                    dense_results=dense_list,
-                    sparse_results=sparse_list,
-                    k=settings.rrf_k,
-                    dense_weight=settings.dense_weight,
-                    sparse_weight=settings.sparse_weight,
-                    top_n=pool_size,
-                )
-    except Exception:
-        if mode == "dense":
-            q_vec = embedder.embed_query(query)
-            candidates = _in_memory_dense_search(q_vec, limit=pool_size, document_ids=clean_doc_ids)
-        elif mode == "sparse":
-            candidates = _in_memory_sparse_search(
-                query,
-                limit=pool_size,
-                document_ids=clean_doc_ids,
-                min_sparse_score=min_sparse_score,
+    rewrites = expand_query(query) if query_expansion else []
+    if expanded_queries_out is not None:
+        expanded_queries_out.clear()
+        expanded_queries_out.extend(rewrites)
+
+    if rewrites:
+        per_query_lists = [
+            _single_query_candidates(
+                q_str, mode, pool_size, embedder, clean_doc_ids, min_sparse_score, settings
             )
-        else:
-            q_vec = embedder.embed_query(query)
-            dense_list = _in_memory_dense_search(q_vec, limit=pool_size, document_ids=clean_doc_ids)
-            sparse_list = _in_memory_sparse_search(
-                query,
-                limit=pool_size,
-                document_ids=clean_doc_ids,
-                min_sparse_score=min_sparse_score,
-            )
-            candidates = reciprocal_rank_fusion(
-                dense_results=dense_list,
-                sparse_results=sparse_list,
-                k=settings.rrf_k,
-                dense_weight=settings.dense_weight,
-                sparse_weight=settings.sparse_weight,
-                top_n=pool_size,
-            )
+            for q_str in [query, *rewrites]
+        ]
+        candidates = _merge_expanded_candidates_rrf(
+            per_query_lists, rrf_k=settings.rrf_k, top_n=pool_size
+        )
+    else:
+        candidates = _single_query_candidates(
+            query, mode, pool_size, embedder, clean_doc_ids, min_sparse_score, settings
+        )
 
     retrieval_ms = round((time.perf_counter() - t0) * 1000.0, 2)
     t_rerank = time.perf_counter()
     if use_reranker and candidates:
-        results = rerank_chunks(query=query, candidates=candidates, top_k=top_k)
+        results = rerank_chunks(
+            query=query,
+            candidates=candidates,
+            top_k=top_k,
+            expanded_queries=rewrites,
+        )
         rerank_ms = round((time.perf_counter() - t_rerank) * 1000.0, 2)
     else:
         results = candidates[:top_k]

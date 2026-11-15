@@ -170,6 +170,7 @@ try:
         top_k: int = Field(default=5, ge=1, le=20)
         candidate_pool: int = Field(default=20, ge=1, le=100)
         use_reranker: bool = Field(default=True)
+        query_expansion: bool = Field(default=True)
         document_ids: Optional[List[str]] = Field(default=None)
         rerank_min_score: Optional[float] = Field(default=None)
         rerank_relative_factor: Optional[float] = Field(default=None)
@@ -185,6 +186,10 @@ try:
         abstained: bool = Field(
             default=False,
             description="True when retrieved chunks do not contain enough evidence to answer",
+        )
+        abstain_reason: Optional[str] = Field(
+            default=None,
+            description="Human-readable explanation for why the pipeline abstained",
         )
         error: Optional[str] = Field(
             default=None,
@@ -203,6 +208,7 @@ try:
         completion_tokens: int = 0
         total_tokens: int = 0
         prompt_sent: str = ""
+        expanded_queries: List[str] = Field(default_factory=list)
         effective_settings: Dict[str, Any] = Field(default_factory=dict)
 
 except ImportError:
@@ -277,6 +283,7 @@ except ImportError:
         top_k: int = 5
         candidate_pool: int = 20
         use_reranker: bool = True
+        query_expansion: bool = True
         document_ids: Optional[List[str]] = None
         min_sparse_score: Optional[float] = None
 
@@ -307,6 +314,7 @@ except ImportError:
         top_k: int = 5
         candidate_pool: int = 20
         use_reranker: bool = True
+        query_expansion: bool = True
         document_ids: Optional[List[str]] = None
         rerank_min_score: Optional[float] = None
         rerank_relative_factor: Optional[float] = None
@@ -319,6 +327,7 @@ except ImportError:
         question: str
         answer: str
         abstained: bool = False
+        abstain_reason: Optional[str] = None
         error: Optional[str] = None
         citations: List[Citation] = field(default_factory=list)
         verified_citations_count: int = 0
@@ -333,4 +342,5 @@ except ImportError:
         completion_tokens: int = 0
         total_tokens: int = 0
         prompt_sent: str = ""
+        expanded_queries: List[str] = field(default_factory=list)
         effective_settings: Dict[str, Any] = field(default_factory=dict)

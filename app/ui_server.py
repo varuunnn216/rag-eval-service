@@ -64,6 +64,7 @@ def _parse_ask_request(body: Dict[str, Any]) -> AskRequest:
         top_k=int(body.get("top_k", 5)),
         candidate_pool=int(body.get("candidate_pool", 20)),
         use_reranker=bool(body.get("use_reranker", True)),
+        query_expansion=bool(body.get("query_expansion", True)),
         document_ids=doc_ids,
         rerank_min_score=(
             float(body["rerank_min_score"])
@@ -209,6 +210,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                     candidate_pool=req.candidate_pool,
                     use_reranker=req.use_reranker,
                     document_ids=req.document_ids,
+                    query_expansion=req.query_expansion,
                 )
                 self._send_sse_event(
                     {"stage": "reranking", "retrieval_ms": retrieval_ms, "rerank_ms": rerank_ms}

@@ -76,6 +76,7 @@ class TestBluebirdCafeRAGPipeline(unittest.TestCase):
                 mode="hybrid",
                 top_k=5,
                 use_reranker=True,
+                document_ids=["doc_08_bluebird_cafe"],
             )
         )
         self.assertIsNone(resp.error)
@@ -143,6 +144,7 @@ class TestBluebirdCafeRAGPipeline(unittest.TestCase):
                 mode="hybrid",
                 top_k=5,
                 use_reranker=True,
+                document_ids=["doc_08_bluebird_cafe"],
             )
         )
         self.assertGreaterEqual(

@@ -530,6 +530,31 @@
               </div>
             </div>
 
+            <!-- Control 2b: Query Expansion Toggle -->
+            <div class="control-card" data-setting-card="queryExpansion">
+              <div class="control-header">
+                <label for="query-expansion-toggle" class="control-label">Query expansion</label>
+                <div class="header-badges">
+                  <span class="diff-badge hidden" id="diff-queryExpansion">Modified</span>
+                  <span class="tooltip-wrap" tabindex="0" aria-label="Explanation of Query Expansion">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-popup" role="tooltip">
+                      <strong>Query Expansion:</strong><br/>
+                      Expands vocabulary-mismatched queries with 2–3 synonym phrasings (e.g. flashing/blinking, collect/pick up) and merges results with RRF.
+                    </span>
+                  </span>
+                </div>
+              </div>
+              <div class="toggle-row">
+                <label class="switch" aria-label="Toggle Query Expansion">
+                  <input type="checkbox" id="query-expansion-toggle" role="switch" checked />
+                  <span class="slider-toggle"></span>
+                </label>
+                <span id="query-expansion-state-label" class="toggle-status-text">On</span>
+              </div>
+              <div class="helper-text">Merges original + synonym rewrites with RRF</div>
+            </div>
+
             <!-- Control 3: Document Scope Multi-Select Dropdown -->
             <div class="control-card" data-setting-card="documentIds">
               <div class="control-header">
@@ -728,6 +753,9 @@
                 I don’t have enough information in the provided documents.
               </div>
               <div class="abstain-reason" id="abstain-reason-detail"></div>
+              <button type="button" id="show-abstain-chunks-btn" class="abstain-chunks-link">
+                Show retrieved chunks anyway
+              </button>
             </div>
           </div>
 
@@ -786,6 +814,11 @@
                   <div class="metric-value" id="metric-tokens-card">&mdash;</div>
                   <div class="metric-sub" id="metric-tokens-sub">Prompt: 0 &bull; Completion: 0</div>
                 </div>
+              </div>
+
+              <div id="expanded-queries-row" class="expanded-queries-row hidden">
+                <strong>Query expansion rewrites:</strong>
+                <span id="expanded-queries-list"></span>
               </div>
 
               <details id="prompt-drawer" class="prompt-drawer">
@@ -972,6 +1005,7 @@
               <option value="exact_lookup">Exact Lookup</option>
               <option value="semantic_conceptual">Semantic / Conceptual</option>
               <option value="multi_hop">Multi-Hop Synthesis</option>
+              <option value="paraphrase">Paraphrase</option>
               <option value="unanswerable">Unanswerable Trap</option>
             </select>
             <input type="text" id="eval-search-filter" placeholder="Filter questions..." aria-label="Search Evaluation Questions" />

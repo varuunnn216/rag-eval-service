@@ -1692,6 +1692,39 @@ input[type="range"] {
   margin-top: 6px;
 }
 
+.abstain-chunks-link {
+  margin-top: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.abstain-chunks-link:hover {
+  color: var(--accent-hover);
+}
+
+.expanded-queries-row {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.expanded-queries-row strong {
+  color: var(--text);
+  margin-right: 6px;
+}
+
 /* Rule 2: Red (--danger) only for errors */
 .error-callout {
   padding: var(--space-3);

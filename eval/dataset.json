@@ -629,5 +629,75 @@
     "expected_answer": "ABSTAIN",
     "key_facts": [],
     "should_abstain": true
+  },
+  {
+    "id": "q61",
+    "category": "paraphrase",
+    "question": "The light on my router keeps flashing red. What should I do?",
+    "expected_document_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": ["doc_11_zephyr_router::chunk_002"],
+    "expected_answer": "Blinking red means a hardware fault. Contact support.",
+    "key_facts": ["hardware fault", "contact support"],
+    "should_abstain": false
+  },
+  {
+    "id": "q62",
+    "category": "paraphrase",
+    "question": "How do I wipe all my settings on the router?",
+    "expected_document_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": ["doc_11_zephyr_router::chunk_005"],
+    "expected_answer": "Hold the Reset button for 10 seconds while the router is powered on until all LEDs flash once.",
+    "key_facts": ["Reset", "10 seconds"],
+    "should_abstain": false
+  },
+  {
+    "id": "q63",
+    "category": "paraphrase",
+    "question": "My router keeps shutting itself off. Why?",
+    "expected_document_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": ["doc_11_zephyr_router::chunk_004"],
+    "expected_answer": "The router is overheating (E-407) and shuts down automatically at 70 degrees Celsius. Move it to a ventilated place.",
+    "key_facts": ["overheating", "E-407", "70"],
+    "should_abstain": false
+  },
+  {
+    "id": "q64",
+    "category": "paraphrase",
+    "question": "Can I get my money back on a router I already opened?",
+    "expected_document_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": ["doc_11_zephyr_router::chunk_007"],
+    "expected_answer": "An opened router can be returned within 15 days with a restocking fee of 10 percent of the price.",
+    "key_facts": ["15 days", "10 percent"],
+    "should_abstain": false
+  },
+  {
+    "id": "q65",
+    "category": "paraphrase",
+    "question": "How many days do I have to collect an item I requested from another library?",
+    "expected_document_id": "doc_10_harborview_library",
+    "expected_chunk_ids": ["doc_10_harborview_library::chunk_004"],
+    "expected_answer": "You must collect the item within 5 days of the arrival email, or the request is cancelled.",
+    "key_facts": ["5 days"],
+    "should_abstain": false
+  },
+  {
+    "id": "q66",
+    "category": "unanswerable",
+    "question": "Does the ZX-400 support Wi-Fi 7?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
+  },
+  {
+    "id": "q67",
+    "category": "unanswerable",
+    "question": "What CPU does the router use?",
+    "expected_document_id": null,
+    "expected_chunk_ids": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true
   }
 ]
