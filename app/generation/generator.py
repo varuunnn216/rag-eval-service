@@ -703,7 +703,7 @@ def _expand_with_section_neighbors(
     return out
 
 
-def answer_question(request: AskRequest) -> AskResponse:
+def answer_question(request: AskRequest, session_id: Optional[str] = None) -> AskResponse:
     """
     End-to-end RAG pipeline:
     1. Retrieve + rerank candidate chunks (with optional document scope filter)
@@ -724,6 +724,8 @@ def answer_question(request: AskRequest) -> AskResponse:
         document_ids=request.document_ids,
         query_expansion=request.query_expansion,
         expanded_queries_out=expanded_queries,
+        session_id=session_id,
+        scope_mode=getattr(request, "scope_mode", "all"),
     )
 
     annotated_chunks, selected_chunks, abstain_pre_llm = select_context_chunks(

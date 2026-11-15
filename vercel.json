@@ -4,5 +4,11 @@
     "api/index.py": {
       "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/v1/cron/cleanup",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

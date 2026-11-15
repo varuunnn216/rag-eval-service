@@ -190,3 +190,9 @@ In `DEMO_MODE=true`, public visitors have read-only access to the Document Libra
   ```
   (`ADMIN_TOKEN` is read from the environment only and sent via the `X-Admin-Token` header.)
 
+### 9. How the public demo works
+- **Shared sample library vs. private sandbox:** When `DEMO_MODE=true`, the bundled corpus (`session_id IS NULL`) is read-only for visitors. On first visit, each browser receives an anonymous `HttpOnly`, `SameSite=Lax` (`Secure` on HTTPS) session cookie (`rag_visitor_session`, valid for 24 hours). Any document a visitor uploads is scoped strictly to their session (`WHERE session_id IS NULL OR session_id = :current_session`) so other visitors can never view, retrieve, or delete it.
+- **Sandbox limits & safety:** Visitors can upload up to **3 documents** per session, **100 KB** each, **20 chunks** total (`.md`, `.txt`, or pasted text). Control characters are stripped on ingest, Markdown is sanitized on render, and rate limits apply (`5` uploads/hour/IP, `20` Ask requests/hour/IP, plus daily global caps).
+- **24-hour automatic deletion:** Sandbox documents expire after 24 hours and are removed both opportunistically on upload and daily via the Vercel Cron job (`/api/v1/cron/cleanup`).
+
+

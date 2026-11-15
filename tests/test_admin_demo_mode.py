@@ -84,14 +84,7 @@ class AdminDemoModeTests(unittest.TestCase):
         return h.status_code, h.response_headers, parsed
 
     def test_admin_endpoints_return_401_without_session_or_token(self) -> None:
-        status, _, _ = self._request(
-            "POST",
-            "/api/v1/ingest",
-            {"documents": [{"title": "T", "content": "Hello world"}]},
-        )
-        self.assertEqual(status, 401)
-
-        status, _, _ = self._request("DELETE", "/api/v1/documents/doc_01")
+        status, _, _ = self._request("DELETE", "/api/v1/documents/doc_pgvector_indexing")
         self.assertEqual(status, 401)
 
         status, _, _ = self._request("POST", "/api/v1/eval/generate", {"doc_id": "doc_01"})
@@ -177,9 +170,10 @@ class AdminDemoModeTests(unittest.TestCase):
         self.assertIn("var(--danger)", css)
 
         html = Path("app/static/index.html").read_text(encoding="utf-8")
-        self.assertIn('id="docs-demo-banner"', html)
+        self.assertIn('id="sandbox-privacy-note"', html)
+        self.assertIn('id="sandbox-docs-section"', html)
         self.assertIn('id="admin-login-link"', html)
-        self.assertIn("Public demo: the document library is read-only.", html)
+        self.assertIn("Documents are private to this browser session and are deleted after 24 hours.", html)
 
 
 if __name__ == "__main__":

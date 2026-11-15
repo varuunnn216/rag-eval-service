@@ -85,6 +85,8 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
         return JSONResponse(err, status_code=500, headers=SECURITY_HEADERS)
     for k, v in SECURITY_HEADERS.items():
         response.headers.setdefault(k, v)
+    if request.url.path.startswith("/static/fonts/"):
+        response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
     return response
 
 app.include_router(api_router)
@@ -107,20 +109,21 @@ def serve_favicon() -> FileResponse:
 @app.get("/health", tags=["system"])
 def health_check(request: Request) -> Dict[str, Any]:
     """Verify API and PostgreSQL + pgvector connectivity and corpus counts."""
+    from app.security import VISITOR_COOKIE_NAME, verify_visitor_session_value
+
     settings = get_settings()
+    visitor_sid = verify_visitor_session_value(request.cookies.get(VISITOR_COOKIE_NAME))
+    docs = list_documents(session_id=visitor_sid)
+    doc_count = len(docs)
+    chunk_count = sum(int(d.get("chunk_count") or 0) for d in docs)
     try:
         with get_db_connection() as conn:
-            doc_count = conn.execute("SELECT COUNT(*) AS cnt FROM documents").fetchone()["cnt"]
-            chunk_count = conn.execute("SELECT COUNT(*) AS cnt FROM chunks").fetchone()["cnt"]
             ext_row = conn.execute(
                 "SELECT extversion FROM pg_extension WHERE extname = 'vector'"
             ).fetchone()
             pgv_ver = ext_row["extversion"] if ext_row else None
             backend = "postgresql+pgvector"
     except Exception:
-        docs = list_documents()
-        doc_count = len(docs)
-        chunk_count = sum(d.get("chunk_count", 0) for d in docs)
         pgv_ver = "in-memory-mirror"
         backend = "in-memory-hybrid"
 

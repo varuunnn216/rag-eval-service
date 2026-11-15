@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timedelta, timezone
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
 import mimetypes
+import os
 from pathlib import Path
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from urllib.parse import unquote, urlparse
 
 from app.config import get_settings
@@ -25,8 +27,10 @@ from app.generation.generator import (
 )
 from app.ingestion.seed import load_corpus_documents
 from app.ingestion.service import (
+    cleanup_expired_sandbox_documents,
     delete_document,
     get_document_chunks,
+    get_session_sandbox_usage,
     ingest_documents,
     list_documents,
 )
@@ -36,16 +40,27 @@ from app.security import (
     ADMIN_COOKIE_NAME,
     ADMIN_SESSION_TTL_SECONDS,
     MAX_REQUEST_BODY_BYTES,
+    SANDBOX_MAX_CHUNKS_PER_SESSION,
     SECURITY_HEADERS,
+    VISITOR_COOKIE_NAME,
     build_session_cookie_header,
+    check_ask_rate_limit,
+    check_daily_ingest_cap,
+    check_daily_llm_cap,
+    check_ingest_rate_limit,
     check_login_rate_limit,
     check_rate_limit,
     create_admin_session_value,
     friendly_error_payload,
+    get_or_create_visitor_session,
     is_admin_authenticated,
+    parse_cookies,
     sanitize_ask_payload_for_demo,
     sanitize_documents_for_demo,
+    strip_control_chars,
+    validate_sandbox_upload,
     verify_admin_token,
+    verify_visitor_session_value,
 )
 from eval.question_bank import (
     add_manual_question,
@@ -72,7 +87,11 @@ def _is_admin_authorized(headers: Any) -> bool:
 
 def _get_health_payload(headers: Any = None) -> Dict[str, Any]:
     settings = get_settings()
-    docs = list_documents()
+    visitor_sid = None
+    if headers is not None:
+        cookies = parse_cookies(headers.get("Cookie") or headers.get("cookie"))
+        visitor_sid = verify_visitor_session_value(cookies.get(VISITOR_COOKIE_NAME))
+    docs = list_documents(session_id=visitor_sid)
     doc_count = len(docs)
     chunk_count = sum(d.get("chunk_count", 0) for d in docs)
     return {
@@ -104,6 +123,7 @@ def _parse_ask_request(body: Dict[str, Any]) -> AskRequest:
         use_reranker=bool(body.get("use_reranker", True)),
         query_expansion=bool(body.get("query_expansion", True)),
         document_ids=doc_ids,
+        scope_mode=str(body.get("scope_mode") or "all"),
         rerank_min_score=(
             float(body["rerank_min_score"])
             if body.get("rerank_min_score") is not None
@@ -153,18 +173,24 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
-    def _send_file(self, file_path: Path) -> None:
+    def _send_file(self, file_path: Path, extra_headers: Dict[str, str] | None = None) -> None:
         if not file_path.exists() or not file_path.is_file():
             self._send_json({"detail": "Not found"}, status=404)
             return
         mime, _ = mimetypes.guess_type(str(file_path))
         if file_path.suffix == ".svg":
             mime = "image/svg+xml"
+        elif file_path.suffix == ".woff2":
+            mime = "font/woff2"
         content = file_path.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", mime or "application/octet-stream")
         self.send_header("Content-Length", str(len(content)))
+        if file_path.parent.name == "fonts":
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
         self._send_security_headers()
+        for k, v in (extra_headers or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(content)
 
@@ -182,12 +208,19 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(line)
         self.wfile.flush()
 
+    def _visitor_session(self) -> tuple[str, Dict[str, str]]:
+        is_https = (self.headers.get("X-Forwarded-Proto") or "").lower() == "https" or os.getenv("VERCEL") == "1"
+        sid, set_cookie = get_or_create_visitor_session(self.headers, is_https=is_https)
+        extra = {"Set-Cookie": set_cookie} if set_cookie else {}
+        return sid, extra
+
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path
 
         if path == "/" or path == "/index.html":
-            self._send_file(STATIC_DIR / "index.html")
+            _, extra = self._visitor_session()
+            self._send_file(STATIC_DIR / "index.html", extra_headers=extra)
             return
         if path == "/favicon.ico" or path == "/favicon.svg":
             self._send_file(STATIC_DIR / "favicon.svg")
@@ -202,20 +235,37 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"detail": "Forbidden"}, status=403)
             return
         if path == "/health":
-            self._send_json(_get_health_payload(self.headers))
+            sid, extra = self._visitor_session()
+            self._send_json(_get_health_payload(self.headers), extra_headers=extra)
+            return
+        if path == "/api/v1/cron/cleanup":
+            cron_secret = (os.getenv("CRON_SECRET") or "").strip()
+            auth_hdr = (self.headers.get("Authorization") or "").strip()
+            if cron_secret:
+                expected = f"Bearer {cron_secret}"
+                if not hmac.compare_digest(auth_hdr, expected) and not _is_admin_authorized(self.headers):
+                    self._send_json({"detail": "Unauthorized cron request"}, status=401)
+                    return
+            removed = cleanup_expired_sandbox_documents()
+            self._send_json({"cleaned_up": removed})
             return
         if path == "/api/v1/admin/status":
             settings = get_settings()
             self._send_json({"demo_mode": settings.demo_mode, "is_admin": _is_admin_authorized(self.headers)})
             return
         if path == "/api/v1/documents":
-            self._send_json(sanitize_documents_for_demo(list_documents(), is_admin=_is_admin_authorized(self.headers)))
+            sid, extra = self._visitor_session()
+            self._send_json(
+                sanitize_documents_for_demo(list_documents(session_id=sid), is_admin=_is_admin_authorized(self.headers)),
+                extra_headers=extra,
+            )
             return
         if path.startswith("/api/v1/documents/") and path.endswith("/chunks"):
             parts = path.split("/")
             if len(parts) >= 5:
+                sid, extra = self._visitor_session()
                 doc_id = unquote(parts[4])
-                self._send_json(get_document_chunks(doc_id))
+                self._send_json(get_document_chunks(doc_id, session_id=sid), extra_headers=extra)
                 return
         if path == "/api/v1/eval/questions":
             qs = load_all_questions()
@@ -275,12 +325,16 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"detail": "Question not found or cannot delete golden question"}, status=404)
             return
         if path.startswith("/api/v1/documents/"):
-            if not _is_admin_authorized(self.headers):
-                self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=401)
-                return
+            is_admin = _is_admin_authorized(self.headers)
+            sid, extra = self._visitor_session()
             doc_id = unquote(path[len("/api/v1/documents/") :].strip("/"))
             if doc_id:
-                self._send_json(delete_document(doc_id))
+                try:
+                    self._send_json(delete_document(doc_id, session_id=sid, is_admin=is_admin), extra_headers=extra)
+                except PermissionError as exc:
+                    self._send_json({"detail": str(exc)}, status=401, extra_headers=extra)
+                except FileNotFoundError as exc:
+                    self._send_json({"detail": str(exc)}, status=404, extra_headers=extra)
                 return
         self._send_json({"detail": f"Unknown route: {path}"}, status=404)
 
@@ -321,17 +375,41 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             if path == "/api/v1/ask":
+                settings = get_settings()
+                is_admin = _is_admin_authorized(self.headers)
+                sid, extra = self._visitor_session()
+                if settings.demo_mode and not is_admin:
+                    if not check_ask_rate_limit(client_ip):
+                        self._send_json({"detail": "Question rate limit reached (20 per hour). Please try again later."}, status=429, extra_headers=extra)
+                        return
+                    cap_ok, cap_msg = check_daily_llm_cap()
+                    if not cap_ok:
+                        self._send_json({"detail": cap_msg}, status=429, extra_headers=extra)
+                        return
                 req = _parse_ask_request(body)
-                resp = answer_question(req)
-                self._send_json(sanitize_ask_payload_for_demo(resp.to_dict(), is_admin=_is_admin_authorized(self.headers)))
+                resp = answer_question(req, session_id=sid)
+                self._send_json(sanitize_ask_payload_for_demo(resp.to_dict(), is_admin=is_admin), extra_headers=extra)
                 return
 
             if path == "/api/v1/ask/stream":
+                settings = get_settings()
+                is_admin = _is_admin_authorized(self.headers)
+                sid, extra = self._visitor_session()
+                if settings.demo_mode and not is_admin:
+                    if not check_ask_rate_limit(client_ip):
+                        self._send_json({"detail": "Question rate limit reached (20 per hour). Please try again later."}, status=429, extra_headers=extra)
+                        return
+                    cap_ok, cap_msg = check_daily_llm_cap()
+                    if not cap_ok:
+                        self._send_json({"detail": cap_msg}, status=429, extra_headers=extra)
+                        return
                 req = _parse_ask_request(body)
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream; charset=utf-8")
                 self.send_header("Cache-Control", "no-cache")
                 self.send_header("Connection", "close")
+                for k, v in extra.items():
+                    self.send_header(k, v)
                 self.end_headers()
 
                 self._send_sse_event({"stage": "retrieving"})
@@ -344,6 +422,8 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                     use_reranker=req.use_reranker,
                     document_ids=req.document_ids,
                     query_expansion=req.query_expansion,
+                    session_id=sid,
+                    scope_mode=req.scope_mode,
                 )
                 self._send_sse_event(
                     {"stage": "reranking", "retrieval_ms": retrieval_ms, "rerank_ms": rerank_ms}
@@ -361,7 +441,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                         "abstain_pre_llm": abstain_pre_llm,
                     }
                 )
-                resp = answer_question(req)
+                resp = answer_question(req, session_id=sid)
                 # Stream answer tokens progressively for smooth visual feedback
                 if not resp.abstained and not resp.error and resp.answer:
                     words = resp.answer.split(" ")
@@ -390,6 +470,8 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                     if body.get("min_sparse_score") is not None
                     else None
                 )
+                sid, extra = self._visitor_session()
+                scope_mode = str(body.get("scope_mode") or "all")
                 results, latency_ms = retrieve_candidates(
                     query=query,
                     mode=mode,
@@ -398,6 +480,8 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                     use_reranker=use_reranker,
                     document_ids=doc_ids,
                     min_sparse_score=min_sparse,
+                    session_id=sid,
+                    scope_mode=scope_mode,
                 )
                 self._send_json(
                     {
@@ -406,14 +490,13 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                         "use_reranker": use_reranker,
                         "results": [r.to_dict() for r in results],
                         "latency_ms": latency_ms,
-                    }
+                    },
+                    extra_headers=extra,
                 )
                 return
 
             if path == "/api/v1/ingest":
-                if not _is_admin_authorized(self.headers):
-                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=401)
-                    return
+                is_admin = _is_admin_authorized(self.headers)
                 raw_docs = body.get("documents")
                 if raw_docs is None and "content" in body:
                     raw_docs = [body]
@@ -428,18 +511,61 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                     )
                     for d in (raw_docs or [])
                 ]
-                res = ingest_documents(docs)
-                self._send_json(res.to_dict())
+                if is_admin:
+                    res = ingest_documents(docs)
+                    self._send_json(res.to_dict())
+                    return
+
+                sid, extra = self._visitor_session()
+                if not check_ingest_rate_limit(client_ip):
+                    self._send_json({"detail": "Upload rate limit reached (5 per hour). Please try again later."}, status=429, extra_headers=extra)
+                    return
+                cap_ok, cap_msg = check_daily_ingest_cap()
+                if not cap_ok:
+                    self._send_json({"detail": cap_msg}, status=429, extra_headers=extra)
+                    return
+                if len(docs) != 1:
+                    self._send_json({"detail": "Sandbox supports uploading 1 document at a time."}, status=400, extra_headers=extra)
+                    return
+                doc = docs[0]
+                doc.content = strip_control_chars(doc.content)
+                doc.title = strip_control_chars(doc.title)
+                filename = str((doc.metadata or {}).get("filename") or doc.source or "")
+                cur_docs, cur_chunks = get_session_sandbox_usage(sid)
+                ok, err_msg = validate_sandbox_upload(filename, doc.content, cur_docs, cur_chunks)
+                if not ok:
+                    self._send_json({"detail": err_msg}, status=400, extra_headers=extra)
+                    return
+                prefix = f"sandbox_{sid[:12]}_"
+                if not doc.id.startswith(prefix):
+                    doc.id = f"{prefix}{doc.id}"
+                    doc.document_id = doc.id
+                expires_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+                try:
+                    res = ingest_documents(
+                        [doc],
+                        session_id=sid,
+                        expires_at=expires_at,
+                        existing_session_chunks=cur_chunks,
+                        max_session_chunks=SANDBOX_MAX_CHUNKS_PER_SESSION,
+                    )
+                    self._send_json(res.to_dict(), extra_headers=extra)
+                except ValueError as exc:
+                    self._send_json({"detail": str(exc)}, status=400, extra_headers=extra)
                 return
 
             if path.startswith("/api/v1/documents/") and path.endswith("/delete"):
-                if not _is_admin_authorized(self.headers):
-                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=401)
-                    return
+                is_admin = _is_admin_authorized(self.headers)
+                sid, extra = self._visitor_session()
                 parts = path.split("/")
                 if len(parts) >= 5:
                     doc_id = unquote(parts[4])
-                    self._send_json(delete_document(doc_id))
+                    try:
+                        self._send_json(delete_document(doc_id, session_id=sid, is_admin=is_admin), extra_headers=extra)
+                    except PermissionError as exc:
+                        self._send_json({"detail": str(exc)}, status=401, extra_headers=extra)
+                    except FileNotFoundError as exc:
+                        self._send_json({"detail": str(exc)}, status=404, extra_headers=extra)
                     return
 
             if path == "/api/v1/eval/generate":

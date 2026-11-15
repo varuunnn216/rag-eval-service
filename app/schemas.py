@@ -75,6 +75,8 @@ try:
         title: str = Field(default="", description="Human-readable document title")
         source: str = Field(default="", description="Source path or URL")
         content: str = Field(..., description="Full markdown or text content")
+        session_id: Optional[str] = Field(default=None, description="Owning visitor session ID (NULL = shared library)")
+        expires_at: Optional[str] = Field(default=None, description="ISO timestamp when sandbox document expires")
         metadata: Dict[str, Any] = Field(default_factory=dict)
 
         @model_validator(mode="after")
@@ -105,6 +107,7 @@ try:
         documents_ingested: int
         chunks_created: int
         document_ids: List[str]
+        suggested_questions: List[str] = Field(default_factory=list)
 
     class RetrievedChunk(_BaseSchema):
         """A retrieved chunk with dense, sparse, RRF, reranker, and selection metadata."""
@@ -172,6 +175,7 @@ try:
         use_reranker: bool = Field(default=True)
         query_expansion: bool = Field(default=True)
         document_ids: Optional[List[str]] = Field(default=None)
+        scope_mode: Literal["all", "sample", "mine"] = Field(default="all")
         rerank_min_score: Optional[float] = Field(default=None)
         rerank_relative_factor: Optional[float] = Field(default=None)
         rerank_max_chunks: Optional[int] = Field(default=None)
@@ -227,6 +231,8 @@ except ImportError:
         title: str = ""
         source: str = ""
         content: str = ""
+        session_id: Optional[str] = None
+        expires_at: Optional[str] = None
         metadata: Dict[str, Any] = field(default_factory=dict)
         document_id: str = ""
 
@@ -254,6 +260,7 @@ except ImportError:
         documents_ingested: int
         chunks_created: int
         document_ids: List[str]
+        suggested_questions: List[str] = field(default_factory=list)
 
     @dataclass
     class RetrievedChunk(_FallbackSchema):  # type: ignore[no-redef]
@@ -286,6 +293,7 @@ except ImportError:
         use_reranker: bool = True
         query_expansion: bool = True
         document_ids: Optional[List[str]] = None
+        scope_mode: Literal["all", "sample", "mine"] = "all"
         min_sparse_score: Optional[float] = None
 
     @dataclass
@@ -317,6 +325,7 @@ except ImportError:
         use_reranker: bool = True
         query_expansion: bool = True
         document_ids: Optional[List[str]] = None
+        scope_mode: Literal["all", "sample", "mine"] = "all"
         rerank_min_score: Optional[float] = None
         rerank_relative_factor: Optional[float] = None
         rerank_max_chunks: Optional[int] = None

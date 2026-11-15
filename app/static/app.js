@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS = {
   topK: 5,
   candidatePool: 20,
   documentIds: [], // empty = All documents
+  scopeMode: "all",
   rerankMinScore: 0.25,
   rerankRelativeFactor: 0.6,
   rerankMaxChunks: 3,
@@ -1322,6 +1323,7 @@ async function runAskQuery() {
     use_reranker: currentSettings.useReranker,
     query_expansion: currentSettings.queryExpansion !== false,
     document_ids: currentSettings.documentIds.length ? currentSettings.documentIds : null,
+    scope_mode: document.getElementById("ask-scope-mode")?.value || currentSettings.scopeMode || "all",
     rerank_min_score: currentSettings.rerankMinScore,
     rerank_relative_factor: currentSettings.rerankRelativeFactor,
     rerank_max_chunks: currentSettings.rerankMaxChunks,
@@ -2268,8 +2270,63 @@ window.tryQuestionInPlayground = function (questionText) {
 /* =====================================================================
    TAB 3: CORPUS & DOCUMENT INGESTION (A.5)
    ===================================================================== */
+const SANDBOX_SAMPLE_DOC = {
+  title: "Willow Creek Community Garden Handbook",
+  filename: "willow_creek_sample.md",
+  content: `# Willow Creek Community Garden Handbook
+
+## Plot Types and Annual Fees
+Plots are assigned for one growing season (April 1 to October 31).
+
+| Plot Size | Dimensions | Seasonal Fee | Water Included |
+| --- | --- | --- | --- |
+| Small | 4 ft x 8 ft | $35 | Yes |
+| Medium | 8 ft x 12 ft | $60 | Yes |
+| Large | 10 ft x 20 ft | $95 | Yes |
+
+## Garden Rules
+- **Organic Only:** Synthetic pesticides and herbicides are prohibited.
+- **Personal Use Only:** Produce grown in Willow Creek plots is for personal and family use or food-bank donation; commercial sale at markets is not permitted.
+- **Quiet Hours:** Garden gates are open from 6:00 AM to 9:00 PM daily.
+`,
+};
+
+function handleDocumentCardClick(e) {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const docId = btn.dataset.docId || "";
+  const docTitle = btn.dataset.docTitle || docId;
+  if (action === "view-chunks") {
+    window.openDocumentChunksModal(docId, docTitle);
+  } else if (action === "gen-questions") {
+    window.startDocQuestionGeneration(docId, btn);
+  } else if (action === "delete-doc") {
+    window.promptDeleteDocument(docId, docTitle);
+  }
+}
+
 function initCorpusControls() {
   document.getElementById("refresh-docs-btn").addEventListener("click", loadDocuments);
+  document.getElementById("documents-list")?.addEventListener("click", handleDocumentCardClick);
+  document.getElementById("sandbox-documents-list")?.addEventListener("click", handleDocumentCardClick);
+
+  document.getElementById("load-sample-doc-btn")?.addEventListener("click", () => {
+    lastUploadedFilename = SANDBOX_SAMPLE_DOC.filename;
+    const titleEl = document.getElementById("ingest-title");
+    const contentEl = document.getElementById("ingest-content");
+    const statusEl = document.getElementById("uploaded-file-status");
+    if (titleEl) titleEl.value = SANDBOX_SAMPLE_DOC.title;
+    if (contentEl) contentEl.value = SANDBOX_SAMPLE_DOC.content;
+    if (statusEl) statusEl.textContent = `Loaded sample "${SANDBOX_SAMPLE_DOC.filename}" — click "Index document" below.`;
+  });
+
+  document.getElementById("ask-sandbox-btn")?.addEventListener("click", () => {
+    const scopeSel = document.getElementById("ask-scope-mode");
+    if (scopeSel) scopeSel.value = "mine";
+    switchToTab("tab-playground");
+    document.getElementById("question-input")?.focus();
+  });
 
   const searchInput = document.getElementById("doc-search-input");
   if (searchInput) {
@@ -2364,6 +2421,35 @@ function initCorpusControls() {
       feedback.classList.remove("hidden");
       showToast(`Indexed document (${data.chunks_created} chunks created)`, "success");
 
+      const postBox = document.getElementById("sandbox-post-ingest");
+      const sugBox = document.getElementById("sandbox-suggestions-box");
+      if (postBox) postBox.classList.remove("hidden");
+      if (sugBox) {
+        const sugs = Array.isArray(data.suggested_questions) ? data.suggested_questions : [];
+        if (sugs.length > 0) {
+          sugBox.innerHTML = sugs
+            .map(
+              (q) =>
+                `<button type="button" class="secondary-btn btn-xs sandbox-sug-btn" data-question="${escapeHtml(q)}">${escapeHtml(q)}</button>`
+            )
+            .join("");
+          sugBox.querySelectorAll(".sandbox-sug-btn").forEach((sBtn) => {
+            sBtn.addEventListener("click", () => {
+              const scopeSel = document.getElementById("ask-scope-mode");
+              if (scopeSel) scopeSel.value = "mine";
+              const qInput = document.getElementById("question-input");
+              if (qInput) qInput.value = sBtn.dataset.question || "";
+              switchToTab("tab-playground");
+              document.getElementById("ask-form")?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+            });
+          });
+          sugBox.classList.remove("hidden");
+        } else {
+          sugBox.innerHTML = "";
+          sugBox.classList.add("hidden");
+        }
+      }
+
       await loadDocuments();
       await fetchHealth();
     } catch (err) {
@@ -2424,8 +2510,9 @@ function isReadOnlyVisitor() {
 
 function updateAdminUI() {
   const readOnly = isReadOnlyVisitor();
-  document.getElementById("docs-demo-banner")?.classList.toggle("hidden", !readOnly);
-  document.getElementById("ingest-upload-panel")?.classList.toggle("hidden", readOnly);
+  document.getElementById("sandbox-privacy-note")?.classList.toggle("hidden", !readOnly);
+  document.getElementById("ingest-id-label")?.classList.toggle("hidden", readOnly);
+  document.getElementById("ingest-source-label")?.classList.toggle("hidden", readOnly);
   document.getElementById("admin-login-link")?.classList.toggle("hidden", !(window.__demoMode && !window.__isAdmin));
   document.getElementById("admin-badge")?.classList.toggle("hidden", !window.__isAdmin);
   document.getElementById("admin-logout-btn")?.classList.toggle("hidden", !window.__isAdmin);
@@ -2441,50 +2528,39 @@ function updateAdminUI() {
   renderDocumentsList();
 }
 
-function renderDocumentsList() {
-  const container = document.getElementById("documents-list");
-  if (!container) return;
-
-  const readOnly = isReadOnlyVisitor();
-  const query = (document.getElementById("doc-search-input")?.value || "").trim().toLowerCase();
-  const filtered = indexedDocuments.filter((d) => {
-    if (!query) return true;
-    const hay = readOnly
-      ? `${d.title} ${d.id}`.toLowerCase()
-      : `${d.title} ${d.id} ${d.source || ""}`.toLowerCase();
-    return hay.includes(query);
-  });
-
-  if (filtered.length === 0) {
-    container.innerHTML = `<div class="empty-state-box">No documents match "${escapeHtml(query)}".</div>`;
-    return;
-  }
-
-  // Identical card layout for every doc: 1. Title, 2. ID chip, 3. Source (admin/local only) & chunk count, 4. Actions
-  container.innerHTML = filtered
+function _renderDocCardsHtml(docs, { readOnly, isSandboxSection }) {
+  return docs
     .map((d) => {
       const showSource = !readOnly && Boolean(d.source);
       const sourceHtml = showSource
         ? `<span>Source: <code>${escapeHtml(d.source)}</code></span><span class="status-sep">&middot;</span>`
         : "";
-      const adminActionsHtml = readOnly
-        ? ""
-        : `
+      const canGenerate = !readOnly && !isSandboxSection;
+      const canDelete = !readOnly || isSandboxSection;
+      const genBtn = canGenerate
+        ? `
           <button
             type="button"
             class="secondary-btn btn-xs doc-generate-btn"
+            data-action="gen-questions"
+            data-doc-id="${escapeHtml(d.id)}"
             data-gen-doc-id="${escapeHtml(d.id)}"
-            onclick="startDocQuestionGeneration(${JSON.stringify(d.id).replace(/"/g, "&quot;")}, this)"
           >
             Generate Questions
-          </button>
+          </button>`
+        : "";
+      const delBtn = canDelete
+        ? `
           <button
             type="button"
             class="secondary-btn btn-xs doc-delete-btn"
-            onclick="promptDeleteDocument(${JSON.stringify(d.id).replace(/"/g, "&quot;")}, ${JSON.stringify(d.title).replace(/"/g, "&quot;")})"
+            data-action="delete-doc"
+            data-doc-id="${escapeHtml(d.id)}"
+            data-doc-title="${escapeHtml(d.title)}"
           >
             Delete
-          </button>`;
+          </button>`
+        : "";
 
       return `
       <div class="doc-card" data-doc-id="${escapeHtml(d.id)}">
@@ -2500,16 +2576,53 @@ function renderDocumentsList() {
           <button
             type="button"
             class="secondary-btn btn-xs"
-            onclick="openDocumentChunksModal(${JSON.stringify(d.id).replace(/"/g, "&quot;")}, ${JSON.stringify(d.title).replace(/"/g, "&quot;")})"
+            data-action="view-chunks"
+            data-doc-id="${escapeHtml(d.id)}"
+            data-doc-title="${escapeHtml(d.title)}"
           >
             View chunks
-          </button>${adminActionsHtml}
+          </button>${genBtn}${delBtn}
         </div>
         <div class="doc-gen-progress muted-text hidden" id="doc-gen-status-${escapeHtml(d.id)}"></div>
       </div>
     `;
     })
     .join("");
+}
+
+function renderDocumentsList() {
+  const sampleContainer = document.getElementById("documents-list");
+  const sandboxContainer = document.getElementById("sandbox-documents-list");
+  const sandboxSection = document.getElementById("sandbox-docs-section");
+  if (!sampleContainer) return;
+
+  const readOnly = isReadOnlyVisitor();
+  const query = (document.getElementById("doc-search-input")?.value || "").trim().toLowerCase();
+  const filtered = indexedDocuments.filter((d) => {
+    if (!query) return true;
+    const hay = readOnly
+      ? `${d.title} ${d.id}`.toLowerCase()
+      : `${d.title} ${d.id} ${d.source || ""}`.toLowerCase();
+    return hay.includes(query);
+  });
+
+  const sandboxDocs = filtered.filter((d) => Boolean(d.is_sandbox));
+  const sampleDocs = filtered.filter((d) => !d.is_sandbox);
+
+  if (sandboxSection && sandboxContainer) {
+    sandboxSection.classList.toggle("hidden", !readOnly && sandboxDocs.length === 0);
+    if (sandboxDocs.length === 0) {
+      sandboxContainer.innerHTML = `<div class="empty-state-box">No private documents yet. Upload a <code>.md</code> or <code>.txt</code> file or load a sample on the right.</div>`;
+    } else {
+      sandboxContainer.innerHTML = _renderDocCardsHtml(sandboxDocs, { readOnly, isSandboxSection: true });
+    }
+  }
+
+  if (sampleDocs.length === 0) {
+    sampleContainer.innerHTML = `<div class="empty-state-box">No documents match "${escapeHtml(query)}".</div>`;
+  } else {
+    sampleContainer.innerHTML = _renderDocCardsHtml(sampleDocs, { readOnly, isSandboxSection: false });
+  }
 }
 
 /* =====================================================================

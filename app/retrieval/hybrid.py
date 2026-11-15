@@ -39,6 +39,51 @@ _SPARSE_STOPWORDS: Set[str] = {
 _in_memory_cache: Optional[List[Tuple[RetrievedChunk, List[float]]]] = None
 _extra_ingested_docs: List[Any] = []
 _deleted_doc_ids: Set[str] = set()
+_doc_session_map: Dict[str, Optional[str]] = {}
+_doc_expires_map: Dict[str, Optional[str]] = {}
+
+
+def is_doc_expired(expires_at: Optional[str]) -> bool:
+    if not expires_at:
+        return False
+    try:
+        from datetime import datetime, timezone
+
+        dt = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt <= datetime.now(timezone.utc)
+    except Exception:
+        return False
+
+
+def cleanup_expired_in_memory_documents() -> int:
+    """Remove expired sandbox documents from the in-memory index mirror."""
+    global _in_memory_cache, _extra_ingested_docs
+    before = len(_extra_ingested_docs)
+    _extra_ingested_docs = [
+        d for d in _extra_ingested_docs
+        if not is_doc_expired(getattr(d, "expires_at", None))
+    ]
+    removed = before - len(_extra_ingested_docs)
+    if removed > 0:
+        _in_memory_cache = None
+    return removed
+
+
+def _is_doc_visible_in_session(
+    document_id: str,
+    session_id: Optional[str],
+    scope_mode: str = "all",
+) -> bool:
+    if is_doc_expired(_doc_expires_map.get(document_id)):
+        return False
+    doc_sid = _doc_session_map.get(document_id)
+    if scope_mode == "sample":
+        return doc_sid is None
+    if scope_mode == "mine":
+        return bool(session_id) and doc_sid == session_id
+    return doc_sid is None or (bool(session_id) and doc_sid == session_id)
 
 
 def register_in_memory_documents(documents: List[Any]) -> int:
@@ -127,57 +172,62 @@ def build_websearch_query(query: str) -> str:
     return " OR ".join(terms)
 
 
+def _pg_session_scope_clause(
+    session_id: Optional[str],
+    scope_mode: str = "all",
+) -> Tuple[str, List[Any]]:
+    if scope_mode == "sample":
+        return "d.session_id IS NULL AND (d.expires_at IS NULL OR d.expires_at > NOW())", []
+    if scope_mode == "mine":
+        if not session_id:
+            return "FALSE", []
+        return "d.session_id = %s AND (d.expires_at IS NULL OR d.expires_at > NOW())", [session_id]
+    if session_id:
+        return "(d.session_id IS NULL OR d.session_id = %s) AND (d.expires_at IS NULL OR d.expires_at > NOW())", [session_id]
+    return "d.session_id IS NULL AND (d.expires_at IS NULL OR d.expires_at > NOW())", []
+
+
 def dense_search(
     conn: Any,
     query_embedding: List[float],
     limit: int = 20,
     document_ids: Optional[List[str]] = None,
+    session_id: Optional[str] = None,
+    scope_mode: str = "all",
 ) -> List[RetrievedChunk]:
     """Execute cosine similarity vector search (`1 - (embedding <=> q)`) against pgvector HNSW."""
     import numpy as np
 
+    scope_sql, scope_params = _pg_session_scope_clause(session_id, scope_mode)
+    if scope_sql == "FALSE":
+        return []
     vec_param = np.array(query_embedding, dtype=np.float32)
+    where_parts = [scope_sql]
+    params: List[Any] = [vec_param, *scope_params]
     if document_ids:
-        rows = conn.execute(
-            """
-            SELECT
-                c.id AS chunk_id,
-                c.document_id,
-                d.title AS document_title,
-                d.source,
-                c.chunk_index,
-                c.heading,
-                c.content,
-                c.token_count,
-                1.0 - (c.embedding <=> %s) AS dense_score
-            FROM chunks c
-            JOIN documents d ON d.id = c.document_id
-            WHERE c.document_id = ANY(%s)
-            ORDER BY c.embedding <=> %s ASC, c.id ASC
-            LIMIT %s
-            """,
-            (vec_param, list(document_ids), vec_param, limit),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            """
-            SELECT
-                c.id AS chunk_id,
-                c.document_id,
-                d.title AS document_title,
-                d.source,
-                c.chunk_index,
-                c.heading,
-                c.content,
-                c.token_count,
-                1.0 - (c.embedding <=> %s) AS dense_score
-            FROM chunks c
-            JOIN documents d ON d.id = c.document_id
-            ORDER BY c.embedding <=> %s ASC, c.id ASC
-            LIMIT %s
-            """,
-            (vec_param, vec_param, limit),
-        ).fetchall()
+        where_parts.append("c.document_id = ANY(%s)")
+        params.append(list(document_ids))
+    params.extend([vec_param, limit])
+    rows = conn.execute(
+        f"""
+        SELECT
+            c.id AS chunk_id,
+            c.document_id,
+            d.title AS document_title,
+            d.source,
+            c.chunk_index,
+            c.heading,
+            c.content,
+            c.token_count,
+            1.0 - (c.embedding <=> %s) AS dense_score
+        FROM chunks c
+        JOIN documents d ON d.id = c.document_id
+        WHERE {' AND '.join(where_parts)}
+        ORDER BY c.embedding <=> %s ASC, c.id ASC
+        LIMIT %s
+        """,
+        tuple(params),
+    ).fetchall()
 
     results: List[RetrievedChunk] = []
     for rank, row in enumerate(rows, start=1):
@@ -206,6 +256,8 @@ def sparse_search(
     limit: int = 20,
     document_ids: Optional[List[str]] = None,
     min_sparse_score: Optional[float] = None,
+    session_id: Optional[str] = None,
+    scope_mode: str = "all",
 ) -> List[RetrievedChunk]:
     """
     Execute full-text cover-density lexical search against the 'english' GIN tsvector index
@@ -217,59 +269,39 @@ def sparse_search(
     if not web_q:
         return []
 
+    scope_sql, scope_params = _pg_session_scope_clause(session_id, scope_mode)
+    if scope_sql == "FALSE":
+        return []
+    where_parts = [scope_sql, "c.tsv @@ q.query_tsv", "ts_rank_cd(c.tsv, q.query_tsv, 32) >= %s"]
+    params: List[Any] = [web_q, *scope_params]
     if document_ids:
-        rows = conn.execute(
-            """
-            WITH q AS (
-                SELECT websearch_to_tsquery('english', %s) AS query_tsv
-            )
-            SELECT
-                c.id AS chunk_id,
-                c.document_id,
-                d.title AS document_title,
-                d.source,
-                c.chunk_index,
-                c.heading,
-                c.content,
-                c.token_count,
-                ts_rank_cd(c.tsv, q.query_tsv, 32) AS sparse_score
-            FROM chunks c
-            JOIN documents d ON d.id = c.document_id
-            CROSS JOIN q
-            WHERE c.document_id = ANY(%s)
-              AND c.tsv @@ q.query_tsv
-              AND ts_rank_cd(c.tsv, q.query_tsv, 32) >= %s
-            ORDER BY sparse_score DESC, c.id ASC
-            LIMIT %s
-            """,
-            (web_q, list(document_ids), min_score, limit),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            """
-            WITH q AS (
-                SELECT websearch_to_tsquery('english', %s) AS query_tsv
-            )
-            SELECT
-                c.id AS chunk_id,
-                c.document_id,
-                d.title AS document_title,
-                d.source,
-                c.chunk_index,
-                c.heading,
-                c.content,
-                c.token_count,
-                ts_rank_cd(c.tsv, q.query_tsv, 32) AS sparse_score
-            FROM chunks c
-            JOIN documents d ON d.id = c.document_id
-            CROSS JOIN q
-            WHERE c.tsv @@ q.query_tsv
-              AND ts_rank_cd(c.tsv, q.query_tsv, 32) >= %s
-            ORDER BY sparse_score DESC, c.id ASC
-            LIMIT %s
-            """,
-            (web_q, min_score, limit),
-        ).fetchall()
+        where_parts.insert(1, "c.document_id = ANY(%s)")
+        params.append(list(document_ids))
+    params.extend([min_score, limit])
+    rows = conn.execute(
+        f"""
+        WITH q AS (
+            SELECT websearch_to_tsquery('english', %s) AS query_tsv
+        )
+        SELECT
+            c.id AS chunk_id,
+            c.document_id,
+            d.title AS document_title,
+            d.source,
+            c.chunk_index,
+            c.heading,
+            c.content,
+            c.token_count,
+            ts_rank_cd(c.tsv, q.query_tsv, 32) AS sparse_score
+        FROM chunks c
+        JOIN documents d ON d.id = c.document_id
+        CROSS JOIN q
+        WHERE {' AND '.join(where_parts)}
+        ORDER BY sparse_score DESC, c.id ASC
+        LIMIT %s
+        """,
+        tuple(params),
+    ).fetchall()
 
     results: List[RetrievedChunk] = []
     for rank, row in enumerate(rows, start=1):
@@ -294,7 +326,7 @@ def sparse_search(
 
 def _get_in_memory_corpus_index() -> List[Tuple[RetrievedChunk, List[float]]]:
     """Build or return an in-memory index of the bundled corpus when PostgreSQL is not active."""
-    global _in_memory_cache
+    global _in_memory_cache, _doc_session_map, _doc_expires_map
     if _in_memory_cache is not None:
         return _in_memory_cache
 
@@ -307,8 +339,10 @@ def _get_in_memory_corpus_index() -> List[Tuple[RetrievedChunk, List[float]]]:
         if d.id not in _deleted_doc_ids:
             docs_by_id[d.id] = d
     for d in _extra_ingested_docs:
-        if d.id not in _deleted_doc_ids:
+        if d.id not in _deleted_doc_ids and not is_doc_expired(getattr(d, "expires_at", None)):
             docs_by_id[d.id] = d
+    _doc_session_map = {did: getattr(doc, "session_id", None) for did, doc in docs_by_id.items()}
+    _doc_expires_map = {did: getattr(doc, "expires_at", None) for did, doc in docs_by_id.items()}
 
     raw_chunks = []
     for d in docs_by_id.values():
@@ -357,12 +391,16 @@ def _in_memory_dense_search(
     query_embedding: List[float],
     limit: int = 20,
     document_ids: Optional[List[str]] = None,
+    session_id: Optional[str] = None,
+    scope_mode: str = "all",
 ) -> List[RetrievedChunk]:
     """Exact cosine similarity search (`1 - cosine_distance`) mirroring pgvector `<=>`."""
     entries = _get_in_memory_corpus_index()
     allowed_docs = set(document_ids) if document_ids else None
     scored: List[Tuple[float, RetrievedChunk]] = []
     for base_chunk, vec in entries:
+        if not _is_doc_visible_in_session(base_chunk.document_id, session_id, scope_mode):
+            continue
         if allowed_docs and base_chunk.document_id not in allowed_docs:
             continue
         cos_sim = cosine_similarity(query_embedding, vec)
@@ -384,6 +422,8 @@ def _in_memory_sparse_search(
     limit: int = 20,
     document_ids: Optional[List[str]] = None,
     min_sparse_score: Optional[float] = None,
+    session_id: Optional[str] = None,
+    scope_mode: str = "all",
 ) -> List[RetrievedChunk]:
     """
     Cover-density lexical search mirroring PostgreSQL `websearch_to_tsquery('english', ...)`
@@ -403,7 +443,8 @@ def _in_memory_sparse_search(
     filtered_entries = [
         (base_chunk, vec)
         for base_chunk, vec in entries
-        if not allowed_docs or base_chunk.document_id in allowed_docs
+        if _is_doc_visible_in_session(base_chunk.document_id, session_id, scope_mode)
+        and (not allowed_docs or base_chunk.document_id in allowed_docs)
     ]
     if not filtered_entries:
         return []
@@ -535,13 +576,18 @@ def _single_query_candidates(
     clean_doc_ids: Optional[List[str]],
     min_sparse_score: Optional[float],
     settings: Any,
+    session_id: Optional[str] = None,
+    scope_mode: str = "all",
 ) -> List[RetrievedChunk]:
     """Run dense, sparse, or hybrid retrieval for a single query string."""
     try:
         with get_db_connection() as conn:
             if mode == "dense":
                 q_vec = embedder.embed_query(query)
-                return dense_search(conn, q_vec, limit=pool_size, document_ids=clean_doc_ids)
+                return dense_search(
+                    conn, q_vec, limit=pool_size, document_ids=clean_doc_ids,
+                    session_id=session_id, scope_mode=scope_mode,
+                )
             if mode == "sparse":
                 return sparse_search(
                     conn,
@@ -549,15 +595,22 @@ def _single_query_candidates(
                     limit=pool_size,
                     document_ids=clean_doc_ids,
                     min_sparse_score=min_sparse_score,
+                    session_id=session_id,
+                    scope_mode=scope_mode,
                 )
             q_vec = embedder.embed_query(query)
-            dense_list = dense_search(conn, q_vec, limit=pool_size, document_ids=clean_doc_ids)
+            dense_list = dense_search(
+                conn, q_vec, limit=pool_size, document_ids=clean_doc_ids,
+                session_id=session_id, scope_mode=scope_mode,
+            )
             sparse_list = sparse_search(
                 conn,
                 query,
                 limit=pool_size,
                 document_ids=clean_doc_ids,
                 min_sparse_score=min_sparse_score,
+                session_id=session_id,
+                scope_mode=scope_mode,
             )
             return reciprocal_rank_fusion(
                 dense_results=dense_list,
@@ -570,21 +623,31 @@ def _single_query_candidates(
     except Exception:
         if mode == "dense":
             q_vec = embedder.embed_query(query)
-            return _in_memory_dense_search(q_vec, limit=pool_size, document_ids=clean_doc_ids)
+            return _in_memory_dense_search(
+                q_vec, limit=pool_size, document_ids=clean_doc_ids,
+                session_id=session_id, scope_mode=scope_mode,
+            )
         if mode == "sparse":
             return _in_memory_sparse_search(
                 query,
                 limit=pool_size,
                 document_ids=clean_doc_ids,
                 min_sparse_score=min_sparse_score,
+                session_id=session_id,
+                scope_mode=scope_mode,
             )
         q_vec = embedder.embed_query(query)
-        dense_list = _in_memory_dense_search(q_vec, limit=pool_size, document_ids=clean_doc_ids)
+        dense_list = _in_memory_dense_search(
+            q_vec, limit=pool_size, document_ids=clean_doc_ids,
+            session_id=session_id, scope_mode=scope_mode,
+        )
         sparse_list = _in_memory_sparse_search(
             query,
             limit=pool_size,
             document_ids=clean_doc_ids,
             min_sparse_score=min_sparse_score,
+            session_id=session_id,
+            scope_mode=scope_mode,
         )
         return reciprocal_rank_fusion(
             dense_results=dense_list,
@@ -643,6 +706,8 @@ def retrieve_candidates_with_timing(
     min_sparse_score: Optional[float] = None,
     query_expansion: bool = True,
     expanded_queries_out: Optional[List[str]] = None,
+    session_id: Optional[str] = None,
+    scope_mode: str = "all",
 ) -> Tuple[List[RetrievedChunk], float, float]:
     """
     Execute retrieval in `dense`, `sparse`, or `hybrid` (RRF) mode, with optional
@@ -665,7 +730,8 @@ def retrieve_candidates_with_timing(
     if rewrites:
         per_query_lists = [
             _single_query_candidates(
-                q_str, mode, pool_size, embedder, clean_doc_ids, min_sparse_score, settings
+                q_str, mode, pool_size, embedder, clean_doc_ids, min_sparse_score, settings,
+                session_id=session_id, scope_mode=scope_mode,
             )
             for q_str in [query, *rewrites]
         ]
@@ -674,7 +740,8 @@ def retrieve_candidates_with_timing(
         )
     else:
         candidates = _single_query_candidates(
-            query, mode, pool_size, embedder, clean_doc_ids, min_sparse_score, settings
+            query, mode, pool_size, embedder, clean_doc_ids, min_sparse_score, settings,
+            session_id=session_id, scope_mode=scope_mode,
         )
 
     retrieval_ms = round((time.perf_counter() - t0) * 1000.0, 2)
@@ -702,6 +769,8 @@ def retrieve_candidates(
     use_reranker: bool = True,
     document_ids: Optional[List[str]] = None,
     min_sparse_score: Optional[float] = None,
+    session_id: Optional[str] = None,
+    scope_mode: str = "all",
 ) -> Tuple[List[RetrievedChunk], float]:
     """
     Execute retrieval in `dense`, `sparse`, or `hybrid` (RRF) mode, with optional
@@ -716,5 +785,7 @@ def retrieve_candidates(
         use_reranker=use_reranker,
         document_ids=document_ids,
         min_sparse_score=min_sparse_score,
+        session_id=session_id,
+        scope_mode=scope_mode,
     )
     return results, round(retrieval_ms + rerank_ms, 2)

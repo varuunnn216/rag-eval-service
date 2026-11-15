@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RAG Workbench</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="preload" as="font" type="font/woff2" href="/static/fonts/SpaceGrotesk.woff2" crossorigin />
+  <link rel="preload" as="font" type="font/woff2" href="/static/fonts/JetBrainsMono.woff2" crossorigin />
+  <link rel="preload" as="font" type="font/woff2" href="/static/fonts/SpaceMono-400.woff2" crossorigin />
+  <link rel="stylesheet" href="/static/styles.css?v=2" />
 </head>
 <body>
   <!-- Official React Bits Prism 3D Spectral Shader + Warm Perlin Waves Backdrop -->
@@ -570,6 +570,11 @@
                   </span>
                 </div>
               </div>
+              <select id="ask-scope-mode" class="scope-mode-select" aria-label="Document library scope">
+                <option value="all">All (sample + mine)</option>
+                <option value="sample">Sample library only</option>
+                <option value="mine">My documents only</option>
+              </select>
               <div class="multiselect" id="doc-scope-multiselect">
                 <button
                   type="button"
@@ -1186,43 +1191,58 @@
               <div class="skeleton-card"></div>
             </div>
             <div id="docs-error" class="error-callout hidden" role="alert"></div>
-            <div id="documents-list" class="documents-list"></div>
+
+            <div id="sandbox-docs-section" class="docs-section">
+              <h3 class="docs-section-heading">Your documents <span class="muted-text">(private, deleted after 24 hours)</span></h3>
+              <div id="sandbox-documents-list" class="documents-list"></div>
+            </div>
+
+            <div id="sample-docs-section" class="docs-section">
+              <h3 class="docs-section-heading">Sample library</h3>
+              <div id="documents-list" class="documents-list"></div>
+            </div>
           </div>
         </div>
 
         <div class="col-chunks">
           <div class="card">
-            <h2 data-rb-blur-text>Upload documents</h2>
-            <div id="docs-demo-banner" class="info-banner hidden" role="status">
-              Public demo: the document library is read-only. Browse the indexed documents, view their chunks, and ask questions on the Ask page.
+            <h2 data-rb-blur-text id="upload-panel-heading">Upload documents</h2>
+            <div id="sandbox-privacy-note" class="info-banner hidden" role="note">
+              Don&rsquo;t upload sensitive or personal data. Documents are private to this browser session and are deleted after 24 hours.
             </div>
             <div id="ingest-upload-panel">
-            <p class="muted-text">
-              Upload a file or paste Markdown below to index it into the search corpus.
+            <p class="muted-text" id="upload-panel-desc">
+              Upload a <code>.md</code> or <code>.txt</code> file, paste text, or load a sample document to index it into your private sandbox.
             </p>
+            <div class="sandbox-toolbar">
+              <button type="button" id="load-sample-doc-btn" class="secondary-btn btn-xs">
+                Load a sample document
+              </button>
+              <span class="muted-text" id="sandbox-limits-hint">Max 3 docs &middot; 100 KB each &middot; 20 chunks total</span>
+            </div>
             <div class="file-upload-dropzone" id="file-dropzone">
-              <input type="file" id="file-upload-input" accept=".md,.txt,.markdown,.json,.csv,.py,.log,.yaml,.yml,.html" aria-label="Upload document file" />
+              <input type="file" id="file-upload-input" accept=".md,.txt,.markdown" aria-label="Upload document file" />
               <div class="dropzone-label">
                 <strong>Choose a file</strong> or drag &amp; drop it here
-                <div class="muted-text" id="uploaded-file-status">.md, .txt, .json, .csv, .py, .yaml</div>
+                <div class="muted-text" id="uploaded-file-status">.md, .txt files supported</div>
               </div>
             </div>
             <form id="ingest-form" class="ingest-form">
-              <label>
+              <label id="ingest-id-label">
                 <span>Document ID (optional)</span>
                 <input type="text" id="ingest-id" placeholder="e.g. doc_09_nimbus_bikeshare" value="" />
               </label>
               <label>
                 <span>Document Title (optional &mdash; falls back to # H1, then filename)</span>
-                <input type="text" id="ingest-title" placeholder="e.g. Nimbus Bike Share Operations & Rider Guide" value="" />
+                <input type="text" id="ingest-title" placeholder="e.g. Willow Creek Community Garden Guide" value="" />
               </label>
-              <label>
+              <label id="ingest-source-label">
                 <span>Source (optional)</span>
                 <input type="text" id="ingest-source" placeholder="e.g. nimbus-bikeshare.md" value="" />
               </label>
               <label>
                 <span>Content</span>
-                <textarea id="ingest-content" rows="8" required placeholder="Paste Markdown content or choose a file above..."></textarea>
+                <textarea id="ingest-content" rows="8" required placeholder="Paste Markdown or plain text content, or choose a file above..."></textarea>
               </label>
 
               <!-- Upload Progress Bar (A.5) -->
@@ -1237,6 +1257,12 @@
                 Index document
               </button>
               <div id="ingest-feedback" class="ingest-feedback hidden" role="status"></div>
+              <div id="sandbox-post-ingest" class="sandbox-post-ingest hidden">
+                <button type="button" id="ask-sandbox-btn" class="secondary-btn">
+                  Ask about this document
+                </button>
+                <div id="sandbox-suggestions-box" class="sandbox-suggestions-box hidden"></div>
+              </div>
             </form>
             </div>
           </div>
@@ -1315,7 +1341,7 @@
   <!-- Toast Notification Container (A.5) -->
   <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="/static/reactbits_fx.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/reactbits_fx.js?v=2"></script>
+  <script src="/static/app.js?v=2"></script>
 </body>
 </html>

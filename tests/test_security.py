@@ -107,7 +107,6 @@ class TestLiveSecurity(unittest.TestCase):
         checks = [
             ("POST", "/api/v1/eval/run", {}),
             ("POST", "/api/v1/eval/generate", {"doc_id": "doc_08_bluebird_cafe"}),
-            ("POST", "/api/v1/ingest", {"documents": [{"id": "x", "title": "x", "content": "hello world"}]}),
             ("DELETE", "/api/v1/documents/doc_08_bluebird_cafe", None),
         ]
         for method, path, body in checks:
