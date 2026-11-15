@@ -1,0 +1,12 @@
+.env
+.env.*
+.pgdata
+pgdata
+.agents
+.git
+.github_token
+__pycache__
+*.pyc
+tests
+.venv
+venv

@@ -10,7 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from app.api.routes import router as api_router
 from app.config import get_settings
 from app.db import get_db_connection, init_db
-from app.ingestion.service import list_documents
+from app.ingestion.seed import load_corpus_documents
+from app.ingestion.service import ingest_documents, list_documents
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,11 +24,15 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Initialize PostgreSQL + pgvector schema on startup when database is available."""
+    """Initialize PostgreSQL + pgvector schema and seed corpus on startup."""
     try:
         init_db()
     except Exception as exc:
         logger.info("Running with in-memory pgvector/tsvector mirror (%s)", exc)
+    try:
+        ingest_documents(load_corpus_documents())
+    except Exception as exc:
+        logger.warning("Startup corpus seeding skipped (%s)", exc)
     yield
 
 
@@ -50,6 +55,12 @@ if STATIC_DIR.exists():
 def serve_web_ui() -> FileResponse:
     """Serve the interactive RAG & Evaluation Harness Web UI."""
     return FileResponse(str(STATIC_DIR / "index.html"))
+
+
+@app.get("/favicon.svg", include_in_schema=False)
+@app.get("/favicon.ico", include_in_schema=False)
+def serve_favicon() -> FileResponse:
+    return FileResponse(str(STATIC_DIR / "favicon.svg"), media_type="image/svg+xml")
 
 
 @app.get("/health", tags=["system"])
@@ -80,5 +91,7 @@ def health_check() -> Dict[str, Any]:
         "chunks_count": chunk_count,
         "embedding_model": settings.embedding_model,
         "generation_model": settings.generation_model,
+        "generator_model": settings.generator_model,
         "reranker_model": settings.reranker_model,
+        "demo_mode": settings.demo_mode,
     }

@@ -1,0 +1,5 @@
+-r requirements.txt
+pgserver>=0.1.4
+sentence-transformers>=2.7.0
+pytest>=8.1.0
+pytest-asyncio>=0.23.6
