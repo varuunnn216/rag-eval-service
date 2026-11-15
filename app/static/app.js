@@ -1223,6 +1223,10 @@ function clearPlaygroundResults() {
   const eqList = document.getElementById("expanded-queries-list");
   if (eqRow) eqRow.classList.add("hidden");
   if (eqList) eqList.textContent = "";
+  const fbRow = document.getElementById("fallback-used-row");
+  const fbLabel = document.getElementById("fallback-used-label");
+  if (fbRow) fbRow.classList.add("hidden");
+  if (fbLabel) fbLabel.textContent = "";
 
   const copyAnsBtn = document.getElementById("copy-answer-btn");
   const copyJsonBtn = document.getElementById("copy-json-btn");
@@ -1836,6 +1840,18 @@ function renderMetricsSection(data) {
     } else {
       eqList.textContent = "";
       eqRow.classList.add("hidden");
+    }
+  }
+
+  const fbRow = document.getElementById("fallback-used-row");
+  const fbLabel = document.getElementById("fallback-used-label");
+  if (fbRow && fbLabel) {
+    if (data.fallback_used === "lexical_evidence") {
+      fbLabel.textContent = "lexical evidence";
+      fbRow.classList.remove("hidden");
+    } else {
+      fbLabel.textContent = "";
+      fbRow.classList.add("hidden");
     }
   }
 }

@@ -174,6 +174,22 @@ def _sigmoid(x: float) -> float:
 _RERANK_CACHE: Dict[Tuple[str, Tuple[str, ...]], Dict[str, float]] = {}
 
 
+def truncate_passage_for_reranker(ctx: str, chunk_id: str = "", max_chars: int = 1400) -> str:
+    """
+    Ensure reranker passage text never exceeds safe model max length while
+    preserving the heading path at the start and never truncating the query.
+    """
+    if len(ctx) <= max_chars:
+        return ctx
+    logger.warning(
+        "Truncated reranker passage from %d to %d chars for chunk %s",
+        len(ctx),
+        max_chars,
+        chunk_id or "unknown",
+    )
+    return ctx[:max_chars].rstrip()
+
+
 def _gemini_semantic_rerank(
     query: str,
     candidates: List[RetrievedChunk],
@@ -199,7 +215,8 @@ def _gemini_semantic_rerank(
     passages = []
     for idx, c in enumerate(top_slice):
         ctx = format_contextual_chunk_text(c.document_title, c.heading, c.content, linearize=True)
-        passages.append(f"[{idx}] id={c.chunk_id}\n{ctx[:600]}")
+        safe_ctx = truncate_passage_for_reranker(ctx, chunk_id=c.chunk_id, max_chars=1400)
+        passages.append(f"[{idx}] id={c.chunk_id}\n{safe_ctx}")
 
     prompt = (
         "Score each candidate passage from 0.0 to 1.0 for how directly it helps answer "
@@ -271,7 +288,11 @@ def rerank_chunks(
 
     if model is not None:
         contextual_docs = [
-            format_contextual_chunk_text(c.document_title, c.heading, c.content, linearize=True)
+            truncate_passage_for_reranker(
+                format_contextual_chunk_text(c.document_title, c.heading, c.content, linearize=True),
+                chunk_id=c.chunk_id,
+                max_chars=1400,
+            )
             for c in reranked
         ]
         pairs = [(query, doc_text) for doc_text in contextual_docs]

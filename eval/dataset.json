@@ -2072,5 +2072,162 @@
     "generator_model": null,
     "needs_review": false,
     "document_missing": false
+  },
+  {
+    "id": "q68",
+    "question": "Which bus route goes from Downtown to Lakeview?",
+    "type": "single_chunk",
+    "category": "big_table_lookalike",
+    "expected_document_id": "doc_14_meridian_transit",
+    "doc_id": "doc_14_meridian_transit",
+    "expected_chunk_ids": [
+      "doc_14_meridian_transit::chunk_007",
+      "doc_14_meridian_transit::chunk_008"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_14_meridian_transit",
+        "heading_path": "Meridian City Transit Authority Rider Handbook, 2026 Edition > Bus > Selected Routes",
+        "quote_snippet": "| 41 | Local | Downtown to Lakeview | 5:45 AM to 11:15 PM |",
+        "chunk_id": "doc_14_meridian_transit::chunk_007"
+      },
+      {
+        "doc_id": "doc_14_meridian_transit",
+        "heading_path": "Meridian City Transit Authority Rider Handbook, 2026 Edition > Bus > Selected Routes",
+        "quote_snippet": "Route 14 ends at Lakeside and Route 41 ends at Lakeview.",
+        "chunk_id": "doc_14_meridian_transit::chunk_008"
+      }
+    ],
+    "expected_answer": "Route 41 goes from Downtown to Lakeview.",
+    "key_facts": [
+      "Route 41",
+      "Downtown to Lakeview"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "q69",
+    "question": "Which bus route goes from Downtown to Lakeside?",
+    "type": "single_chunk",
+    "category": "big_table_lookalike",
+    "expected_document_id": "doc_14_meridian_transit",
+    "doc_id": "doc_14_meridian_transit",
+    "expected_chunk_ids": [
+      "doc_14_meridian_transit::chunk_006",
+      "doc_14_meridian_transit::chunk_008"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_14_meridian_transit",
+        "heading_path": "Meridian City Transit Authority Rider Handbook, 2026 Edition > Bus > Selected Routes",
+        "quote_snippet": "| 14 | Local | Downtown to Lakeside | 5:30 AM to 11:00 PM |",
+        "chunk_id": "doc_14_meridian_transit::chunk_006"
+      },
+      {
+        "doc_id": "doc_14_meridian_transit",
+        "heading_path": "Meridian City Transit Authority Rider Handbook, 2026 Edition > Bus > Selected Routes",
+        "quote_snippet": "Route 14 ends at Lakeside and Route 41 ends at Lakeview.",
+        "chunk_id": "doc_14_meridian_transit::chunk_008"
+      }
+    ],
+    "expected_answer": "Route 14 goes from Downtown to Lakeside.",
+    "key_facts": [
+      "Route 14",
+      "Downtown to Lakeside"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "q70",
+    "question": "When does Route 22 stop running at night?",
+    "type": "single_chunk",
+    "category": "big_table_lookalike",
+    "expected_document_id": "doc_14_meridian_transit",
+    "doc_id": "doc_14_meridian_transit",
+    "expected_chunk_ids": [
+      "doc_14_meridian_transit::chunk_006"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_14_meridian_transit",
+        "heading_path": "Meridian City Transit Authority Rider Handbook, 2026 Edition > Bus > Selected Routes",
+        "quote_snippet": "| 22 | Local | Eastgate to Harbor Point | 6:00 AM to 10:30 PM |",
+        "chunk_id": "doc_14_meridian_transit::chunk_006"
+      }
+    ],
+    "expected_answer": "Route 22 runs from 6:00 AM to 10:30 PM.",
+    "key_facts": [
+      "Route 22",
+      "10:30 PM"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "q71",
+    "question": "How often does the E5 express run?",
+    "type": "single_chunk",
+    "category": "big_table_lookalike",
+    "expected_document_id": "doc_14_meridian_transit",
+    "doc_id": "doc_14_meridian_transit",
+    "expected_chunk_ids": [
+      "doc_14_meridian_transit::chunk_007"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_14_meridian_transit",
+        "heading_path": "Meridian City Transit Authority Rider Handbook, 2026 Edition > Bus > Selected Routes",
+        "quote_snippet": "| E5 | Express | Airport to Downtown | 4:00 AM to midnight | every 20 min |",
+        "chunk_id": "doc_14_meridian_transit::chunk_007"
+      }
+    ],
+    "expected_answer": "The E5 express bus runs every 20 min.",
+    "key_facts": [
+      "E5",
+      "20 min"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "q72",
+    "question": "Can I sell my vegetables at a market?",
+    "type": "unanswerable",
+    "category": "unanswerable",
+    "expected_document_id": null,
+    "doc_id": null,
+    "expected_chunk_ids": [],
+    "gold_refs": [],
+    "expected_answer": "ABSTAIN",
+    "key_facts": [],
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   }
 ]

@@ -578,6 +578,131 @@ def verify_answer_citations(
     return cleaned_answer, verified_citations, verified_count, total_citations
 
 
+_LEX_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "can", "cost", "do",
+    "does", "for", "from", "go", "goes", "how", "i", "in", "into", "is", "it",
+    "many", "much", "my", "of", "on", "or", "should", "stop", "that", "the",
+    "their", "there", "these", "this", "to", "was", "were", "what", "when",
+    "where", "which", "who", "why", "with", "would",
+}
+
+
+def check_lexical_evidence(query: str, annotated_chunks: List[RetrievedChunk]) -> bool:
+    """
+    Two-signal lexical-evidence check:
+    Returns True if a chunk ranks in the top 3 by sparse score AND contains
+    at least 2 distinctive query terms (non-stopword terms with low DF).
+    """
+    q_terms = list(dict.fromkeys(
+        t for t in re.findall(r"[a-z0-9_]+", (query or "").lower())
+        if t not in _LEX_STOPWORDS and len(t) >= 2
+    ))
+    if len(q_terms) < 2 or not annotated_chunks:
+        return False
+
+    # Compute DF across retrieved candidates to identify distinctive terms
+    max_df = max(2, len(annotated_chunks) // 2)
+    distinctive: List[str] = []
+    for term in q_terms:
+        df = sum(
+            1
+            for c in annotated_chunks
+            if term in f"{c.heading} {c.content}".lower()
+        )
+        if df <= max_df or any(ch.isdigit() for ch in term):
+            distinctive.append(term)
+    if len(distinctive) < 2:
+        distinctive = q_terms
+
+    # Extract specific entities / identifiers from the query (capitalized non-initial words,
+    # acronyms, numbers, or hyphen/dot identifiers) so unanswerable traps with missing
+    # entities (e.g., Kafka/KRaft, Bluebird Cafe, MPPT) cannot trigger lexical fallback.
+    raw_tokens = re.findall(r"[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*", query)
+    q_entities: List[str] = []
+    for idx_t, tok in enumerate(raw_tokens):
+        low = tok.lower()
+        if low in _LEX_STOPWORDS or (len(low) < 2 and not tok.isdigit()):
+            continue
+        is_non_initial_cap = idx_t > 0 and any(ch.isupper() for ch in tok)
+        has_digit_or_punct = any(ch.isdigit() or ch in "._-" for ch in tok)
+        if is_non_initial_cap or has_digit_or_punct:
+            if low not in q_entities:
+                q_entities.append(low)
+
+    # Top 3 by sparse rank / score
+    sparse_cands = [
+        c for c in annotated_chunks
+        if (c.sparse_rank is not None and c.sparse_rank <= 3) or (c.sparse_score is not None and c.sparse_score > 0)
+    ]
+    sparse_cands.sort(key=lambda c: (c.sparse_rank if c.sparse_rank is not None else 999, -(c.sparse_score or 0.0)))
+    for c in sparse_cands[:3]:
+        hay = f"{c.heading} {c.content}".lower()
+        if q_entities:
+            ent_matches = sum(
+                1 for ent in q_entities
+                if (ent in hay if ("." in ent or "-" in ent) else re.search(rf"\b{re.escape(ent)}\b", hay))
+            )
+            needed = max(1, (len(q_entities) * 3 + 3) // 4)  # >= 75% of entities
+            if ent_matches < needed:
+                continue
+        distinctive_matches = sum(1 for t in distinctive if re.search(rf"\b{re.escape(t)}\b", hay))
+        total_matches = sum(1 for t in q_terms if re.search(rf"\b{re.escape(t)}\b", hay))
+        if distinctive_matches >= 1 and total_matches >= 2:
+            return True
+    return False
+
+
+def _expand_with_section_neighbors(
+    selected_chunks: List[RetrievedChunk],
+    max_total_tokens: int = 600,
+) -> List[RetrievedChunk]:
+    """
+    Parent-child expansion: given small child chunks (e.g. split table row groups),
+    append same-section neighbor chunks up to ~600 total tokens so the LLM can compare rows.
+    """
+    if not selected_chunks:
+        return []
+    try:
+        from app.retrieval.hybrid import _get_in_memory_corpus_index
+
+        corpus_index = _get_in_memory_corpus_index()
+    except Exception:
+        corpus_index = []
+
+    if not corpus_index:
+        return selected_chunks
+
+    by_doc_heading: Dict[Tuple[str, str], List[RetrievedChunk]] = {}
+    for ch, _ in corpus_index:
+        by_doc_heading.setdefault((ch.document_id, ch.heading), []).append(ch)
+    for lst in by_doc_heading.values():
+        lst.sort(key=lambda c: c.chunk_index)
+
+    out: List[RetrievedChunk] = [c.clone() for c in selected_chunks]
+    seen_ids = {c.chunk_id for c in out}
+    total_tokens = sum(max(1, int(c.token_count or estimate_token_count(c.content))) for c in out)
+
+    for c in list(selected_chunks):
+        siblings = by_doc_heading.get((c.document_id, c.heading), [])
+        for sib in siblings:
+            if sib.chunk_id in seen_ids:
+                continue
+            sib_tok = max(1, int(sib.token_count or estimate_token_count(sib.content)))
+            if total_tokens + sib_tok > max_total_tokens:
+                continue
+            sib_clone = sib.clone()
+            sib_clone.selected = True
+            sib_clone.selection_status = "used"
+            sib_clone.selection_reason = "Used: parent-child section neighbor"
+            out.append(sib_clone)
+            seen_ids.add(sib.chunk_id)
+            total_tokens += sib_tok
+
+    for idx, ch in enumerate(out, start=1):
+        ch.context_index = idx
+    return out
+
+
 def answer_question(request: AskRequest) -> AskResponse:
     """
     End-to-end RAG pipeline:
@@ -634,54 +759,67 @@ def answer_question(request: AskRequest) -> AskResponse:
         "temperature": request.temperature if request.temperature is not None else 0.0,
     }
 
+    fallback_used: Optional[str] = None
     if abstain_pre_llm or not selected_chunks:
-        min_sc = float(eff_settings["rerank_min_score"])
-        best_sc = max(
-            (
-                float(c.rerank_score if c.rerank_score is not None else c.final_score)
-                for c in annotated_chunks
-            ),
-            default=0.0,
-        )
-        pre_abstain_reason = (
-            f"No relevant passage found (best rerank score {best_sc:.2f}, below the {min_sc:.2f} minimum)"
-        )
-        total_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
-        _log_request_telemetry(
-            query=request.question,
-            chunks=annotated_chunks,
-            selected_chunks=[],
-            llm_latency_ms=0.0,
-            prompt_tokens=0,
-            completion_tokens=0,
-            citation_summary="Verified 0/0 citations",
-            abstained=True,
-            error=None,
-        )
-        return AskResponse(
-            question=request.question,
-            answer=ABSTENTION_MESSAGE,
-            abstained=True,
-            abstain_reason=pre_abstain_reason,
-            error=None,
-            citations=[],
-            verified_citations_count=0,
-            total_citations_count=0,
-            citation_summary="Verified 0/0 citations",
-            retrieved_chunks=annotated_chunks,
-            retrieval_latency_ms=retrieval_ms,
-            rerank_latency_ms=rerank_ms,
-            generation_latency_ms=0.0,
-            total_latency_ms=total_ms,
-            prompt_tokens=0,
-            completion_tokens=0,
-            total_tokens=0,
-            prompt_sent="(Skipped LLM call: top-1 rerank score fell below minimum threshold / abstain floor)",
-            expanded_queries=expanded_queries,
-            effective_settings=eff_settings,
-        )
+        if check_lexical_evidence(request.question, annotated_chunks):
+            rrf_top = sorted(annotated_chunks, key=lambda c: (-c.rrf_score, c.chunk_id))[:3]
+            for idx_r, rc in enumerate(rrf_top, start=1):
+                rc.selected = True
+                rc.selection_status = "used"
+                rc.context_index = idx_r
+                rc.selection_reason = "Used: lexical-evidence fallback"
+            selected_chunks = rrf_top
+            fallback_used = "lexical_evidence"
+        else:
+            min_sc = float(eff_settings["rerank_min_score"])
+            best_sc = max(
+                (
+                    float(c.rerank_score if c.rerank_score is not None else c.final_score)
+                    for c in annotated_chunks
+                ),
+                default=0.0,
+            )
+            pre_abstain_reason = (
+                f"No relevant passage found (best rerank score {best_sc:.2f}, below the {min_sc:.2f} minimum)"
+            )
+            total_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
+            _log_request_telemetry(
+                query=request.question,
+                chunks=annotated_chunks,
+                selected_chunks=[],
+                llm_latency_ms=0.0,
+                prompt_tokens=0,
+                completion_tokens=0,
+                citation_summary="Verified 0/0 citations",
+                abstained=True,
+                error=None,
+            )
+            return AskResponse(
+                question=request.question,
+                answer=ABSTENTION_MESSAGE,
+                abstained=True,
+                abstain_reason=pre_abstain_reason,
+                error=None,
+                citations=[],
+                verified_citations_count=0,
+                total_citations_count=0,
+                citation_summary="Verified 0/0 citations",
+                retrieved_chunks=annotated_chunks,
+                retrieval_latency_ms=retrieval_ms,
+                rerank_latency_ms=rerank_ms,
+                generation_latency_ms=0.0,
+                total_latency_ms=total_ms,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                prompt_sent="(Skipped LLM call: top-1 rerank score fell below minimum threshold / abstain floor)",
+                expanded_queries=expanded_queries,
+                fallback_used=None,
+                effective_settings=eff_settings,
+            )
 
-    prompt = format_context_prompt(request.question, selected_chunks)
+    llm_chunks = _expand_with_section_neighbors(selected_chunks, max_total_tokens=600)
+    prompt = format_context_prompt(request.question, llm_chunks)
     full_prompt_display = f"[System Instruction]\n{SYSTEM_PROMPT}\n\n[User Prompt]\n{prompt}"
     t_gen = time.perf_counter()
     try:
@@ -765,6 +903,7 @@ def answer_question(request: AskRequest) -> AskResponse:
                 if not _is_abstain_text(retry_raw):
                     raw_answer = retry_raw
                     selected_chunks = fallback_chunks
+                    llm_chunks = fallback_chunks
                     for idx_fc, fc in enumerate(fallback_chunks, start=1):
                         fc.selected = True
                         fc.selection_status = "used"
@@ -773,13 +912,19 @@ def answer_question(request: AskRequest) -> AskResponse:
                             fc.selection_reason = "Used: adaptive fallback (top 5 candidates)"
                 else:
                     selected_chunks = fallback_chunks
+                    llm_chunks = fallback_chunks
             except LLMGenerationError:
                 pass
 
     if _is_abstain_text(raw_answer):
-        llm_abstain_reason = (
-            f"The model found no supporting evidence in the {len(selected_chunks)} chunks it was given"
-        )
+        if fallback_used == "lexical_evidence":
+            llm_abstain_reason = (
+                f"Checked {len(llm_chunks)} chunks with keyword evidence; the model found no supporting answer"
+            )
+        else:
+            llm_abstain_reason = (
+                f"The model found no supporting evidence in the {len(llm_chunks)} chunks it was given"
+            )
         total_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
         _log_request_telemetry(
             query=request.question,
@@ -812,12 +957,13 @@ def answer_question(request: AskRequest) -> AskResponse:
             total_tokens=prompt_tok + completion_tok,
             prompt_sent=full_prompt_display,
             expanded_queries=expanded_queries,
+            fallback_used=fallback_used,
             effective_settings=eff_settings,
         )
 
     cleaned_answer, citations, verified_count, total_cit_count = verify_answer_citations(
         raw_answer=raw_answer,
-        selected_chunks=selected_chunks,
+        selected_chunks=llm_chunks,
     )
     cit_summary = f"Verified {verified_count}/{total_cit_count} citations"
     total_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
@@ -853,6 +999,7 @@ def answer_question(request: AskRequest) -> AskResponse:
         total_tokens=prompt_tok + completion_tok,
         prompt_sent=full_prompt_display,
         expanded_queries=expanded_queries,
+        fallback_used=fallback_used,
         effective_settings=eff_settings,
     )
 

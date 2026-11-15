@@ -59,12 +59,23 @@ def _grounded_eval_synthesizer(prompt: str, system_prompt: str) -> Tuple[str, in
     scored_sentences: List[Tuple[float, int, str]] = []
     for num_str, body in blocks:
         idx = int(num_str)
-        raw_sents = [
-            re.sub(r"^\s*(?:[-*+•]|\d+[.)])\s+", "", s.strip())
-            for s in re.split(r"(?<=[.!?])\s+|\n+", body)
-            if s.strip() and not s.strip().startswith("#") and not s.strip().startswith("| :---")
-        ]
+        raw_sents: List[str] = []
+        for line in body.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or stripped.startswith("| :---"):
+                continue
+            if re.match(r"^[^:]{1,35}:\s.+?\.\s+[^:]{1,35}:\s", stripped):
+                raw_sents.append(stripped)
+            else:
+                for s in re.split(r"(?<=[.!?])\s+", stripped):
+                    cleaned = re.sub(r"^\s*(?:[-*+•]|\d+[.)])\s+", "", s.strip())
+                    if cleaned:
+                        raw_sents.append(cleaned)
+        q_nums = set(re.findall(r"\b\d+\b", question))
+        is_yn_num_check = bool(q_nums) and question.lower().lstrip().startswith(("does ", "is ", "can ", "are "))
         for sent in raw_sents:
+            if is_yn_num_check and not q_nums.issubset(set(re.findall(r"\b\d+\b", sent))):
+                continue
             sim = compute_claim_sentence_similarity(question, sent)
             if sim >= 0.14:
                 scored_sentences.append((sim, idx, sent))

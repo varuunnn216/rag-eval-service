@@ -8,9 +8,9 @@ from app.ingestion.seed import load_corpus_documents, preview_corpus_chunks
 class TestCorpusAndEvalDataset(unittest.TestCase):
     def test_corpus_loads_and_chunks_deterministically(self) -> None:
         docs = load_corpus_documents()
-        self.assertEqual(len(docs), 10)
+        self.assertEqual(len(docs), 11)
         chunks = preview_corpus_chunks()
-        self.assertEqual(len(chunks), 52)
+        self.assertEqual(len(chunks), 71)
 
     def test_eval_dataset_has_40_questions_and_valid_ground_truth_chunk_ids(self) -> None:
         settings = get_settings()
@@ -19,8 +19,8 @@ class TestCorpusAndEvalDataset(unittest.TestCase):
 
         items = json.loads(dataset_path.read_text(encoding="utf-8"))
         self.assertGreaterEqual(len(items), 40)
-        self.assertLessEqual(len(items), 70)
-        self.assertEqual(len(items), 67)
+        self.assertLessEqual(len(items), 80)
+        self.assertEqual(len(items), 72)
 
         valid_chunk_ids = {c.id for c in preview_corpus_chunks()}
         valid_doc_ids = {d.id for d in load_corpus_documents()}
@@ -42,7 +42,7 @@ class TestCorpusAndEvalDataset(unittest.TestCase):
 
         self.assertEqual(
             categories,
-            {"exact_lookup", "semantic_conceptual", "multi_hop", "paraphrase", "unanswerable"},
+            {"exact_lookup", "semantic_conceptual", "multi_hop", "paraphrase", "big_table_lookalike", "unanswerable"},
         )
 
 

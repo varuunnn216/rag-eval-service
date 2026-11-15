@@ -209,6 +209,7 @@ try:
         total_tokens: int = 0
         prompt_sent: str = ""
         expanded_queries: List[str] = Field(default_factory=list)
+        fallback_used: Optional[str] = None
         effective_settings: Dict[str, Any] = Field(default_factory=dict)
 
 except ImportError:
@@ -343,4 +344,5 @@ except ImportError:
         total_tokens: int = 0
         prompt_sent: str = ""
         expanded_queries: List[str] = field(default_factory=list)
+        fallback_used: Optional[str] = None
         effective_settings: Dict[str, Any] = field(default_factory=dict)

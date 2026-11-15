@@ -53,6 +53,10 @@ CORPUS_FILE_MAP: Dict[str, tuple[str, str]] = {
         "doc_11_zephyr_router",
         "Zephyr ZX-400 Router Guide",
     ),
+    "14_meridian_transit_handbook.md": (
+        "doc_14_meridian_transit",
+        "Meridian City Transit Authority Rider Handbook, 2026 Edition",
+    ),
 }
 
 

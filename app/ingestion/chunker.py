@@ -63,8 +63,11 @@ def linearize_tables(text: str) -> str:
             and _TABLE_SEP_RE.match(lines[i + 1])
         ):
             headers = _parse_pipe_cells(lines[i])
+            clean_headers = [h for h in headers if h]
             i += 2
             row_sentences: List[str] = []
+            if clean_headers:
+                row_sentences.append(f"Columns: {', '.join(clean_headers)}.")
             while i < len(lines) and _is_pipe_row(lines[i]):
                 if not _TABLE_SEP_RE.match(lines[i]):
                     cells = _parse_pipe_cells(lines[i])
@@ -194,7 +197,8 @@ def _format_chunk_for_parent_merge(chunk: ChunkData, parent_hd: str) -> str:
     if len(parts) >= 3 and chunk.heading != parent_hd:
         leaf = parts[-1]
         if not chunk.content.startswith(f"{leaf}:"):
-            return f"{leaf}: {chunk.content}"
+            sep = "\n" if chunk.content.lstrip().startswith("|") else " "
+            return f"{leaf}:{sep}{chunk.content}"
     return chunk.content
 
 
@@ -255,6 +259,38 @@ def _merge_small_chunks_into_parent(
     return merged
 
 
+def _split_large_table_into_row_chunks(
+    table_text: str,
+    max_table_tokens: int = 250,
+    rows_per_group: int = 4,
+) -> List[str]:
+    """
+    Split large Markdown tables (> 4 data rows and > 220 tokens) into groups of 3-4 rows,
+    repeating the header + separator row in each chunk so every chunk stays <= ~250 tokens.
+    """
+    lines = [ln for ln in table_text.strip().splitlines() if ln.strip()]
+    if len(lines) < 3 or not (_is_pipe_row(lines[0]) and _TABLE_SEP_RE.match(lines[1])):
+        return [table_text]
+
+    header_block = [lines[0], lines[1]]
+    data_rows = [ln for ln in lines[2:] if _is_pipe_row(ln) and not _TABLE_SEP_RE.match(ln)]
+    if len(data_rows) <= 4 or estimate_token_count(table_text) <= 220:
+        return [table_text]
+
+    groups: List[str] = []
+    cur_rows: List[str] = []
+    for row in data_rows:
+        candidate = "\n".join(header_block + cur_rows + [row])
+        if cur_rows and (len(cur_rows) >= rows_per_group or estimate_token_count(candidate) > max_table_tokens):
+            groups.append("\n".join(header_block + cur_rows))
+            cur_rows = [row]
+        else:
+            cur_rows.append(row)
+    if cur_rows:
+        groups.append("\n".join(header_block + cur_rows))
+    return groups
+
+
 def chunk_document(
     document_id: str,
     content: str,
@@ -282,7 +318,11 @@ def chunk_document(
         # Break any oversized single paragraph into sentence units
         units: List[Tuple[str, int, int]] = []
         for para_text, p_start, p_end in paragraphs:
-            if _is_markdown_table(para_text) or estimate_token_count(para_text) <= max_tokens:
+            if _is_markdown_table(para_text):
+                table_parts = _split_large_table_into_row_chunks(para_text, max_table_tokens=250, rows_per_group=4)
+                for tp in table_parts:
+                    units.append((tp, p_start, p_end))
+            elif estimate_token_count(para_text) <= max_tokens:
                 units.append((para_text, p_start, p_end))
             else:
                 sentences = re.split(r"(?<=[.!?])\s+", para_text)
@@ -300,7 +340,10 @@ def chunk_document(
 
         for unit_text, u_start, u_end in units:
             u_tokens = estimate_token_count(unit_text)
-            if current_units and (current_tokens + u_tokens > max_tokens):
+            has_table = any(_is_markdown_table(u[0]) for u in current_units)
+            both_tables = has_table and _is_markdown_table(unit_text)
+            eff_limit = 250 if has_table else max_tokens
+            if current_units and (both_tables or (current_tokens + u_tokens > eff_limit)):
                 chunk_text = "\n\n".join(u[0] for u in current_units)
                 c_start = current_units[0][1]
                 c_end = current_units[-1][2]

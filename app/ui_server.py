@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import logging
 import mimetypes
 from pathlib import Path
 import time
@@ -46,6 +48,8 @@ from eval.question_generator import (
 from eval.runner import run_evaluation_suite
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+MAX_REQUEST_BODY_BYTES = 10 * 1024 * 1024
+logger = logging.getLogger(__name__)
 
 
 def _is_admin_authorized(headers: Any) -> bool:
@@ -59,7 +63,11 @@ def _is_admin_authorized(headers: Any) -> bool:
     auth_hdr = (headers.get("Authorization") or "").strip()
     if auth_hdr.lower().startswith("bearer "):
         auth_hdr = auth_hdr[7:].strip()
-    return hdr_token == token or auth_hdr == token
+    return (
+        bool(hdr_token) and hmac.compare_digest(hdr_token, token)
+    ) or (
+        bool(auth_hdr) and hmac.compare_digest(auth_hdr, token)
+    )
 
 
 def _get_health_payload() -> Dict[str, Any]:
@@ -126,11 +134,17 @@ def _parse_ask_request(body: Dict[str, Any]) -> AskRequest:
 class RAGWebRequestHandler(BaseHTTPRequestHandler):
     """Zero-dependency HTTP handler serving the Web UI and /api/v1/* endpoints."""
 
+    def _send_security_headers(self) -> None:
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+
     def _send_json(self, payload: Any, status: int = 200) -> None:
         raw = json.dumps(payload, default=str).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
+        self._send_security_headers()
         self.end_headers()
         self.wfile.write(raw)
 
@@ -145,6 +159,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", mime or "application/octet-stream")
         self.send_header("Content-Length", str(len(content)))
+        self._send_security_headers()
         self.end_headers()
         self.wfile.write(content)
 
@@ -152,6 +167,8 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         if length <= 0:
             return {}
+        if length > MAX_REQUEST_BODY_BYTES:
+            raise ValueError("Request body too large")
         raw = self.rfile.read(length).decode("utf-8")
         return json.loads(raw)
 
@@ -172,8 +189,9 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
             return
         if path.startswith("/static/"):
             rel = path[len("/static/") :]
-            target = (STATIC_DIR / rel).resolve()
-            if str(target).startswith(str(STATIC_DIR.resolve())):
+            static_root = STATIC_DIR.resolve()
+            target = (static_root / rel).resolve()
+            if target.is_relative_to(static_root):
                 self._send_file(target)
                 return
             self._send_json({"detail": "Forbidden"}, status=403)
@@ -248,6 +266,9 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"detail": "Question not found or cannot delete golden question"}, status=404)
             return
         if path.startswith("/api/v1/documents/"):
+            if not _is_admin_authorized(self.headers):
+                self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                return
             doc_id = unquote(path[len("/api/v1/documents/") :].strip("/"))
             if doc_id:
                 self._send_json(delete_document(doc_id))
@@ -350,6 +371,9 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             if path == "/api/v1/ingest":
+                if not _is_admin_authorized(self.headers):
+                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                    return
                 raw_docs = body.get("documents")
                 if raw_docs is None and "content" in body:
                     raw_docs = [body]
@@ -369,6 +393,9 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             if path.startswith("/api/v1/documents/") and path.endswith("/delete"):
+                if not _is_admin_authorized(self.headers):
+                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                    return
                 parts = path.split("/")
                 if len(parts) >= 5:
                     doc_id = unquote(parts[4])
@@ -428,6 +455,9 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             if path == "/api/v1/eval/run":
+                if not _is_admin_authorized(self.headers):
+                    self._send_json({"detail": "Eval run disabled in DEMO_MODE (admin token required)"}, status=403)
+                    return
                 selected_cfg = body.get("config") if isinstance(body, dict) else None
                 question_set = str(body.get("question_set") or "golden_only") if isinstance(body, dict) else "golden_only"
                 doc_id = (body.get("doc_id") or None) if isinstance(body, dict) else None
@@ -441,8 +471,11 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                 return
 
             self._send_json({"detail": f"Unknown route: {path}"}, status=404)
-        except Exception as exc:
+        except ValueError as exc:
             self._send_json({"detail": str(exc)}, status=400)
+        except Exception:
+            logger.exception("Unhandled error in POST %s", path)
+            self._send_json({"detail": "Internal server error"}, status=500)
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8000) -> None:
