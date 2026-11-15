@@ -158,3 +158,15 @@ curl -X POST http://localhost:8000/api/v1/ask \
 python3 -m eval.runner
 python3 -m unittest discover -s tests -v
 ```
+
+### 6. Run the Regression Tests
+Run the live HTTP regression suite and security checks against a local or deployed `BASE_URL` (defaults to `http://127.0.0.1:8000`):
+```bash
+BASE_URL=http://127.0.0.1:8000 python3 tests/regression.py
+BASE_URL=http://127.0.0.1:8000 python3 -m unittest tests/test_security.py -v
+```
+
+### 7. Security
+- **Public Read-Only Mode (`DEMO_MODE=true`):** Disables `/docs`, `/redoc`, and `/openapi.json`, hides the LLM system prompt (`prompt_sent`) and internal file paths from API responses and UI, and requires `ADMIN_TOKEN` (`X-Admin-Token` or `Authorization: Bearer`) on all mutating endpoints (`POST /api/v1/ingest`, `DELETE /api/v1/documents/{id}`, `POST /api/v1/eval/run`, `POST /api/v1/eval/generate`, and question bank edits).
+- **Headers, CORS & Guardrails:** Enforces `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, HSTS, strict `ALLOWED_ORIGINS` CORS, `10 MB` request body limit, per-IP rate limiting, parameterized SQL queries, and escaped Markdown rendering.
+- **Rotating Keys:** Generate a new `GEMINI_API_KEY` (Google AI Studio) or `ADMIN_TOKEN`, update it in your host environment variables (e.g. Vercel Project Settings → Environment Variables) and local `.env` (never committed), and redeploy.

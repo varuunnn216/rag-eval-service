@@ -1478,8 +1478,12 @@ function renderAnswerSection(data) {
 
   document.getElementById("copy-answer-btn").disabled = false;
   document.getElementById("copy-json-btn").disabled = false;
+  const promptDrawer = document.getElementById("prompt-drawer");
+  if (promptDrawer) {
+    promptDrawer.classList.toggle("hidden", Boolean(window.__demoMode));
+  }
   document.getElementById("prompt-sent-content").textContent =
-    data.prompt_sent || "(No LLM prompt sent)";
+    window.__demoMode ? "" : (data.prompt_sent || "(No LLM prompt sent)");
 
   const citSummary =
     data.citation_summary ||

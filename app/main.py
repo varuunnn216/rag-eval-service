@@ -3,8 +3,9 @@ import logging
 from pathlib import Path
 from typing import AsyncGenerator, Dict, Any
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router as api_router
@@ -12,6 +13,13 @@ from app.config import get_settings
 from app.db import get_db_connection, init_db
 from app.ingestion.seed import load_corpus_documents
 from app.ingestion.service import ingest_documents, list_documents
+from app.security import (
+    MAX_REQUEST_BODY_BYTES,
+    SECURITY_HEADERS,
+    check_rate_limit,
+    friendly_error_payload,
+    get_allowed_origins,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,15 +44,47 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
 
+_settings = get_settings()
+
 app = FastAPI(
     title="RAG Service with Evaluation Harness",
     description=(
         "FastAPI + pgvector RAG service featuring hybrid search (dense + BM25/tsvector RRF), "
-        "local cross-encoder reranking, verifiable inline citations, and a 30-50 question eval harness."
+        "local cross-encoder reranking, verifiable inline citations, and a 72-question eval harness."
     ),
     version="0.1.0",
     lifespan=lifespan,
+    docs_url=None if _settings.demo_mode else "/docs",
+    redoc_url=None if _settings.demo_mode else "/redoc",
+    openapi_url=None if _settings.demo_mode else "/openapi.json",
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_allowed_origins(),
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Admin-Token", "Authorization"],
+)
+
+
+@app.middleware("http")
+async def security_and_rate_limit_middleware(request: Request, call_next):
+    client_ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(client_ip):
+        return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429, headers=SECURITY_HEADERS)
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit() and int(content_length) > MAX_REQUEST_BODY_BYTES:
+        return JSONResponse({"detail": "Request body too large"}, status_code=413, headers=SECURITY_HEADERS)
+    try:
+        response = await call_next(request)
+    except Exception:
+        err = friendly_error_payload()
+        logger.exception("Unhandled error request_id=%s path=%s", err["request_id"], request.url.path)
+        return JSONResponse(err, status_code=500, headers=SECURITY_HEADERS)
+    for k, v in SECURITY_HEADERS.items():
+        response.headers.setdefault(k, v)
+    return response
 
 app.include_router(api_router)
 if STATIC_DIR.exists():

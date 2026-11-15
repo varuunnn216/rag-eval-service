@@ -1,0 +1,128 @@
+[
+  {
+    "question": "What time does Bluebird Cafe open on Sunday?",
+    "expected_contains": ["9:00"],
+    "must_abstain": false,
+    "doc": "doc_08_bluebird_cafe"
+  },
+  {
+    "question": "Who must approve a refund over 500 rupees?",
+    "expected_contains": ["shift manager"],
+    "must_abstain": false,
+    "doc": "doc_08_bluebird_cafe"
+  },
+  {
+    "question": "What is the nut allergy handling procedure?",
+    "expected_contains": ["nut"],
+    "must_abstain": false,
+    "doc": "doc_08_bluebird_cafe"
+  },
+  {
+    "question": "What is the wifi password?",
+    "expected_contains": [],
+    "must_abstain": true,
+    "doc": "doc_08_bluebird_cafe"
+  },
+  {
+    "question": "What are the 2026 Casual Pass rates?",
+    "expected_contains": ["2026"],
+    "must_abstain": false,
+    "doc": "doc_09_nimbus_bikeshare"
+  },
+  {
+    "question": "What CLI command resets a jammed dock latch?",
+    "expected_contains": ["nimbus"],
+    "must_abstain": false,
+    "doc": "doc_09_nimbus_bikeshare"
+  },
+  {
+    "question": "How many solar panels and what wattage MPPT charge controller are installed on each Nimbus docking station bollard?",
+    "expected_contains": [],
+    "must_abstain": true,
+    "doc": "doc_09_nimbus_bikeshare"
+  },
+  {
+    "question": "How many books can a graduate student borrow, and for how long?",
+    "expected_contains": ["30", "60"],
+    "must_abstain": false,
+    "doc": "doc_10_harborview_library"
+  },
+  {
+    "question": "Is the Main Library open on Sunday?",
+    "expected_contains": ["closed"],
+    "must_abstain": false,
+    "doc": "doc_10_harborview_library"
+  },
+  {
+    "question": "How many days do I have to collect an item I requested from another library?",
+    "expected_contains": ["5"],
+    "must_abstain": false,
+    "doc": "doc_10_harborview_library"
+  },
+  {
+    "question": "The light on my router keeps flashing red. What should I do?",
+    "expected_contains": ["hardware fault", "contact support"],
+    "must_abstain": false,
+    "doc": "doc_11_zephyr_router"
+  },
+  {
+    "question": "How do I wipe all my settings on the router?",
+    "expected_contains": ["10 seconds"],
+    "must_abstain": false,
+    "doc": "doc_11_zephyr_router"
+  },
+  {
+    "question": "My router keeps shutting itself off. Why?",
+    "expected_contains": ["E-407"],
+    "must_abstain": false,
+    "doc": "doc_11_zephyr_router"
+  },
+  {
+    "question": "Does the ZX-400 support Wi-Fi 7?",
+    "expected_contains": [],
+    "must_abstain": true,
+    "doc": "doc_11_zephyr_router"
+  },
+  {
+    "question": "What CPU does the router use?",
+    "expected_contains": [],
+    "must_abstain": true,
+    "doc": "doc_11_zephyr_router"
+  },
+  {
+    "question": "Which bus route goes from Downtown to Lakeview?",
+    "expected_contains": ["41"],
+    "must_abstain": false,
+    "doc": "doc_14_meridian_transit"
+  },
+  {
+    "question": "Which bus route goes from Downtown to Lakeside?",
+    "expected_contains": ["14"],
+    "must_abstain": false,
+    "doc": "doc_14_meridian_transit"
+  },
+  {
+    "question": "When does Route 22 stop running at night?",
+    "expected_contains": ["10:30 PM"],
+    "must_abstain": false,
+    "doc": "doc_14_meridian_transit"
+  },
+  {
+    "question": "How often does the E5 express run?",
+    "expected_contains": ["20 min"],
+    "must_abstain": false,
+    "doc": "doc_14_meridian_transit"
+  },
+  {
+    "question": "How much does a bike-share membership cost?",
+    "expected_contains": [],
+    "must_abstain": true,
+    "doc": "doc_14_meridian_transit"
+  },
+  {
+    "question": "Can I sell my vegetables at a market?",
+    "expected_contains": [],
+    "must_abstain": true,
+    "doc": null
+  }
+]

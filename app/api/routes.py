@@ -23,6 +23,7 @@ from app.schemas import (
     SearchRequest,
     SearchResponse,
 )
+from app.security import sanitize_ask_payload_for_demo, sanitize_documents_for_demo
 from eval.question_bank import (
     add_manual_question,
     bulk_update_status,
@@ -74,7 +75,7 @@ def ingest_endpoint(
 @router.get("/documents")
 def list_documents_endpoint() -> List[Dict[str, Any]]:
     """List all indexed documents and their chunk counts."""
-    return list_documents()
+    return sanitize_documents_for_demo(list_documents())
 
 
 @router.get("/documents/{document_id}/chunks")
@@ -126,10 +127,10 @@ def search_endpoint(payload: SearchRequest) -> SearchResponse:
     )
 
 
-@router.post("/ask", response_model=AskResponse)
-def ask_endpoint(payload: AskRequest) -> AskResponse:
+@router.post("/ask")
+def ask_endpoint(payload: AskRequest) -> Dict[str, Any]:
     """Retrieve, rerank, and generate a grounded answer with verified inline citations."""
-    return answer_question(payload)
+    return sanitize_ask_payload_for_demo(answer_question(payload).to_dict())
 
 
 @router.post("/ask/stream")
@@ -164,7 +165,7 @@ def ask_stream_endpoint(payload: AskRequest) -> StreamingResponse:
                 accum.extend(words[i : i + step])
                 yield f"data: {json.dumps({'stage': 'delta', 'text': ' '.join(accum)})}\n\n"
                 time.sleep(0.015)
-        yield f"data: {json.dumps({'stage': 'done', 'response': resp.to_dict()}, default=str)}\n\n"
+        yield f"data: {json.dumps({'stage': 'done', 'response': sanitize_ask_payload_for_demo(resp.to_dict())}, default=str)}\n\n"
 
     return StreamingResponse(
         event_stream(),

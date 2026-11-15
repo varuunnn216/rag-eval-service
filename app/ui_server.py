@@ -32,6 +32,14 @@ from app.ingestion.service import (
 )
 from app.retrieval.hybrid import retrieve_candidates, retrieve_candidates_with_timing
 from app.schemas import AskRequest, AskResponse, DocumentInput
+from app.security import (
+    MAX_REQUEST_BODY_BYTES,
+    SECURITY_HEADERS,
+    check_rate_limit,
+    friendly_error_payload,
+    sanitize_ask_payload_for_demo,
+    sanitize_documents_for_demo,
+)
 from eval.question_bank import (
     add_manual_question,
     bulk_update_status,
@@ -48,7 +56,6 @@ from eval.question_generator import (
 from eval.runner import run_evaluation_suite
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-MAX_REQUEST_BODY_BYTES = 10 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
 
@@ -134,10 +141,12 @@ def _parse_ask_request(body: Dict[str, Any]) -> AskRequest:
 class RAGWebRequestHandler(BaseHTTPRequestHandler):
     """Zero-dependency HTTP handler serving the Web UI and /api/v1/* endpoints."""
 
+    server_version = ""
+    sys_version = ""
+
     def _send_security_headers(self) -> None:
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        for k, v in SECURITY_HEADERS.items():
+            self.send_header(k, v)
 
     def _send_json(self, payload: Any, status: int = 200) -> None:
         raw = json.dumps(payload, default=str).encode("utf-8")
@@ -200,7 +209,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
             self._send_json(_get_health_payload())
             return
         if path == "/api/v1/documents":
-            self._send_json(list_documents())
+            self._send_json(sanitize_documents_for_demo(list_documents()))
             return
         if path.startswith("/api/v1/documents/") and path.endswith("/chunks"):
             parts = path.split("/")
@@ -278,12 +287,16 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path
+        client_ip = self.client_address[0] if self.client_address else "unknown"
+        if not check_rate_limit(client_ip):
+            self._send_json({"detail": "Rate limit exceeded"}, status=429)
+            return
         try:
             body = self._read_json_body()
             if path == "/api/v1/ask":
                 req = _parse_ask_request(body)
                 resp = answer_question(req)
-                self._send_json(resp.to_dict())
+                self._send_json(sanitize_ask_payload_for_demo(resp.to_dict()))
                 return
 
             if path == "/api/v1/ask/stream":
@@ -331,7 +344,7 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                         accum.extend(words[i : i + step])
                         self._send_sse_event({"stage": "delta", "text": " ".join(accum)})
                         time.sleep(0.018)
-                self._send_sse_event({"stage": "done", "response": resp.to_dict()})
+                self._send_sse_event({"stage": "done", "response": sanitize_ask_payload_for_demo(resp.to_dict())})
                 return
 
             if path == "/api/v1/search":
@@ -474,8 +487,9 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self._send_json({"detail": str(exc)}, status=400)
         except Exception:
-            logger.exception("Unhandled error in POST %s", path)
-            self._send_json({"detail": "Internal server error"}, status=500)
+            err = friendly_error_payload()
+            logger.exception("Unhandled error in POST %s request_id=%s", path, err["request_id"])
+            self._send_json(err, status=500)
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8000) -> None:
