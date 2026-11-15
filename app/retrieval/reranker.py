@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
 import re
-from typing import Any, List, Optional
+import urllib.request
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.config import get_settings
 from app.ingestion.chunker import format_contextual_chunk_text
@@ -169,6 +171,87 @@ def _sigmoid(x: float) -> float:
     return z / (1.0 + z)
 
 
+_RERANK_CACHE: Dict[Tuple[str, Tuple[str, ...]], Dict[str, float]] = {}
+
+
+def _gemini_semantic_rerank(
+    query: str,
+    candidates: List[RetrievedChunk],
+    settings: Any,
+) -> Optional[Dict[str, float]]:
+    """
+    Use Gemini Flash as a semantic cross-encoder fallback when local CrossEncoder
+    is unavailable. Returns {chunk_id: score in [0.0, 1.0]} or None on failure.
+    """
+    if os.getenv("DISABLE_NEURAL_RERANKER", "").lower() in ("1", "true", "yes"):
+        return None
+    if os.getenv("DISABLE_GEMINI_RERANKER", "").lower() in ("1", "true", "yes"):
+        return None
+    key = (getattr(settings, "gemini_api_key", "") or "").strip()
+    if not key or key == "your_gemini_api_key_here":
+        return None
+
+    top_slice = candidates[:10]
+    cache_key = (query, tuple(c.chunk_id for c in top_slice))
+    if cache_key in _RERANK_CACHE:
+        return _RERANK_CACHE[cache_key]
+
+    passages = []
+    for idx, c in enumerate(top_slice):
+        ctx = format_contextual_chunk_text(c.document_title, c.heading, c.content, linearize=True)
+        passages.append(f"[{idx}] id={c.chunk_id}\n{ctx[:600]}")
+
+    prompt = (
+        "Score each candidate passage from 0.0 to 1.0 for how directly it helps answer "
+        "the user's question (including paraphrases, symptoms, or synonyms). "
+        "Use 0.0-0.15 if the passage is unrelated or does not contain the asked fact/feature "
+        "(for example, if the question asks about a feature not mentioned in the passage). "
+        "Use 0.70-1.0 if the passage directly answers or resolves the question.\n\n"
+        f"Question: {query}\n\n"
+        "Passages:\n" + "\n---\n".join(passages) + "\n\n"
+        'Return compact JSON only using the integer passage index i and score s: {"scores": [{"i": 0, "s": 0.0}]}'
+    )
+
+    model_name = getattr(settings, "generation_model", "gemini-3.5-flash-lite")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.0,
+            "maxOutputTokens": 1024,
+            "responseMimeType": "application/json",
+        },
+    }
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "x-goog-api-key": key},
+        )
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        parsed = json.loads(text)
+        scores_map: Dict[str, float] = {}
+        for item in parsed.get("scores", []):
+            idx_val = item.get("i")
+            if idx_val is not None and 0 <= int(idx_val) < len(top_slice):
+                cid = top_slice[int(idx_val)].chunk_id
+            else:
+                cid = str(item.get("id", ""))
+            raw_s = item.get("s", item.get("score", 0.0))
+            sc = max(0.0, min(1.0, float(raw_s)))
+            if cid:
+                scores_map[cid] = round(sc, 6)
+        if not scores_map:
+            return None
+        _RERANK_CACHE[cache_key] = scores_map
+        return scores_map
+    except Exception as exc:
+        logger.debug("Gemini semantic reranker unavailable (%s); falling back to lexical scorer.", exc)
+        return None
+
+
 def rerank_chunks(
     query: str,
     candidates: List[RetrievedChunk],
@@ -206,30 +289,37 @@ def rerank_chunks(
             chunk.rerank_score = rounded
             chunk.final_score = rounded
     else:
-        # Compute candidate-pool IDF so rare/distinguishing query terms carry higher weight
-        q_stems = [
-            _stem(t)
-            for t in _TOKEN_RE.findall(query.lower())
-            if t not in _STOPWORDS and len(t) >= 2
-        ]
-        n_docs = len(reranked)
-        token_idf: dict[str, float] = {}
-        for qs in set(q_stems):
-            equiv = get_synonym_stems(qs)
-            df = 0
-            for c in reranked:
-                ctx_text = format_contextual_chunk_text(
-                    c.document_title, c.heading, c.content, linearize=True
-                ).lower()
-                c_stems = {_stem(t) for t in _TOKEN_RE.findall(ctx_text)}
-                if equiv & c_stems:
-                    df += 1
-            token_idf[qs] = 1.0 + math.log((n_docs + 1.0) / (df + 1.0))
+        gemini_scores = _gemini_semantic_rerank(query, reranked, settings)
+        if gemini_scores is not None:
+            for chunk in reranked:
+                score = gemini_scores.get(chunk.chunk_id, 0.0)
+                chunk.rerank_score = score
+                chunk.final_score = score
+        else:
+            # Compute candidate-pool IDF so rare/distinguishing query terms carry higher weight
+            q_stems = [
+                _stem(t)
+                for t in _TOKEN_RE.findall(query.lower())
+                if t not in _STOPWORDS and len(t) >= 2
+            ]
+            n_docs = len(reranked)
+            token_idf: dict[str, float] = {}
+            for qs in set(q_stems):
+                equiv = get_synonym_stems(qs)
+                df = 0
+                for c in reranked:
+                    ctx_text = format_contextual_chunk_text(
+                        c.document_title, c.heading, c.content, linearize=True
+                    ).lower()
+                    c_stems = {_stem(t) for t in _TOKEN_RE.findall(ctx_text)}
+                    if equiv & c_stems:
+                        df += 1
+                token_idf[qs] = 1.0 + math.log((n_docs + 1.0) / (df + 1.0))
 
-        for chunk in reranked:
-            score = compute_pair_interaction_score(query, chunk, token_idf=token_idf)
-            chunk.rerank_score = score
-            chunk.final_score = score
+            for chunk in reranked:
+                score = compute_pair_interaction_score(query, chunk, token_idf=token_idf)
+                chunk.rerank_score = score
+                chunk.final_score = score
 
     reranked.sort(
         key=lambda c: (

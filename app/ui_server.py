@@ -30,9 +30,36 @@ from app.ingestion.service import (
 )
 from app.retrieval.hybrid import retrieve_candidates, retrieve_candidates_with_timing
 from app.schemas import AskRequest, AskResponse, DocumentInput
+from eval.question_bank import (
+    add_manual_question,
+    bulk_update_status,
+    delete_question,
+    load_all_questions,
+    update_question,
+)
+from eval.question_generator import (
+    generate_questions_for_document,
+    get_generation_job,
+    list_generation_jobs,
+    start_generation_job,
+)
 from eval.runner import run_evaluation_suite
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+def _is_admin_authorized(headers: Any) -> bool:
+    settings = get_settings()
+    if not settings.demo_mode:
+        return True
+    token = (settings.admin_token or "").strip()
+    if not token:
+        return False
+    hdr_token = (headers.get("X-Admin-Token") or "").strip()
+    auth_hdr = (headers.get("Authorization") or "").strip()
+    if auth_hdr.lower().startswith("bearer "):
+        auth_hdr = auth_hdr[7:].strip()
+    return hdr_token == token or auth_hdr == token
 
 
 def _get_health_payload() -> Dict[str, Any]:
@@ -48,7 +75,9 @@ def _get_health_payload() -> Dict[str, Any]:
         "chunks_count": chunk_count,
         "embedding_model": settings.embedding_model,
         "generation_model": settings.generation_model,
+        "generator_model": settings.generator_model,
         "reranker_model": settings.reranker_model,
+        "demo_mode": settings.demo_mode,
     }
 
 
@@ -161,6 +190,39 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                 doc_id = unquote(parts[4])
                 self._send_json(get_document_chunks(doc_id))
                 return
+        if path == "/api/v1/eval/questions":
+            qs = load_all_questions()
+            settings = get_settings()
+            self._send_json(
+                {
+                    "questions": qs,
+                    "demo_mode": settings.demo_mode,
+                    "counts": {
+                        "total": len(qs),
+                        "golden": sum(1 for q in qs if q.get("source") == "golden"),
+                        "synthetic": sum(1 for q in qs if q.get("source") == "synthetic"),
+                        "approved": sum(1 for q in qs if q.get("status") == "approved"),
+                        "draft": sum(1 for q in qs if q.get("status") == "draft"),
+                        "rejected": sum(1 for q in qs if q.get("status") == "rejected"),
+                        "needs_review": sum(1 for q in qs if q.get("needs_review")),
+                    },
+                }
+            )
+            return
+        if path == "/api/v1/eval/generate/status":
+            from urllib.parse import parse_qs
+
+            q_params = parse_qs(parsed.query)
+            job_id = (q_params.get("job_id") or [""])[0]
+            if job_id:
+                job = get_generation_job(job_id)
+                if job is None:
+                    self._send_json({"detail": "Unknown job_id"}, status=404)
+                    return
+                self._send_json(job)
+            else:
+                self._send_json({"jobs": list_generation_jobs()})
+            return
         if path == "/api/v1/eval/report":
             settings = get_settings()
             report_path = settings.project_root / "eval" / "reports" / "latest_eval_report.json"
@@ -175,6 +237,16 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         path = parsed.path
+        if path.startswith("/api/v1/eval/questions/"):
+            if not _is_admin_authorized(self.headers):
+                self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                return
+            qid = unquote(path[len("/api/v1/eval/questions/") :].strip("/"))
+            if qid and delete_question(qid):
+                self._send_json({"deleted": True, "id": qid})
+                return
+            self._send_json({"detail": "Question not found or cannot delete golden question"}, status=404)
+            return
         if path.startswith("/api/v1/documents/"):
             doc_id = unquote(path[len("/api/v1/documents/") :].strip("/"))
             if doc_id:
@@ -303,9 +375,69 @@ class RAGWebRequestHandler(BaseHTTPRequestHandler):
                     self._send_json(delete_document(doc_id))
                     return
 
+            if path == "/api/v1/eval/generate":
+                if not _is_admin_authorized(self.headers):
+                    self._send_json({"detail": "Generation disabled in DEMO_MODE (admin token required)"}, status=403)
+                    return
+                doc_id = str(body.get("doc_id") or "")
+                if not doc_id:
+                    self._send_json({"detail": "doc_id is required"}, status=400)
+                    return
+                per_chunk = int(body.get("per_chunk", 2))
+                include_unans = bool(body.get("include_unanswerable", True))
+                if body.get("sync"):
+                    res = generate_questions_for_document(
+                        doc_id, per_chunk=per_chunk, include_unanswerable=include_unans
+                    )
+                    self._send_json(res)
+                else:
+                    job = start_generation_job(
+                        doc_id, per_chunk=per_chunk, include_unanswerable=include_unans
+                    )
+                    self._send_json(job, status=202)
+                return
+
+            if path == "/api/v1/eval/questions":
+                if not _is_admin_authorized(self.headers):
+                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                    return
+                rec = add_manual_question(body)
+                self._send_json(rec, status=201)
+                return
+
+            if path == "/api/v1/eval/questions/bulk":
+                if not _is_admin_authorized(self.headers):
+                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                    return
+                qids = [str(x) for x in (body.get("ids") or [])]
+                new_status = str(body.get("status") or "approved")
+                count = bulk_update_status(qids, new_status)
+                self._send_json({"updated": count, "status": new_status})
+                return
+
+            if path.startswith("/api/v1/eval/questions/"):
+                if not _is_admin_authorized(self.headers):
+                    self._send_json({"detail": "Read-only in DEMO_MODE (admin token required)"}, status=403)
+                    return
+                qid = unquote(path[len("/api/v1/eval/questions/") :].strip("/"))
+                updated = update_question(qid, body)
+                if updated is None:
+                    self._send_json({"detail": f"Question {qid} not found"}, status=404)
+                    return
+                self._send_json(updated)
+                return
+
             if path == "/api/v1/eval/run":
                 selected_cfg = body.get("config") if isinstance(body, dict) else None
-                self._send_json(run_evaluation_suite(selected_config=selected_cfg))
+                question_set = str(body.get("question_set") or "golden_only") if isinstance(body, dict) else "golden_only"
+                doc_id = (body.get("doc_id") or None) if isinstance(body, dict) else None
+                self._send_json(
+                    run_evaluation_suite(
+                        selected_config=selected_cfg,
+                        question_set=question_set,
+                        doc_id=doc_id,
+                    )
+                )
                 return
 
             self._send_json({"detail": f"Unknown route: {path}"}, status=404)

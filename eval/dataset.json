@@ -1,703 +1,2076 @@
 [
   {
     "id": "q01",
-    "category": "exact_lookup",
     "question": "Which pgvector operator and operator class are used for cosine distance indexing?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_pgvector_indexing",
-    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_001"],
+    "doc_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": [
+      "doc_pgvector_indexing::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_pgvector_indexing",
+        "heading_path": "pgvector Indexing and Vector Search Reference > Distance Operators and Index Classes",
+        "quote_snippet": "`pgvector` supports three primary distance operators and corresponding operator classes for indexing: - Cosine distance uses the `<=>` operator with the `vec...",
+        "chunk_id": "doc_pgvector_indexing::chunk_001"
+      }
+    ],
     "expected_answer": "Cosine distance uses the <=> operator with the vector_cosine_ops operator class.",
-    "key_facts": ["<=>", "vector_cosine_ops"],
-    "should_abstain": false
+    "key_facts": [
+      "<=>",
+      "vector_cosine_ops"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q02",
-    "category": "exact_lookup",
     "question": "What are the default values of m and ef_construction when creating a pgvector HNSW index?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_pgvector_indexing",
-    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_002"],
+    "doc_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": [
+      "doc_pgvector_indexing::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_pgvector_indexing",
+        "heading_path": "pgvector Indexing and Vector Search Reference > HNSW Index Architecture and Build Parameters",
+        "quote_snippet": "Hierarchical Navigable Small World (HNSW) indexes construct a multi-layer proximity graph that provides logarithmic search complexity and high recall without...",
+        "chunk_id": "doc_pgvector_indexing::chunk_002"
+      }
+    ],
     "expected_answer": "The default value of m is 16 and the default value of ef_construction is 64.",
-    "key_facts": ["16", "64", "ef_construction"],
-    "should_abstain": false
+    "key_facts": [
+      "16",
+      "64",
+      "ef_construction"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q03",
-    "category": "exact_lookup",
     "question": "What is the default value of hnsw.ef_search at query time and what is the default hnsw.max_scan_tuples limit?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_pgvector_indexing",
-    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_003"],
+    "doc_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": [
+      "doc_pgvector_indexing::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_pgvector_indexing",
+        "heading_path": "pgvector Indexing and Vector Search Reference > HNSW Query-Time Tuning and Iterative Scans",
+        "quote_snippet": "At query time, search breadth is controlled by the session parameter `hnsw.ef_search`, which specifies the size of the dynamic candidate list during graph tr...",
+        "chunk_id": "doc_pgvector_indexing::chunk_003"
+      }
+    ],
     "expected_answer": "The default value of hnsw.ef_search is 40, and hnsw.max_scan_tuples defaults to 20000.",
-    "key_facts": ["40", "20000", "ef_search"],
-    "should_abstain": false
+    "key_facts": [
+      "40",
+      "20000",
+      "ef_search"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q04",
-    "category": "exact_lookup",
     "question": "How many dimensions does the halfvec data type support for HNSW indexes compared to standard vector columns?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_pgvector_indexing",
-    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_004"],
+    "doc_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": [
+      "doc_pgvector_indexing::chunk_004"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_pgvector_indexing",
+        "heading_path": "pgvector Indexing and Vector Search Reference > IVFFlat Indexes and Half-Precision Vectors",
+        "quote_snippet": "Inverted File with Flat Compression (`IVFFlat`) partitions vectors into `lists` Voronoi cells using k-means clustering. For datasets up to 1 million rows, th...",
+        "chunk_id": "doc_pgvector_indexing::chunk_004"
+      }
+    ],
     "expected_answer": "The halfvec data type supports up to 4000 dimensions for HNSW indexes, compared to 2000 dimensions for standard 32-bit vector columns.",
-    "key_facts": ["halfvec", "4000", "2000"],
-    "should_abstain": false
+    "key_facts": [
+      "halfvec",
+      "4000",
+      "2000"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q05",
-    "category": "exact_lookup",
     "question": "What normalization bitmask is passed to ts_rank_cd and what is the default gin_pending_list_limit size?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_hybrid_search",
-    "expected_chunk_ids": ["doc_hybrid_search::chunk_001"],
+    "doc_id": "doc_hybrid_search",
+    "expected_chunk_ids": [
+      "doc_hybrid_search::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_hybrid_search",
+        "heading_path": "Hybrid Search, Full-Text Indexing, and Reciprocal Rank Fusion > PostgreSQL Full-Text Search with tsvector and GIN",
+        "quote_snippet": "PostgreSQL provides native lexical indexing via the `tsvector` document representation and `tsquery` query representation. In our RAG schema, each chunk stor...",
+        "chunk_id": "doc_hybrid_search::chunk_001"
+      }
+    ],
     "expected_answer": "Normalization bitmask 32 is passed to ts_rank_cd (dividing rank by 1 + rank), and gin_pending_list_limit defaults to 4MB.",
-    "key_facts": ["32", "ts_rank_cd", "4MB"],
-    "should_abstain": false
+    "key_facts": [
+      "32",
+      "ts_rank_cd",
+      "4MB"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q06",
-    "category": "exact_lookup",
     "question": "What is the default smoothing constant k used in the Reciprocal Rank Fusion (RRF) formula?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_hybrid_search",
-    "expected_chunk_ids": ["doc_hybrid_search::chunk_002"],
+    "doc_id": "doc_hybrid_search",
+    "expected_chunk_ids": [
+      "doc_hybrid_search::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_hybrid_search",
+        "heading_path": "Hybrid Search, Full-Text Indexing, and Reciprocal Rank Fusion > Reciprocal Rank Fusion (RRF) Mathematics",
+        "quote_snippet": "Because cosine similarity scores from `pgvector` and cover-density scores from `ts_rank_cd` follow incompatible probability distributions, directly summing r...",
+        "chunk_id": "doc_hybrid_search::chunk_002"
+      }
+    ],
     "expected_answer": "The default RRF smoothing constant k is 60 (RRF_K = 60).",
-    "key_facts": ["60", "RRF"],
-    "should_abstain": false
+    "key_facts": [
+      "60",
+      "RRF"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q07",
-    "category": "exact_lookup",
     "question": "Which cross-encoder model is used in the second-stage reranking pipeline and how many candidates does it compress to top_k?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_hybrid_search",
-    "expected_chunk_ids": ["doc_hybrid_search::chunk_003"],
+    "doc_id": "doc_hybrid_search",
+    "expected_chunk_ids": [
+      "doc_hybrid_search::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_hybrid_search",
+        "heading_path": "Hybrid Search, Full-Text Indexing, and Reciprocal Rank Fusion > Cross-Encoder Reranking Stage",
+        "quote_snippet": "After RRF merges the dense and sparse candidate lists into a unified pool of `candidate_pool = 20` chunks, a second-stage cross-encoder reranker scores each...",
+        "chunk_id": "doc_hybrid_search::chunk_003"
+      }
+    ],
     "expected_answer": "It uses cross-encoder/ms-marco-MiniLM-L-6-v2 to compress candidate_pool = 20 candidates down to top_k = 5 chunks.",
-    "key_facts": ["ms-marco-MiniLM-L-6-v2", "20", "5"],
-    "should_abstain": false
+    "key_facts": [
+      "ms-marco-MiniLM-L-6-v2",
+      "20",
+      "5"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q08",
-    "category": "exact_lookup",
     "question": "What are the min_size, max_size, and max_lifetime settings for the psycopg_pool database connection pool?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_fastapi_service",
-    "expected_chunk_ids": ["doc_fastapi_service::chunk_001"],
+    "doc_id": "doc_fastapi_service",
+    "expected_chunk_ids": [
+      "doc_fastapi_service::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_fastapi_service",
+        "heading_path": "FastAPI Production RAG Service Architecture > Database Connection Pooling and Lifespan Management",
+        "quote_snippet": "The FastAPI service initializes its PostgreSQL connection resources inside an `@asynccontextmanager` lifespan handler. Production deployments using `psycopg_...",
+        "chunk_id": "doc_fastapi_service::chunk_001"
+      }
+    ],
     "expected_answer": "The psycopg_pool connection pool uses min_size = 4, max_size = 20, and max_lifetime = 3600 seconds.",
-    "key_facts": ["4", "20", "3600"],
-    "should_abstain": false
+    "key_facts": [
+      "4",
+      "20",
+      "3600"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q09",
-    "category": "exact_lookup",
     "question": "What are the per-minute request rate limits and burst capacities for /api/v1/search and /api/v1/ask?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_fastapi_service",
-    "expected_chunk_ids": ["doc_fastapi_service::chunk_002"],
+    "doc_id": "doc_fastapi_service",
+    "expected_chunk_ids": [
+      "doc_fastapi_service::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_fastapi_service",
+        "heading_path": "FastAPI Production RAG Service Architecture > Rate Limiting and Backpressure",
+        "quote_snippet": "To protect upstream LLM and embedding quotas, the API gateway enforces token-bucket rate limiting: - `/api/v1/search` allows a sustained rate of `60` request...",
+        "chunk_id": "doc_fastapi_service::chunk_002"
+      }
+    ],
     "expected_answer": "/api/v1/search allows 60 requests per minute (burst 15), and /api/v1/ask allows 20 requests per minute (burst 5), returning HTTP 429 with Retry-After when exceeded.",
-    "key_facts": ["60", "15", "20", "429"],
-    "should_abstain": false
+    "key_facts": [
+      "60",
+      "15",
+      "20",
+      "429"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q10",
-    "category": "exact_lookup",
     "question": "Which HTTP header is used for ingestion deduplication on network retries and what is its cache TTL?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_fastapi_service",
-    "expected_chunk_ids": ["doc_fastapi_service::chunk_003"],
+    "doc_id": "doc_fastapi_service",
+    "expected_chunk_ids": [
+      "doc_fastapi_service::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_fastapi_service",
+        "heading_path": "FastAPI Production RAG Service Architecture > Idempotent Document Ingestion and Deduplication",
+        "quote_snippet": "The `POST /api/v1/ingest` endpoint accepts a batch of documents identified by deterministic slugs (for example, `doc_pgvector_indexing`). Re-ingesting a docu...",
+        "chunk_id": "doc_fastapi_service::chunk_003"
+      }
+    ],
     "expected_answer": "Clients pass the X-Idempotency-Key HTTP header, which is cached for a TTL of 24 hours (86400 seconds).",
-    "key_facts": ["X-Idempotency-Key", "24", "86400"],
-    "should_abstain": false
+    "key_facts": [
+      "X-Idempotency-Key",
+      "24",
+      "86400"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q11",
-    "category": "exact_lookup",
     "question": "What are the election_timeout_ms range and heartbeat_interval_ms values in Raft?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_raft_consensus",
-    "expected_chunk_ids": ["doc_raft_consensus::chunk_002"],
+    "doc_id": "doc_raft_consensus",
+    "expected_chunk_ids": [
+      "doc_raft_consensus::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_raft_consensus",
+        "heading_path": "Distributed Consensus and Raft Protocol Reference > Leader Election and Timing Parameters",
+        "quote_snippet": "Time in Raft is divided into monotonically increasing logical integers called `terms`. Followers monitor leader liveness using a randomized election timeout:...",
+        "chunk_id": "doc_raft_consensus::chunk_002"
+      }
+    ],
     "expected_answer": "In Raft, election_timeout_ms is randomized between 150ms and 300ms, and heartbeat_interval_ms is 30ms.",
-    "key_facts": ["150ms", "300ms", "30ms"],
-    "should_abstain": false
+    "key_facts": [
+      "150ms",
+      "300ms",
+      "30ms"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q12",
-    "category": "exact_lookup",
     "question": "At what entry count or size threshold does Raft compact its log into a snapshot?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_raft_consensus",
-    "expected_chunk_ids": ["doc_raft_consensus::chunk_003"],
+    "doc_id": "doc_raft_consensus",
+    "expected_chunk_ids": [
+      "doc_raft_consensus::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_raft_consensus",
+        "heading_path": "Distributed Consensus and Raft Protocol Reference > Log Replication Safety and Compaction",
+        "quote_snippet": "Raft guarantees the `Log Matching Property`: if two log entries in different nodes have the same index and the same term, then they store the exact same comm...",
+        "chunk_id": "doc_raft_consensus::chunk_003"
+      }
+    ],
     "expected_answer": "Raft compacts committed log entries into a snapshot when the log exceeds snapshot_threshold_entries = 10000 or snapshot_size_mb = 64.",
-    "key_facts": ["10000", "64", "InstallSnapshot"],
-    "should_abstain": false
+    "key_facts": [
+      "10000",
+      "64",
+      "InstallSnapshot"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q13",
-    "category": "exact_lookup",
     "question": "Which SQLSTATE error code is raised on serialization conflicts in Repeatable Read or Serializable isolation levels?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_postgres_mvcc",
-    "expected_chunk_ids": ["doc_postgres_mvcc::chunk_001"],
+    "doc_id": "doc_postgres_mvcc",
+    "expected_chunk_ids": [
+      "doc_postgres_mvcc::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_postgres_mvcc",
+        "heading_path": "PostgreSQL MVCC, Transaction Isolation, and Vacuum Maintenance > Tuple Visibility and Transaction Isolation Levels",
+        "quote_snippet": "When a row is updated or deleted in PostgreSQL, the existing physical tuple is not overwritten in place. Instead, PostgreSQL marks the old tuple with the del...",
+        "chunk_id": "doc_postgres_mvcc::chunk_001"
+      }
+    ],
     "expected_answer": "Concurrent modifications or serialization anomalies abort the transaction with error SQLSTATE 40001.",
-    "key_facts": ["40001", "Repeatable Read", "Serializable"],
-    "should_abstain": false
+    "key_facts": [
+      "40001",
+      "Repeatable Read",
+      "Serializable"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q14",
-    "category": "exact_lookup",
     "question": "What is the default autovacuum_freeze_max_age threshold used to prevent PostgreSQL transaction ID wraparound?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_postgres_mvcc",
-    "expected_chunk_ids": ["doc_postgres_mvcc::chunk_002"],
+    "doc_id": "doc_postgres_mvcc",
+    "expected_chunk_ids": [
+      "doc_postgres_mvcc::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_postgres_mvcc",
+        "heading_path": "PostgreSQL MVCC, Transaction Isolation, and Vacuum Maintenance > HOT Updates, Autovacuum, and XID Wraparound Prevention",
+        "quote_snippet": "Heap-Only Tuple (HOT) updates occur when an `UPDATE` does not modify any column referenced by an index and sufficient free space exists on the same `8KB` hea...",
+        "chunk_id": "doc_postgres_mvcc::chunk_002"
+      }
+    ],
     "expected_answer": "autovacuum_freeze_max_age is set to 200000000 (200 million transactions) to trigger anti-wraparound freezing.",
-    "key_facts": ["200000000", "FrozenTransactionId"],
-    "should_abstain": false
+    "key_facts": [
+      "200000000",
+      "FrozenTransactionId"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q15",
-    "category": "semantic_conceptual",
     "question": "When should you use the negative inner product operator (<#>) in pgvector?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_pgvector_indexing",
-    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_001"],
+    "doc_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": [
+      "doc_pgvector_indexing::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_pgvector_indexing",
+        "heading_path": "pgvector Indexing and Vector Search Reference > Distance Operators and Index Classes",
+        "quote_snippet": "`pgvector` supports three primary distance operators and corresponding operator classes for indexing: - Cosine distance uses the `<=>` operator with the `vec...",
+        "chunk_id": "doc_pgvector_indexing::chunk_001"
+      }
+    ],
     "expected_answer": "Negative inner product (<#> with vector_ip_ops) is optimal when embedding vectors are already unit-normalized (L2 norm equal to 1.0).",
-    "key_facts": ["<#>", "vector_ip_ops", "unit-normalized"],
-    "should_abstain": false
+    "key_facts": [
+      "<#>",
+      "vector_ip_ops",
+      "unit-normalized"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q16",
-    "category": "semantic_conceptual",
     "question": "How does pgvector 0.8.0 solve the problem of filtered HNSW vector queries returning fewer rows than LIMIT?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_pgvector_indexing",
-    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_003"],
+    "doc_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": [
+      "doc_pgvector_indexing::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_pgvector_indexing",
+        "heading_path": "pgvector Indexing and Vector Search Reference > HNSW Query-Time Tuning and Iterative Scans",
+        "quote_snippet": "At query time, search breadth is controlled by the session parameter `hnsw.ef_search`, which specifies the size of the dynamic candidate list during graph tr...",
+        "chunk_id": "doc_pgvector_indexing::chunk_003"
+      }
+    ],
     "expected_answer": "Enabling hnsw.iterative_scan (set to relaxed_order or strict_order) continues scanning the HNSW graph until LIMIT matching tuples are found or hnsw.max_scan_tuples (20000) is reached.",
-    "key_facts": ["iterative_scan", "relaxed_order", "strict_order"],
-    "should_abstain": false
+    "key_facts": [
+      "iterative_scan",
+      "relaxed_order",
+      "strict_order"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q17",
-    "category": "semantic_conceptual",
     "question": "How should you choose the lists and ivfflat.probes parameters for an IVFFlat index up to 1 million rows?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_pgvector_indexing",
-    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_004"],
+    "doc_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": [
+      "doc_pgvector_indexing::chunk_004"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_pgvector_indexing",
+        "heading_path": "pgvector Indexing and Vector Search Reference > IVFFlat Indexes and Half-Precision Vectors",
+        "quote_snippet": "Inverted File with Flat Compression (`IVFFlat`) partitions vectors into `lists` Voronoi cells using k-means clustering. For datasets up to 1 million rows, th...",
+        "chunk_id": "doc_pgvector_indexing::chunk_004"
+      }
+    ],
     "expected_answer": "For up to 1 million rows, set lists to rows / 1000 and set query-time ivfflat.probes to sqrt(lists).",
-    "key_facts": ["rows / 1000", "sqrt(lists)", "probes"],
-    "should_abstain": false
+    "key_facts": [
+      "rows / 1000",
+      "sqrt(lists)",
+      "probes"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q18",
-    "category": "semantic_conceptual",
     "question": "Why does hybrid search combine dense vector retrieval with sparse lexical retrieval instead of relying only on embeddings?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_hybrid_search",
-    "expected_chunk_ids": ["doc_hybrid_search::chunk_000"],
+    "doc_id": "doc_hybrid_search",
+    "expected_chunk_ids": [
+      "doc_hybrid_search::chunk_000"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_hybrid_search",
+        "heading_path": "Hybrid Search, Full-Text Indexing, and Reciprocal Rank Fusion",
+        "quote_snippet": "Pure dense vector search excels at capturing semantic synonyms and conceptual paraphrases, but often struggles with exact alphanumeric identifiers, error cod...",
+        "chunk_id": "doc_hybrid_search::chunk_000"
+      }
+    ],
     "expected_answer": "Dense vector search captures semantic synonyms and conceptual paraphrases, while sparse lexical search handles exact alphanumeric identifiers, error codes, parameter names, and rare domain acronyms.",
-    "key_facts": ["semantic", "identifiers", "error codes"],
-    "should_abstain": false
+    "key_facts": [
+      "semantic",
+      "identifiers",
+      "error codes"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q19",
-    "category": "semantic_conceptual",
     "question": "How are section headings and body text weighted differently in the PostgreSQL tsvector column?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_hybrid_search",
-    "expected_chunk_ids": ["doc_hybrid_search::chunk_001"],
+    "doc_id": "doc_hybrid_search",
+    "expected_chunk_ids": [
+      "doc_hybrid_search::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_hybrid_search",
+        "heading_path": "Hybrid Search, Full-Text Indexing, and Reciprocal Rank Fusion > PostgreSQL Full-Text Search with tsvector and GIN",
+        "quote_snippet": "PostgreSQL provides native lexical indexing via the `tsvector` document representation and `tsquery` query representation. In our RAG schema, each chunk stor...",
+        "chunk_id": "doc_hybrid_search::chunk_001"
+      }
+    ],
     "expected_answer": "Section headings are assigned weight label A (weight 1.0) and body text is assigned weight label B (weight 0.4).",
-    "key_facts": ["A", "1.0", "B", "0.4"],
-    "should_abstain": false
+    "key_facts": [
+      "A",
+      "1.0",
+      "B",
+      "0.4"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q20",
-    "category": "semantic_conceptual",
     "question": "Why does Reciprocal Rank Fusion use rank positions rather than adding raw cosine and ts_rank_cd scores directly?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_hybrid_search",
-    "expected_chunk_ids": ["doc_hybrid_search::chunk_002"],
+    "doc_id": "doc_hybrid_search",
+    "expected_chunk_ids": [
+      "doc_hybrid_search::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_hybrid_search",
+        "heading_path": "Hybrid Search, Full-Text Indexing, and Reciprocal Rank Fusion > Reciprocal Rank Fusion (RRF) Mathematics",
+        "quote_snippet": "Because cosine similarity scores from `pgvector` and cover-density scores from `ts_rank_cd` follow incompatible probability distributions, directly summing r...",
+        "chunk_id": "doc_hybrid_search::chunk_002"
+      }
+    ],
     "expected_answer": "Cosine similarity and cover-density lexical scores follow incompatible probability distributions, so summing raw scores is unstable; RRF uses rank positions with smoothing constant k=60 to reward consensus chunks.",
-    "key_facts": ["distributions", "rank", "60"],
-    "should_abstain": false
+    "key_facts": [
+      "distributions",
+      "rank",
+      "60"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q21",
-    "category": "semantic_conceptual",
     "question": "Why is a cross-encoder more accurate for reranking than a bi-encoder embedding model?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_hybrid_search",
-    "expected_chunk_ids": ["doc_hybrid_search::chunk_003"],
+    "doc_id": "doc_hybrid_search",
+    "expected_chunk_ids": [
+      "doc_hybrid_search::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_hybrid_search",
+        "heading_path": "Hybrid Search, Full-Text Indexing, and Reciprocal Rank Fusion > Cross-Encoder Reranking Stage",
+        "quote_snippet": "After RRF merges the dense and sparse candidate lists into a unified pool of `candidate_pool = 20` chunks, a second-stage cross-encoder reranker scores each...",
+        "chunk_id": "doc_hybrid_search::chunk_003"
+      }
+    ],
     "expected_answer": "Unlike bi-encoders that encode queries and documents separately into single vectors, a cross-encoder performs full token-by-token cross-attention across the concatenated query and passage, capturing negation, entity binding, and word proximity.",
-    "key_facts": ["cross-attention", "bi-encoder", "proximity"],
-    "should_abstain": false
+    "key_facts": [
+      "cross-attention",
+      "bi-encoder",
+      "proximity"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q22",
-    "category": "semantic_conceptual",
     "question": "How does POST /api/v1/ingest guarantee idempotency when re-indexing an existing document?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_fastapi_service",
-    "expected_chunk_ids": ["doc_fastapi_service::chunk_003"],
+    "doc_id": "doc_fastapi_service",
+    "expected_chunk_ids": [
+      "doc_fastapi_service::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_fastapi_service",
+        "heading_path": "FastAPI Production RAG Service Architecture > Idempotent Document Ingestion and Deduplication",
+        "quote_snippet": "The `POST /api/v1/ingest` endpoint accepts a batch of documents identified by deterministic slugs (for example, `doc_pgvector_indexing`). Re-ingesting a docu...",
+        "chunk_id": "doc_fastapi_service::chunk_003"
+      }
+    ],
     "expected_answer": "Within a single atomic PostgreSQL transaction, it executes INSERT ... ON CONFLICT (id) DO UPDATE on documents, deletes existing chunks for that document_id, and inserts the newly chunked and embedded rows.",
-    "key_facts": ["ON CONFLICT", "transaction", "document_id"],
-    "should_abstain": false
+    "key_facts": [
+      "ON CONFLICT",
+      "transaction",
+      "document_id"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q23",
-    "category": "semantic_conceptual",
     "question": "How many node failures can a 5-node and a 7-node Raft cluster tolerate, and what quorum sizes do they require?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_raft_consensus",
-    "expected_chunk_ids": ["doc_raft_consensus::chunk_001"],
+    "doc_id": "doc_raft_consensus",
+    "expected_chunk_ids": [
+      "doc_raft_consensus::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_raft_consensus",
+        "heading_path": "Distributed Consensus and Raft Protocol Reference > Cluster Quorum and Node Roles",
+        "quote_snippet": "Every Raft cluster requires an odd number of voting nodes $N$ (typically `3`, `5`, or `7` nodes). A quorum requires a strict majority of `floor(N / 2) + 1` n...",
+        "chunk_id": "doc_raft_consensus::chunk_001"
+      }
+    ],
     "expected_answer": "A 5-node Raft cluster requires a quorum of 3 nodes and tolerates 2 failures; a 7-node cluster requires a quorum of 4 nodes and tolerates 3 failures.",
-    "key_facts": ["3", "2", "4", "floor(N / 2) + 1"],
-    "should_abstain": false
+    "key_facts": [
+      "3",
+      "2",
+      "4",
+      "floor(N / 2) + 1"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q24",
-    "category": "semantic_conceptual",
     "question": "What do the Log Matching Property and Leader Completeness Property guarantee in Raft?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_raft_consensus",
-    "expected_chunk_ids": ["doc_raft_consensus::chunk_003"],
+    "doc_id": "doc_raft_consensus",
+    "expected_chunk_ids": [
+      "doc_raft_consensus::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_raft_consensus",
+        "heading_path": "Distributed Consensus and Raft Protocol Reference > Log Replication Safety and Compaction",
+        "quote_snippet": "Raft guarantees the `Log Matching Property`: if two log entries in different nodes have the same index and the same term, then they store the exact same comm...",
+        "chunk_id": "doc_raft_consensus::chunk_003"
+      }
+    ],
     "expected_answer": "Log Matching guarantees that if two log entries have the same index and term, they store the same command and identical preceding entries; Leader Completeness ensures a candidate cannot win an election unless its log is at least as up-to-date as a majority of the cluster.",
-    "key_facts": ["Log Matching Property", "Leader Completeness Property", "majority"],
-    "should_abstain": false
+    "key_facts": [
+      "Log Matching Property",
+      "Leader Completeness Property",
+      "majority"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q25",
-    "category": "semantic_conceptual",
     "question": "How does PostgreSQL use xmin and xmax tuple headers to implement non-blocking MVCC updates?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_postgres_mvcc",
-    "expected_chunk_ids": ["doc_postgres_mvcc::chunk_001"],
+    "doc_id": "doc_postgres_mvcc",
+    "expected_chunk_ids": [
+      "doc_postgres_mvcc::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_postgres_mvcc",
+        "heading_path": "PostgreSQL MVCC, Transaction Isolation, and Vacuum Maintenance > Tuple Visibility and Transaction Isolation Levels",
+        "quote_snippet": "When a row is updated or deleted in PostgreSQL, the existing physical tuple is not overwritten in place. Instead, PostgreSQL marks the old tuple with the del...",
+        "chunk_id": "doc_postgres_mvcc::chunk_001"
+      }
+    ],
     "expected_answer": "PostgreSQL marks the old tuple with the deleting transaction ID in xmax and inserts a new physical tuple version with the creating transaction ID in xmin instead of overwriting in place.",
-    "key_facts": ["xmin", "xmax", "tuple"],
-    "should_abstain": false
+    "key_facts": [
+      "xmin",
+      "xmax",
+      "tuple"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q26",
-    "category": "semantic_conceptual",
     "question": "What conditions are required for a Heap-Only Tuple (HOT) update in PostgreSQL and what fillfactor is recommended?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_postgres_mvcc",
-    "expected_chunk_ids": ["doc_postgres_mvcc::chunk_002"],
+    "doc_id": "doc_postgres_mvcc",
+    "expected_chunk_ids": [
+      "doc_postgres_mvcc::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_postgres_mvcc",
+        "heading_path": "PostgreSQL MVCC, Transaction Isolation, and Vacuum Maintenance > HOT Updates, Autovacuum, and XID Wraparound Prevention",
+        "quote_snippet": "Heap-Only Tuple (HOT) updates occur when an `UPDATE` does not modify any column referenced by an index and sufficient free space exists on the same `8KB` hea...",
+        "chunk_id": "doc_postgres_mvcc::chunk_002"
+      }
+    ],
     "expected_answer": "A HOT update requires that no indexed column is modified and enough free space exists on the same 8KB heap page; setting fillfactor = 80 reserves 20% page space for HOT updates.",
-    "key_facts": ["HOT", "8KB", "fillfactor = 80"],
-    "should_abstain": false
+    "key_facts": [
+      "HOT",
+      "8KB",
+      "fillfactor = 80"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q27",
-    "category": "semantic_conceptual",
     "question": "Why does the ingestion pipeline use chunk_size_tokens = 350 with chunk_overlap_tokens = 50?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_rag_evaluation",
-    "expected_chunk_ids": ["doc_rag_evaluation::chunk_001"],
+    "doc_id": "doc_rag_evaluation",
+    "expected_chunk_ids": [
+      "doc_rag_evaluation::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_rag_evaluation",
+        "heading_path": "RAG Evaluation Harness, Metrics, and Grounded Citation Verification > Chunking Window and Overlap Trade-offs",
+        "quote_snippet": "Our ingestion pipeline splits technical documents along Markdown heading boundaries (`#`, `##`, `###`) and enforces a token budget of `chunk_size_tokens = 35...",
+        "chunk_id": "doc_rag_evaluation::chunk_001"
+      }
+    ],
     "expected_answer": "Chunks smaller than 150 tokens lose surrounding context, while chunks larger than 800 tokens dilute embeddings across topics; a 350-token window with 50-token overlap preserves boundary sentences.",
-    "key_facts": ["350", "50", "150", "800"],
-    "should_abstain": false
+    "key_facts": [
+      "350",
+      "50",
+      "150",
+      "800"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q28",
-    "category": "semantic_conceptual",
     "question": "How are Recall@K, MRR@K, and NDCG@K defined in the retrieval evaluation harness?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_rag_evaluation",
-    "expected_chunk_ids": ["doc_rag_evaluation::chunk_002"],
+    "doc_id": "doc_rag_evaluation",
+    "expected_chunk_ids": [
+      "doc_rag_evaluation::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_rag_evaluation",
+        "heading_path": "RAG Evaluation Harness, Metrics, and Grounded Citation Verification > Retrieval Evaluation Metrics",
+        "quote_snippet": "Given a golden evaluation question with ground-truth relevant chunk IDs $G$, and a ranked retrieval list $R_K = [r_1, r_2, \\dots, r_K]$ of length $K$: - `Rec...",
+        "chunk_id": "doc_rag_evaluation::chunk_002"
+      }
+    ],
     "expected_answer": "Recall@K is the fraction of ground-truth chunks in top K; MRR@K is 1 / rank of the first relevant chunk; NDCG@K measures ranking quality using logarithmic discount log2(i + 1).",
-    "key_facts": ["Recall@K", "MRR@K", "NDCG@K"],
-    "should_abstain": false
+    "key_facts": [
+      "Recall@K",
+      "MRR@K",
+      "NDCG@K"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q29",
-    "category": "multi_hop",
     "question": "Compare the build-time parameters (m, ef_construction, maintenance_work_mem) and query-time parameters (hnsw.ef_search, hnsw.iterative_scan) for pgvector HNSW indexes.",
+    "type": "multi_chunk",
+    "category": "multi_hop",
     "expected_document_id": "doc_pgvector_indexing",
+    "doc_id": "doc_pgvector_indexing",
     "expected_chunk_ids": [
       "doc_pgvector_indexing::chunk_002",
       "doc_pgvector_indexing::chunk_003"
     ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_pgvector_indexing",
+        "heading_path": "pgvector Indexing and Vector Search Reference > HNSW Index Architecture and Build Parameters",
+        "quote_snippet": "Hierarchical Navigable Small World (HNSW) indexes construct a multi-layer proximity graph that provides logarithmic search complexity and high recall without...",
+        "chunk_id": "doc_pgvector_indexing::chunk_002"
+      },
+      {
+        "doc_id": "doc_pgvector_indexing",
+        "heading_path": "pgvector Indexing and Vector Search Reference > HNSW Query-Time Tuning and Iterative Scans",
+        "quote_snippet": "At query time, search breadth is controlled by the session parameter `hnsw.ef_search`, which specifies the size of the dynamic candidate list during graph tr...",
+        "chunk_id": "doc_pgvector_indexing::chunk_003"
+      }
+    ],
     "expected_answer": "At build time, HNSW uses m (default 16), ef_construction (default 64), and maintenance_work_mem (recommended >= 2GB). At query time, it uses hnsw.ef_search (default 40) and hnsw.iterative_scan (relaxed_order or strict_order).",
-    "key_facts": ["16", "64", "2GB", "40", "iterative_scan"],
-    "should_abstain": false
+    "key_facts": [
+      "16",
+      "64",
+      "2GB",
+      "40",
+      "iterative_scan"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q30",
-    "category": "multi_hop",
     "question": "How do PostgreSQL tsvector cover-density ranking and Reciprocal Rank Fusion work together before cross-encoder reranking?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
     "expected_document_id": "doc_hybrid_search",
+    "doc_id": "doc_hybrid_search",
     "expected_chunk_ids": [
       "doc_hybrid_search::chunk_001",
       "doc_hybrid_search::chunk_002",
       "doc_hybrid_search::chunk_003"
     ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_hybrid_search",
+        "heading_path": "Hybrid Search, Full-Text Indexing, and Reciprocal Rank Fusion > PostgreSQL Full-Text Search with tsvector and GIN",
+        "quote_snippet": "PostgreSQL provides native lexical indexing via the `tsvector` document representation and `tsquery` query representation. In our RAG schema, each chunk stor...",
+        "chunk_id": "doc_hybrid_search::chunk_001"
+      },
+      {
+        "doc_id": "doc_hybrid_search",
+        "heading_path": "Hybrid Search, Full-Text Indexing, and Reciprocal Rank Fusion > Reciprocal Rank Fusion (RRF) Mathematics",
+        "quote_snippet": "Because cosine similarity scores from `pgvector` and cover-density scores from `ts_rank_cd` follow incompatible probability distributions, directly summing r...",
+        "chunk_id": "doc_hybrid_search::chunk_002"
+      },
+      {
+        "doc_id": "doc_hybrid_search",
+        "heading_path": "Hybrid Search, Full-Text Indexing, and Reciprocal Rank Fusion > Cross-Encoder Reranking Stage",
+        "quote_snippet": "After RRF merges the dense and sparse candidate lists into a unified pool of `candidate_pool = 20` chunks, a second-stage cross-encoder reranker scores each...",
+        "chunk_id": "doc_hybrid_search::chunk_003"
+      }
+    ],
     "expected_answer": "Sparse search scores tsvector matches with ts_rank_cd (normalization 32), RRF fuses dense and sparse ranks using k = 60 into candidate_pool = 20 chunks, and cross-encoder/ms-marco-MiniLM-L-6-v2 reranks them to top_k = 5.",
-    "key_facts": ["ts_rank_cd", "32", "60", "ms-marco-MiniLM-L-6-v2"],
-    "should_abstain": false
+    "key_facts": [
+      "ts_rank_cd",
+      "32",
+      "60",
+      "ms-marco-MiniLM-L-6-v2"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q31",
-    "category": "multi_hop",
     "question": "What connection pool settings and rate limit policies protect the FastAPI RAG service under high concurrency?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
     "expected_document_id": "doc_fastapi_service",
+    "doc_id": "doc_fastapi_service",
     "expected_chunk_ids": [
       "doc_fastapi_service::chunk_001",
       "doc_fastapi_service::chunk_002"
     ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_fastapi_service",
+        "heading_path": "FastAPI Production RAG Service Architecture > Database Connection Pooling and Lifespan Management",
+        "quote_snippet": "The FastAPI service initializes its PostgreSQL connection resources inside an `@asynccontextmanager` lifespan handler. Production deployments using `psycopg_...",
+        "chunk_id": "doc_fastapi_service::chunk_001"
+      },
+      {
+        "doc_id": "doc_fastapi_service",
+        "heading_path": "FastAPI Production RAG Service Architecture > Rate Limiting and Backpressure",
+        "quote_snippet": "To protect upstream LLM and embedding quotas, the API gateway enforces token-bucket rate limiting: - `/api/v1/search` allows a sustained rate of `60` request...",
+        "chunk_id": "doc_fastapi_service::chunk_002"
+      }
+    ],
     "expected_answer": "psycopg_pool uses min_size = 4, max_size = 20, max_lifetime = 3600s, and timeout = 10.0s, while token-bucket rate limiting caps /api/v1/search at 60 rpm and /api/v1/ask at 20 rpm (returning HTTP 429 with Retry-After).",
-    "key_facts": ["min_size = 4", "max_size = 20", "60", "20", "429"],
-    "should_abstain": false
+    "key_facts": [
+      "min_size = 4",
+      "max_size = 20",
+      "60",
+      "20",
+      "429"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q32",
-    "category": "multi_hop",
     "question": "In Raft, how do randomized election timeouts, leader heartbeats, and log snapshot compaction keep the cluster available and bounded on disk?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
     "expected_document_id": "doc_raft_consensus",
+    "doc_id": "doc_raft_consensus",
     "expected_chunk_ids": [
       "doc_raft_consensus::chunk_002",
       "doc_raft_consensus::chunk_003"
     ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_raft_consensus",
+        "heading_path": "Distributed Consensus and Raft Protocol Reference > Leader Election and Timing Parameters",
+        "quote_snippet": "Time in Raft is divided into monotonically increasing logical integers called `terms`. Followers monitor leader liveness using a randomized election timeout:...",
+        "chunk_id": "doc_raft_consensus::chunk_002"
+      },
+      {
+        "doc_id": "doc_raft_consensus",
+        "heading_path": "Distributed Consensus and Raft Protocol Reference > Log Replication Safety and Compaction",
+        "quote_snippet": "Raft guarantees the `Log Matching Property`: if two log entries in different nodes have the same index and the same term, then they store the exact same comm...",
+        "chunk_id": "doc_raft_consensus::chunk_003"
+      }
+    ],
     "expected_answer": "Randomized election timeouts (150ms-300ms) and 30ms leader AppendEntries heartbeats prevent split votes, while snapshot compaction at 10000 entries or 64MB bounds disk usage and updates lagging followers via InstallSnapshot.",
-    "key_facts": ["150ms", "300ms", "30ms", "10000", "InstallSnapshot"],
-    "should_abstain": false
+    "key_facts": [
+      "150ms",
+      "300ms",
+      "30ms",
+      "10000",
+      "InstallSnapshot"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q33",
-    "category": "multi_hop",
     "question": "How does PostgreSQL maintain ACID durability with WAL checkpoints while cleaning up dead MVCC tuples and preventing XID wraparound?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
     "expected_document_id": "doc_postgres_mvcc",
+    "doc_id": "doc_postgres_mvcc",
     "expected_chunk_ids": [
       "doc_postgres_mvcc::chunk_002",
       "doc_postgres_mvcc::chunk_003"
     ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_postgres_mvcc",
+        "heading_path": "PostgreSQL MVCC, Transaction Isolation, and Vacuum Maintenance > HOT Updates, Autovacuum, and XID Wraparound Prevention",
+        "quote_snippet": "Heap-Only Tuple (HOT) updates occur when an `UPDATE` does not modify any column referenced by an index and sufficient free space exists on the same `8KB` hea...",
+        "chunk_id": "doc_postgres_mvcc::chunk_002"
+      },
+      {
+        "doc_id": "doc_postgres_mvcc",
+        "heading_path": "PostgreSQL MVCC, Transaction Isolation, and Vacuum Maintenance > Write-Ahead Logging (WAL) and Checkpoints",
+        "quote_snippet": "Durability is enforced by writing all modifications to the Write-Ahead Log (WAL) before dirty heap pages are flushed to disk. For streaming replication and p...",
+        "chunk_id": "doc_postgres_mvcc::chunk_003"
+      }
+    ],
     "expected_answer": "Autovacuum freezes tuples beyond autovacuum_freeze_max_age = 200000000 and fillfactor = 80 enables HOT updates on 8KB pages, while durability uses WAL (wal_level = replica, max_wal_size = 4GB, checkpoint_timeout = 15min, checkpoint_completion_target = 0.9).",
-    "key_facts": ["200000000", "fillfactor = 80", "4GB", "15min"],
-    "should_abstain": false
+    "key_facts": [
+      "200000000",
+      "fillfactor = 80",
+      "4GB",
+      "15min"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q34",
-    "category": "multi_hop",
     "question": "What are the complete retrieval metrics and answer generation metrics reported by the RAG evaluation harness?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
     "expected_document_id": "doc_rag_evaluation",
+    "doc_id": "doc_rag_evaluation",
     "expected_chunk_ids": [
       "doc_rag_evaluation::chunk_002",
       "doc_rag_evaluation::chunk_003"
     ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_rag_evaluation",
+        "heading_path": "RAG Evaluation Harness, Metrics, and Grounded Citation Verification > Retrieval Evaluation Metrics",
+        "quote_snippet": "Given a golden evaluation question with ground-truth relevant chunk IDs $G$, and a ranked retrieval list $R_K = [r_1, r_2, \\dots, r_K]$ of length $K$: - `Rec...",
+        "chunk_id": "doc_rag_evaluation::chunk_002"
+      },
+      {
+        "doc_id": "doc_rag_evaluation",
+        "heading_path": "RAG Evaluation Harness, Metrics, and Grounded Citation Verification > Answer Quality, Faithfulness, and Citation Verification",
+        "quote_snippet": "Generation quality is evaluated across four complementary axes: - `Fact Coverage (Answer Accuracy)`: Measures the proportion of required ground-truth `key_fa...",
+        "chunk_id": "doc_rag_evaluation::chunk_003"
+      }
+    ],
     "expected_answer": "Retrieval is evaluated with Recall@K, HitRate@K, MRR@K, and NDCG@K, while generation is evaluated on Fact Coverage (Answer Accuracy), Citation Precision & Recall, Faithfulness, and Abstention Accuracy.",
-    "key_facts": ["Recall@K", "MRR@K", "NDCG@K", "Fact Coverage", "Faithfulness", "Abstention"],
-    "should_abstain": false
+    "key_facts": [
+      "Recall@K",
+      "MRR@K",
+      "NDCG@K",
+      "Fact Coverage",
+      "Faithfulness",
+      "Abstention"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q35",
-    "category": "multi_hop",
     "question": "What happens during PostgreSQL WAL configuration for Point-in-Time Recovery (PITR) and how does Serializable Snapshot Isolation detect conflicts?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
     "expected_document_id": "doc_postgres_mvcc",
+    "doc_id": "doc_postgres_mvcc",
     "expected_chunk_ids": [
       "doc_postgres_mvcc::chunk_001",
       "doc_postgres_mvcc::chunk_003"
     ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_postgres_mvcc",
+        "heading_path": "PostgreSQL MVCC, Transaction Isolation, and Vacuum Maintenance > Tuple Visibility and Transaction Isolation Levels",
+        "quote_snippet": "When a row is updated or deleted in PostgreSQL, the existing physical tuple is not overwritten in place. Instead, PostgreSQL marks the old tuple with the del...",
+        "chunk_id": "doc_postgres_mvcc::chunk_001"
+      },
+      {
+        "doc_id": "doc_postgres_mvcc",
+        "heading_path": "PostgreSQL MVCC, Transaction Isolation, and Vacuum Maintenance > Write-Ahead Logging (WAL) and Checkpoints",
+        "quote_snippet": "Durability is enforced by writing all modifications to the Write-Ahead Log (WAL) before dirty heap pages are flushed to disk. For streaming replication and p...",
+        "chunk_id": "doc_postgres_mvcc::chunk_003"
+      }
+    ],
     "expected_answer": "PITR requires wal_level set to replica or logical (with max_wal_size = 4GB and checkpoint_timeout = 15min), while Serializable isolation uses SIReadLock predicate locks to detect rw-antidependencies and raises SQLSTATE 40001.",
-    "key_facts": ["replica", "4GB", "SIReadLock", "40001"],
-    "should_abstain": false
+    "key_facts": [
+      "replica",
+      "4GB",
+      "SIReadLock",
+      "40001"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q36",
-    "category": "unanswerable",
     "question": "How do you configure BGP route reflector cluster-ids in Cisco IOS XR routers?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q37",
-    "category": "unanswerable",
     "question": "What is the recommended dosage of lithium carbonate for bipolar disorder maintenance therapy?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q38",
-    "category": "unanswerable",
     "question": "How does Apache Kafka KRaft controller quorum configure zookeeper.connection.timeout.ms in Kafka 0.8?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q39",
-    "category": "unanswerable",
     "question": "What are the webpack 5 ModuleFederationPlugin shared singleton configuration options for React 18?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q40",
-    "category": "unanswerable",
     "question": "What was the total global box office revenue of the movie Oppenheimer in 2023?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q41",
-    "category": "exact_lookup",
     "question": "Under the current 2026 Nimbus tariff (Superseding Tariff v3.2), what is the unlock fee and per-minute rate for a Casual Pass rider on a Nimbus Volt e-bike, as opposed to the legacy 2024 launch rate?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_09_nimbus_bikeshare",
-    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_000"],
+    "doc_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": [
+      "doc_09_nimbus_bikeshare::chunk_000"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_09_nimbus_bikeshare",
+        "heading_path": "Nimbus Bike Share Operations & Rider Guide > Pricing Tiers, Unlock Fees, and 2026 Tariff Revision",
+        "quote_snippet": "Under the legacy 2024 launch tariff, Casual Pass riders paid a ₹15 unlock fee and ₹2.50 per minute after the first 10 minutes. **Effective January 1, 2026 (S...",
+        "chunk_id": "doc_09_nimbus_bikeshare::chunk_000"
+      }
+    ],
     "expected_answer": "Under the 2026 Superseding Tariff v3.2, the Casual Pass unlock fee is ₹0 and Nimbus Volt e-bikes cost ₹6.00 per minute from the start (replacing the 2024 rate of ₹15 unlock and ₹2.50/min after 10 minutes).",
-    "key_facts": ["₹0", "₹6.00", "2026"],
-    "should_abstain": false
+    "key_facts": [
+      "₹0",
+      "₹6.00",
+      "2026"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q42",
-    "category": "multi_hop",
     "question": "At Bluebird Cafe, a customer asks for a cash refund on a stale croissant bought 15 minutes ago and a 650 rupee refund on an incorrectly made latte. How must staff handle both items?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
     "expected_document_id": "doc_08_bluebird_cafe",
-    "expected_chunk_ids": ["doc_08_bluebird_cafe::chunk_002"],
+    "doc_id": "doc_08_bluebird_cafe",
+    "expected_chunk_ids": [
+      "doc_08_bluebird_cafe::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_08_bluebird_cafe",
+        "heading_path": "Bluebird Cafe Staff Handbook > Refund Policy",
+        "quote_snippet": "A customer can get a full refund within 30 minutes of buying a drink if it was made wrong. Cashiers can approve refunds up to 500 rupees. Any refund above 50...",
+        "chunk_id": "doc_08_bluebird_cafe::chunk_002"
+      }
+    ],
     "expected_answer": "Bakery items like a stale croissant cannot be refunded (only replaced), while the 650 rupee drink refund is above 500 rupees and must be approved by the shift manager.",
-    "key_facts": ["cannot be refunded", "replaced", "shift manager"],
-    "should_abstain": false
+    "key_facts": [
+      "cannot be refunded",
+      "replaced",
+      "shift manager"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q43",
-    "category": "semantic_conceptual",
     "question": "How did the Casual Pass free ride window and pedal-bike per-minute billing change when Nimbus Tariff v3.2 replaced the 2024 launch tariff?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_09_nimbus_bikeshare",
-    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_000"],
+    "doc_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": [
+      "doc_09_nimbus_bikeshare::chunk_000"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_09_nimbus_bikeshare",
+        "heading_path": "Nimbus Bike Share Operations & Rider Guide > Pricing Tiers, Unlock Fees, and 2026 Tariff Revision",
+        "quote_snippet": "Under the legacy 2024 launch tariff, Casual Pass riders paid a ₹15 unlock fee and ₹2.50 per minute after the first 10 minutes. **Effective January 1, 2026 (S...",
+        "chunk_id": "doc_09_nimbus_bikeshare::chunk_000"
+      }
+    ],
     "expected_answer": "The 10-minute free window and ₹15 unlock fee were eliminated (0 minutes included, ₹0 unlock), and pedal-bike billing changed from ₹2.50/min after 10 minutes to ₹3.50/min immediately.",
-    "key_facts": ["0 minutes", "₹3.50", "10 minutes"],
-    "should_abstain": false
+    "key_facts": [
+      "0 minutes",
+      "₹3.50",
+      "10 minutes"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q44",
-    "category": "exact_lookup",
     "question": "According to the Nimbus Bike Share plan comparison table, what is the monthly fee, included free ride window, and maximum daily cap for the Campus Annual tier?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_09_nimbus_bikeshare",
-    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_000"],
+    "doc_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": [
+      "doc_09_nimbus_bikeshare::chunk_000"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_09_nimbus_bikeshare",
+        "heading_path": "Nimbus Bike Share Operations & Rider Guide > Pricing Tiers, Unlock Fees, and 2026 Tariff Revision",
+        "quote_snippet": "Under the legacy 2024 launch tariff, Casual Pass riders paid a ₹15 unlock fee and ₹2.50 per minute after the first 10 minutes. **Effective January 1, 2026 (S...",
+        "chunk_id": "doc_09_nimbus_bikeshare::chunk_000"
+      }
+    ],
     "expected_answer": "In the plan table, Campus Annual costs ₹399 / mo, includes the first 45 minutes per trip free, and has a max daily cap of ₹180.",
-    "key_facts": ["₹399", "45 minutes", "₹180"],
-    "should_abstain": false
+    "key_facts": [
+      "₹399",
+      "45 minutes",
+      "₹180"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q45",
-    "category": "exact_lookup",
     "question": "In the Nimbus pricing table, compare the e-bike per-minute rate after the free window and the max daily cap between Commuter Plus and Casual Pass.",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_09_nimbus_bikeshare",
-    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_000"],
+    "doc_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": [
+      "doc_09_nimbus_bikeshare::chunk_000"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_09_nimbus_bikeshare",
+        "heading_path": "Nimbus Bike Share Operations & Rider Guide > Pricing Tiers, Unlock Fees, and 2026 Tariff Revision",
+        "quote_snippet": "Under the legacy 2024 launch tariff, Casual Pass riders paid a ₹15 unlock fee and ₹2.50 per minute after the first 10 minutes. **Effective January 1, 2026 (S...",
+        "chunk_id": "doc_09_nimbus_bikeshare::chunk_000"
+      }
+    ],
     "expected_answer": "Commuter Plus charges ₹2.00 / min after 30 minutes with a ₹250 daily cap, whereas Casual Pass charges ₹6.00 / min immediately with a ₹480 daily cap.",
-    "key_facts": ["₹2.00", "₹250", "₹6.00", "₹480"],
-    "should_abstain": false
+    "key_facts": [
+      "₹2.00",
+      "₹250",
+      "₹6.00",
+      "₹480"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q46",
-    "category": "exact_lookup",
     "question": "At Bluebird Cafe, how many loyalty points are required for a free drink, how much must a customer spend to earn them, and when do points expire?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_08_bluebird_cafe",
-    "expected_chunk_ids": ["doc_08_bluebird_cafe::chunk_003"],
+    "doc_id": "doc_08_bluebird_cafe",
+    "expected_chunk_ids": [
+      "doc_08_bluebird_cafe::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_08_bluebird_cafe",
+        "heading_path": "Bluebird Cafe Staff Handbook > Loyalty Program",
+        "quote_snippet": "Customers earn 1 point for every 50 rupees spent. After collecting 10 points, the customer gets one free drink of any size. Points expire after 6 months with...",
+        "chunk_id": "doc_08_bluebird_cafe::chunk_003"
+      }
+    ],
     "expected_answer": "Customers earn 1 point per 50 rupees spent and need 10 points (500 rupees spent) for a free drink; points expire after 6 months without a purchase.",
-    "key_facts": ["50 rupees", "10 points", "6 months"],
-    "should_abstain": false
+    "key_facts": [
+      "50 rupees",
+      "10 points",
+      "6 months"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q47",
-    "category": "exact_lookup",
     "question": "What exact CLI command and flags must a field technician run to reset a jammed docking bay latch on bay 4, and what fault code triggers MAINTENANCE_LOCK?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_09_nimbus_bikeshare",
-    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_001"],
+    "doc_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": [
+      "doc_09_nimbus_bikeshare::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_09_nimbus_bikeshare",
+        "heading_path": "Nimbus Bike Share Operations & Rider Guide > Docking Station Telemetry and Firmware CLI",
+        "quote_snippet": "Each solar-powered docking bollard runs an embedded controller that communicates with the central fleet broker over MQTT v5. When a solenoid latch jams after...",
+        "chunk_id": "doc_09_nimbus_bikeshare::chunk_001"
+      }
+    ],
     "expected_answer": "Run `nimbus-ctl dock --bay-id=4 --reset-latch --solenoid-pulse-ms=4500 --verify-hall`; if fault code E_LATCH_STUCK_09 persists after two pulses, the bay enters MAINTENANCE_LOCK.",
-    "key_facts": ["nimbus-ctl", "--solenoid-pulse-ms=4500", "E_LATCH_STUCK_09", "MAINTENANCE_LOCK"],
-    "should_abstain": false
+    "key_facts": [
+      "nimbus-ctl",
+      "--solenoid-pulse-ms=4500",
+      "E_LATCH_STUCK_09",
+      "MAINTENANCE_LOCK"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q48",
-    "category": "exact_lookup",
     "question": "What exact SQL statement is used inside a transaction to raise the HNSW dynamic candidate list size to 100 at query time?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_pgvector_indexing",
-    "expected_chunk_ids": ["doc_pgvector_indexing::chunk_003"],
+    "doc_id": "doc_pgvector_indexing",
+    "expected_chunk_ids": [
+      "doc_pgvector_indexing::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_pgvector_indexing",
+        "heading_path": "pgvector Indexing and Vector Search Reference > HNSW Query-Time Tuning and Iterative Scans",
+        "quote_snippet": "At query time, search breadth is controlled by the session parameter `hnsw.ef_search`, which specifies the size of the dynamic candidate list during graph tr...",
+        "chunk_id": "doc_pgvector_indexing::chunk_003"
+      }
+    ],
     "expected_answer": "Execute `SET LOCAL hnsw.ef_search = 100;` inside a transaction to increase the HNSW dynamic candidate list size from its default of 40.",
-    "key_facts": ["SET LOCAL hnsw.ef_search = 100", "40"],
-    "should_abstain": false
+    "key_facts": [
+      "SET LOCAL hnsw.ef_search = 100",
+      "40"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q49",
-    "category": "exact_lookup",
     "question": "What steps must a Bluebird Cafe barista take when a customer reports a nut or dairy allergy?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
     "expected_document_id": "doc_08_bluebird_cafe",
-    "expected_chunk_ids": ["doc_08_bluebird_cafe::chunk_005"],
+    "doc_id": "doc_08_bluebird_cafe",
+    "expected_chunk_ids": [
+      "doc_08_bluebird_cafe::chunk_005"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_08_bluebird_cafe",
+        "heading_path": "Bluebird Cafe Staff Handbook > Allergy Safety",
+        "quote_snippet": "Oat milk and almond milk use separate steaming pitchers. Staff must ask every customer about allergies when they order a drink with nuts or dairy. If a custo...",
+        "chunk_id": "doc_08_bluebird_cafe::chunk_005"
+      }
+    ],
     "expected_answer": "The barista must wash their hands and use a clean steaming pitcher (oat milk and almond milk also use separate steaming pitchers).",
-    "key_facts": ["washes their hands", "clean pitcher", "separate"],
-    "should_abstain": false
+    "key_facts": [
+      "washes their hands",
+      "clean pitcher",
+      "separate"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q50",
-    "category": "semantic_conceptual",
     "question": "When freezing weather makes the two-wheeler's power cell too cold, at what exact sub-zero Celsius readings does energy recovery during deceleration shut off, and when does the main power switch disconnect completely?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_09_nimbus_bikeshare",
-    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_002"],
+    "doc_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": [
+      "doc_09_nimbus_bikeshare::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_09_nimbus_bikeshare",
+        "heading_path": "Nimbus Bike Share Operations & Rider Guide > Battery Swapping and Cold-Weather Range Derating",
+        "quote_snippet": "Nimbus Volt e-bikes use removable 48V 14.4Ah lithium iron phosphate (LFP) battery packs housed inside the downtube. When a pack's state of charge (SoC) drops...",
+        "chunk_id": "doc_09_nimbus_bikeshare::chunk_002"
+      }
+    ],
     "expected_answer": "Regenerative braking is disabled below -4°C to prevent lithium plating, and at -12°C the BMS opens the main discharge contactor completely until the pack warms above -8°C.",
-    "key_facts": ["-4°C", "-12°C", "-8°C"],
-    "should_abstain": false
+    "key_facts": [
+      "-4°C",
+      "-12°C",
+      "-8°C"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q51",
-    "category": "semantic_conceptual",
     "question": "How many days must a newly hired coffee maker spend observing an experienced colleague before operating the espresso bar solo?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_08_bluebird_cafe",
-    "expected_chunk_ids": ["doc_08_bluebird_cafe::chunk_001"],
+    "doc_id": "doc_08_bluebird_cafe",
+    "expected_chunk_ids": [
+      "doc_08_bluebird_cafe::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_08_bluebird_cafe",
+        "heading_path": "Bluebird Cafe Staff Handbook > Staff Roles",
+        "quote_snippet": "Baristas: Baristas make drinks and keep the espresso machine clean. A new barista shadows a senior barista for 5 days before working a shift alone. Cashiers:...",
+        "chunk_id": "doc_08_bluebird_cafe::chunk_001"
+      }
+    ],
     "expected_answer": "A new barista shadows a senior barista for 5 days before working a shift alone.",
-    "key_facts": ["5 days", "senior barista"],
-    "should_abstain": false
+    "key_facts": [
+      "5 days",
+      "senior barista"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q52",
-    "category": "semantic_conceptual",
     "question": "What financial penalty is charged if a renter abandons an electric two-wheeler beyond the municipal boundary for over four hours, or never returns it after two full days without a police report?",
+    "type": "single_chunk",
+    "category": "semantic_conceptual",
     "expected_document_id": "doc_09_nimbus_bikeshare",
-    "expected_chunk_ids": ["doc_09_nimbus_bikeshare::chunk_003"],
+    "doc_id": "doc_09_nimbus_bikeshare",
+    "expected_chunk_ids": [
+      "doc_09_nimbus_bikeshare::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_09_nimbus_bikeshare",
+        "heading_path": "Nimbus Bike Share Operations & Rider Guide > Geofence Penalties, Improper Parking, and Lost Bike Liability",
+        "quote_snippet": "All trips must end inside a physical Nimbus docking bay or a painted virtual corral marked on the rider map. Ending a trip outside an approved corral trigger...",
+        "chunk_id": "doc_09_nimbus_bikeshare::chunk_003"
+      }
+    ],
     "expected_answer": "Leaving a bike outside the municipal geofence incurs a ₹1,200 field-retrieval fee after 4 hours, and an unreturned Nimbus Volt e-bike after 48 hours incurs a ₹42,000 replacement liability cap (₹18,500 for a pedal bike).",
-    "key_facts": ["₹1,200", "₹42,000", "48"],
-    "should_abstain": false
+    "key_facts": [
+      "₹1,200",
+      "₹42,000",
+      "48"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q53",
-    "category": "multi_hop",
     "question": "If a Commuter Plus subscriber rides a Nimbus Volt e-bike whose battery drops below 18% state of charge and docks it at an uphill Boost Hub within 25 minutes, what top assist speed limit applies and what wallet credit do they earn?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
     "expected_document_id": "doc_09_nimbus_bikeshare",
+    "doc_id": "doc_09_nimbus_bikeshare",
     "expected_chunk_ids": [
       "doc_09_nimbus_bikeshare::chunk_000",
       "doc_09_nimbus_bikeshare::chunk_002"
     ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_09_nimbus_bikeshare",
+        "heading_path": "Nimbus Bike Share Operations & Rider Guide > Pricing Tiers, Unlock Fees, and 2026 Tariff Revision",
+        "quote_snippet": "Under the legacy 2024 launch tariff, Casual Pass riders paid a ₹15 unlock fee and ₹2.50 per minute after the first 10 minutes. **Effective January 1, 2026 (S...",
+        "chunk_id": "doc_09_nimbus_bikeshare::chunk_000"
+      },
+      {
+        "doc_id": "doc_09_nimbus_bikeshare",
+        "heading_path": "Nimbus Bike Share Operations & Rider Guide > Battery Swapping and Cold-Weather Range Derating",
+        "quote_snippet": "Nimbus Volt e-bikes use removable 48V 14.4Ah lithium iron phosphate (LFP) battery packs housed inside the downtube. When a pack's state of charge (SoC) drops...",
+        "chunk_id": "doc_09_nimbus_bikeshare::chunk_002"
+      }
+    ],
     "expected_answer": "Below 18% SoC, motor assist is restricted to Eco mode with a 15 km/h top speed; the 25-minute trip falls within the Commuter Plus 30-minute free window, and docking at a Boost Hub earns a ₹25 ride credit.",
-    "key_facts": ["15 km/h", "Eco", "₹25", "30 minutes"],
-    "should_abstain": false
+    "key_facts": [
+      "15 km/h",
+      "Eco",
+      "₹25",
+      "30 minutes"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q54",
-    "category": "multi_hop",
     "question": "On a Sunday shift at Bluebird Cafe, at what times is the floor mopped and what time is the espresso machine cleaned with a backflush?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
     "expected_document_id": "doc_08_bluebird_cafe",
+    "doc_id": "doc_08_bluebird_cafe",
     "expected_chunk_ids": [
       "doc_08_bluebird_cafe::chunk_000",
       "doc_08_bluebird_cafe::chunk_004"
     ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_08_bluebird_cafe",
+        "heading_path": "Bluebird Cafe Staff Handbook > Opening Hours",
+        "quote_snippet": "Bluebird Cafe is open Monday to Friday from 7:30 AM to 6:00 PM. On Saturday and Sunday it opens at 9:00 AM and closes at 4:00 PM. The cafe is closed on Diwal...",
+        "chunk_id": "doc_08_bluebird_cafe::chunk_000"
+      },
+      {
+        "doc_id": "doc_08_bluebird_cafe",
+        "heading_path": "Bluebird Cafe Staff Handbook > Cleaning Schedule",
+        "quote_snippet": "The espresso machine is cleaned with a backflush every evening at closing time. The milk steam wand is wiped after every single use. The floor is mopped twic...",
+        "chunk_id": "doc_08_bluebird_cafe::chunk_004"
+      }
+    ],
     "expected_answer": "On Sunday Bluebird Cafe closes at 4:00 PM, so the floor is mopped at 12:00 PM and at 4:00 PM (closing), and the espresso machine is backflushed at 4:00 PM closing time.",
-    "key_facts": ["12:00 PM", "4:00 PM", "backflush"],
-    "should_abstain": false
+    "key_facts": [
+      "12:00 PM",
+      "4:00 PM",
+      "backflush"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q55",
-    "category": "multi_hop",
     "question": "How does Nimbus handle a docking bay whose Hall sensor fails with E_LATCH_STUCK_09 after two reset pulses compared to a rider who ends a trip outside a painted virtual corral?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
     "expected_document_id": "doc_09_nimbus_bikeshare",
+    "doc_id": "doc_09_nimbus_bikeshare",
     "expected_chunk_ids": [
       "doc_09_nimbus_bikeshare::chunk_001",
       "doc_09_nimbus_bikeshare::chunk_003"
     ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_09_nimbus_bikeshare",
+        "heading_path": "Nimbus Bike Share Operations & Rider Guide > Docking Station Telemetry and Firmware CLI",
+        "quote_snippet": "Each solar-powered docking bollard runs an embedded controller that communicates with the central fleet broker over MQTT v5. When a solenoid latch jams after...",
+        "chunk_id": "doc_09_nimbus_bikeshare::chunk_001"
+      },
+      {
+        "doc_id": "doc_09_nimbus_bikeshare",
+        "heading_path": "Nimbus Bike Share Operations & Rider Guide > Geofence Penalties, Improper Parking, and Lost Bike Liability",
+        "quote_snippet": "All trips must end inside a physical Nimbus docking bay or a painted virtual corral marked on the rider map. Ending a trip outside an approved corral trigger...",
+        "chunk_id": "doc_09_nimbus_bikeshare::chunk_003"
+      }
+    ],
     "expected_answer": "A bay with persistent E_LATCH_STUCK_09 is placed in MAINTENANCE_LOCK and hidden from app availability, whereas ending a trip outside an approved corral charges the rider a ₹150 improper parking surcharge.",
-    "key_facts": ["MAINTENANCE_LOCK", "₹150", "corral"],
-    "should_abstain": false
+    "key_facts": [
+      "MAINTENANCE_LOCK",
+      "₹150",
+      "corral"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q56",
-    "category": "unanswerable",
     "question": "What is the helmet rental fee and maximum front cargo basket weight limit in kilograms on a Nimbus Volt e-bike?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q57",
-    "category": "unanswerable",
     "question": "What is the guest Wi-Fi password and customer restroom PIN code at Bluebird Cafe?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q58",
-    "category": "unanswerable",
     "question": "How many solar panels and what wattage MPPT charge controller are installed on each Nimbus docking station bollard?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q59",
-    "category": "unanswerable",
     "question": "What discount percentage do senior citizens or corporate bulk accounts receive on the Nimbus Commuter Plus monthly plan?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q60",
-    "category": "unanswerable",
     "question": "How do you configure pgvector GPU CUDA acceleration using pgvector.cuda_device_id in PostgreSQL 17?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q61",
-    "category": "paraphrase",
     "question": "The light on my router keeps flashing red. What should I do?",
+    "type": "paraphrase",
+    "category": "paraphrase",
     "expected_document_id": "doc_11_zephyr_router",
-    "expected_chunk_ids": ["doc_11_zephyr_router::chunk_002"],
+    "doc_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": [
+      "doc_11_zephyr_router::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_11_zephyr_router",
+        "heading_path": "Zephyr ZX-400 Router Guide > LED Indicators",
+        "quote_snippet": "| LED | Meaning | What to do | |----------------|--------------------------------------|----------------------------------| | Solid green | Online and workin...",
+        "chunk_id": "doc_11_zephyr_router::chunk_002"
+      }
+    ],
     "expected_answer": "Blinking red means a hardware fault. Contact support.",
-    "key_facts": ["hardware fault", "contact support"],
-    "should_abstain": false
+    "key_facts": [
+      "hardware fault",
+      "contact support"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q62",
-    "category": "paraphrase",
     "question": "How do I wipe all my settings on the router?",
+    "type": "paraphrase",
+    "category": "paraphrase",
     "expected_document_id": "doc_11_zephyr_router",
-    "expected_chunk_ids": ["doc_11_zephyr_router::chunk_005"],
+    "doc_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": [
+      "doc_11_zephyr_router::chunk_005"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_11_zephyr_router",
+        "heading_path": "Zephyr ZX-400 Router Guide > Factory Reset",
+        "quote_snippet": "To reset the router, hold the Reset button for 10 seconds while the router is powered on, until all LEDs flash once. A factory reset erases all settings, inc...",
+        "chunk_id": "doc_11_zephyr_router::chunk_005"
+      }
+    ],
     "expected_answer": "Hold the Reset button for 10 seconds while the router is powered on until all LEDs flash once.",
-    "key_facts": ["Reset", "10 seconds"],
-    "should_abstain": false
+    "key_facts": [
+      "Reset",
+      "10 seconds"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q63",
-    "category": "paraphrase",
     "question": "My router keeps shutting itself off. Why?",
+    "type": "paraphrase",
+    "category": "paraphrase",
     "expected_document_id": "doc_11_zephyr_router",
-    "expected_chunk_ids": ["doc_11_zephyr_router::chunk_004"],
+    "doc_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": [
+      "doc_11_zephyr_router::chunk_004"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_11_zephyr_router",
+        "heading_path": "Zephyr ZX-400 Router Guide > Error Codes",
+        "quote_snippet": "- E-101: The WAN cable is disconnected. Check both ends of the cable. - E-204: The DNS server is not responding. Set the DNS server to 1.1.1.1 in the admin p...",
+        "chunk_id": "doc_11_zephyr_router::chunk_004"
+      }
+    ],
     "expected_answer": "The router is overheating (E-407) and shuts down automatically at 70 degrees Celsius. Move it to a ventilated place.",
-    "key_facts": ["overheating", "E-407", "70"],
-    "should_abstain": false
+    "key_facts": [
+      "overheating",
+      "E-407",
+      "70"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q64",
-    "category": "paraphrase",
     "question": "Can I get my money back on a router I already opened?",
+    "type": "paraphrase",
+    "category": "paraphrase",
     "expected_document_id": "doc_11_zephyr_router",
-    "expected_chunk_ids": ["doc_11_zephyr_router::chunk_007"],
+    "doc_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": [
+      "doc_11_zephyr_router::chunk_007"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_11_zephyr_router",
+        "heading_path": "Zephyr ZX-400 Router Guide > Warranty and Returns",
+        "quote_snippet": "The warranty lasts 24 months from the purchase date and covers hardware defects. It does not cover water damage or damage caused by a non-original power adap...",
+        "chunk_id": "doc_11_zephyr_router::chunk_007"
+      }
+    ],
     "expected_answer": "An opened router can be returned within 15 days with a restocking fee of 10 percent of the price.",
-    "key_facts": ["15 days", "10 percent"],
-    "should_abstain": false
+    "key_facts": [
+      "15 days",
+      "10 percent"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q65",
-    "category": "paraphrase",
     "question": "How many days do I have to collect an item I requested from another library?",
+    "type": "paraphrase",
+    "category": "paraphrase",
     "expected_document_id": "doc_10_harborview_library",
-    "expected_chunk_ids": ["doc_10_harborview_library::chunk_004"],
+    "doc_id": "doc_10_harborview_library",
+    "expected_chunk_ids": [
+      "doc_10_harborview_library::chunk_004"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_10_harborview_library",
+        "heading_path": "Harborview University Library Guide > Interlibrary Loan",
+        "quote_snippet": "Interlibrary Loan (ILL) lets students get items that Harborview does not own. Follow these steps: 1. Search the catalog. If the item is not available, click...",
+        "chunk_id": "doc_10_harborview_library::chunk_004"
+      }
+    ],
     "expected_answer": "You must collect the item within 5 days of the arrival email, or the request is cancelled.",
-    "key_facts": ["5 days"],
-    "should_abstain": false
+    "key_facts": [
+      "5 days"
+    ],
+    "should_abstain": false,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q66",
-    "category": "unanswerable",
     "question": "Does the ZX-400 support Wi-Fi 7?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   },
   {
     "id": "q67",
-    "category": "unanswerable",
     "question": "What CPU does the router use?",
+    "type": "unanswerable",
+    "category": "unanswerable",
     "expected_document_id": null,
+    "doc_id": null,
     "expected_chunk_ids": [],
+    "gold_refs": [],
     "expected_answer": "ABSTAIN",
     "key_facts": [],
-    "should_abstain": true
+    "should_abstain": true,
+    "source": "golden",
+    "status": "approved",
+    "created_at": "2026-01-01T00:00:00+00:00",
+    "generator_model": null,
+    "needs_review": false,
+    "document_missing": false
   }
 ]

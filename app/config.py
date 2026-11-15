@@ -30,7 +30,10 @@ class Settings:
     embedding_model: str = "gemini-embedding-001"
     embedding_dim: int = 768
     generation_model: str = "gemini-3.5-flash-lite"
+    generator_model: str = "gemini-3.5-flash"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    demo_mode: bool = False
+    admin_token: str = ""
     chunk_size_tokens: int = 350
     chunk_overlap_tokens: int = 50
     rrf_k: int = 60
@@ -61,7 +64,10 @@ class Settings:
             embedding_model=os.getenv("EMBEDDING_MODEL", "gemini-embedding-001"),
             embedding_dim=int(os.getenv("EMBEDDING_DIM", "768")),
             generation_model=os.getenv("GENERATION_MODEL", "gemini-3.5-flash-lite"),
+            generator_model=os.getenv("GENERATOR_MODEL", "gemini-3.5-flash"),
             reranker_model=os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+            demo_mode=os.getenv("DEMO_MODE", "false").lower() in ("1", "true", "yes"),
+            admin_token=os.getenv("ADMIN_TOKEN", ""),
             chunk_size_tokens=int(os.getenv("CHUNK_SIZE_TOKENS", "350")),
             chunk_overlap_tokens=int(os.getenv("CHUNK_OVERLAP_TOKENS", "50")),
             rrf_k=int(os.getenv("RRF_K", "60")),

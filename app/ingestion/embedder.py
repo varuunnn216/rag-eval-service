@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import math
+import os
 import re
-from typing import List
+import urllib.request
+from typing import Dict, List, Tuple
 
 from app.config import get_settings
 
@@ -96,6 +99,9 @@ def _deterministic_feature_embedding(text: str, dim: int = 768) -> List[float]:
     return _normalize_vector(vec)
 
 
+_EMBEDDING_CACHE: Dict[Tuple[str, int, str, str], List[float]] = {}
+
+
 class EmbeddingService:
     """Generates L2-normalized document and query embeddings using Gemini API with offline fallback."""
 
@@ -105,8 +111,55 @@ class EmbeddingService:
         self.model = self.settings.embedding_model
 
     def _has_real_api_key(self) -> bool:
+        if os.getenv("DISABLE_GEMINI_EMBEDDINGS", "").lower() in ("1", "true", "yes"):
+            return False
         key = (self.settings.gemini_api_key or "").strip()
         return bool(key and key != "your_gemini_api_key_here")
+
+    def _rest_embed_batch(self, texts: List[str], task_type: str) -> List[List[float]]:
+        """Call Gemini REST batchEmbedContents directly without requiring google-genai."""
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:batchEmbedContents"
+        requests_payload = [
+            {
+                "model": f"models/{self.model}",
+                "content": {"parts": [{"text": text}]},
+                "taskType": task_type,
+                "outputDimensionality": self.dim,
+            }
+            for text in texts
+        ]
+        req = urllib.request.Request(
+            url,
+            data=json.dumps({"requests": requests_payload}).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": self.settings.gemini_api_key,
+            },
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return [_normalize_vector(list(emb["values"])) for emb in data["embeddings"]]
+
+    def _rest_embed_single(self, text: str, task_type: str) -> List[float]:
+        """Call Gemini REST embedContent directly without requiring google-genai."""
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:embedContent"
+        payload = {
+            "model": f"models/{self.model}",
+            "content": {"parts": [{"text": text}]},
+            "taskType": task_type,
+            "outputDimensionality": self.dim,
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": self.settings.gemini_api_key,
+            },
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return _normalize_vector(list(data["embedding"]["values"]))
 
     def embed_documents(self, texts: List[str], batch_size: int = 50) -> List[List[float]]:
         """Embed a batch of document chunks for indexing (L2-normalized)."""
@@ -116,35 +169,55 @@ class EmbeddingService:
         if not self._has_real_api_key():
             return [_deterministic_feature_embedding(t, self.dim) for t in texts]
 
-        try:
-            from google import genai
-            from google.genai import types
+        missing_indices = [
+            idx
+            for idx, txt in enumerate(texts)
+            if (self.model, self.dim, "RETRIEVAL_DOCUMENT", txt) not in _EMBEDDING_CACHE
+        ]
+        if missing_indices:
+            missing_texts = [texts[idx] for idx in missing_indices]
+            computed: List[List[float]] = []
+            try:
+                from google import genai
+                from google.genai import types
 
-            client = genai.Client(api_key=self.settings.gemini_api_key)
-            all_embeddings: List[List[float]] = []
+                client = genai.Client(api_key=self.settings.gemini_api_key)
+                for start in range(0, len(missing_texts), batch_size):
+                    batch = missing_texts[start : start + batch_size]
+                    response = client.models.embed_content(
+                        model=self.model,
+                        contents=batch,
+                        config=types.EmbedContentConfig(
+                            task_type="RETRIEVAL_DOCUMENT",
+                            output_dimensionality=self.dim,
+                        ),
+                    )
+                    for emb in response.embeddings:
+                        computed.append(_normalize_vector(list(emb.values)))
+            except Exception:
+                try:
+                    for start in range(0, len(missing_texts), batch_size):
+                        batch = missing_texts[start : start + batch_size]
+                        computed.extend(self._rest_embed_batch(batch, "RETRIEVAL_DOCUMENT"))
+                except Exception as exc:
+                    logger.warning("Gemini embed_documents failed (%s); using deterministic fallback.", exc)
+                    computed = [_deterministic_feature_embedding(t, self.dim) for t in missing_texts]
 
-            for start in range(0, len(texts), batch_size):
-                batch = texts[start : start + batch_size]
-                response = client.models.embed_content(
-                    model=self.model,
-                    contents=batch,
-                    config=types.EmbedContentConfig(
-                        task_type="RETRIEVAL_DOCUMENT",
-                        output_dimensionality=self.dim,
-                    ),
-                )
-                for emb in response.embeddings:
-                    all_embeddings.append(_normalize_vector(list(emb.values)))
+            for txt, vec in zip(missing_texts, computed):
+                _EMBEDDING_CACHE[(self.model, self.dim, "RETRIEVAL_DOCUMENT", txt)] = vec
 
-            return all_embeddings
-        except Exception:
-            return [_deterministic_feature_embedding(t, self.dim) for t in texts]
+        return [_EMBEDDING_CACHE[(self.model, self.dim, "RETRIEVAL_DOCUMENT", txt)] for txt in texts]
 
     def embed_query(self, query: str) -> List[float]:
         """Embed a single search query (L2-normalized)."""
         if not self._has_real_api_key():
             return _deterministic_feature_embedding(query, self.dim)
 
+        cache_key = (self.model, self.dim, "RETRIEVAL_QUERY", query)
+        if cache_key in _EMBEDDING_CACHE:
+            return _EMBEDDING_CACHE[cache_key]
+
+        vec: List[float]
         try:
             from google import genai
             from google.genai import types
@@ -158,6 +231,13 @@ class EmbeddingService:
                     output_dimensionality=self.dim,
                 ),
             )
-            return _normalize_vector(list(response.embeddings[0].values))
+            vec = _normalize_vector(list(response.embeddings[0].values))
         except Exception:
-            return _deterministic_feature_embedding(query, self.dim)
+            try:
+                vec = self._rest_embed_single(query, "RETRIEVAL_QUERY")
+            except Exception as exc:
+                logger.warning("Gemini embed_query failed (%s); using deterministic fallback.", exc)
+                vec = _deterministic_feature_embedding(query, self.dim)
+
+        _EMBEDDING_CACHE[cache_key] = vec
+        return vec

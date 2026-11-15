@@ -1913,10 +1913,18 @@ async function triggerEvaluationRun(selectedConfig) {
   }
 
   try {
+    const qSetEl = document.getElementById("eval-question-set-select");
+    const qDocEl = document.getElementById("eval-question-doc-select");
+    const question_set = qSetEl ? qSetEl.value : "golden_only";
+    const doc_id = question_set === "one_document" && qDocEl ? qDocEl.value : null;
+    const payload = { question_set };
+    if (selectedConfig) payload.config = selectedConfig;
+    if (doc_id) payload.doc_id = doc_id;
+
     const res = await fetch("/api/v1/eval/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(selectedConfig ? { config: selectedConfig } : {}),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       throw new Error(`Evaluation HTTP ${res.status}`);
@@ -2069,6 +2077,31 @@ function renderEvalDashboard(report) {
     })
     .join("");
 
+  const badgeEl = document.getElementById("eval-dataset-badge");
+  if (badgeEl) {
+    const qSetLabel = report.question_set || "golden_only";
+    const totalQ = report.dataset_size || (activeRun.questions || []).length;
+    const synCount = report.synthetic_count || 0;
+    const synTag = synCount > 0 ? `<span class="badge badge-synthetic">Includes ${synCount} synthetic</span>` : `<span class="badge badge-golden">Golden only</span>`;
+    badgeEl.innerHTML = `<span>Used <strong>${totalQ}</strong> approved questions (${escapeHtml(qSetLabel)})</span> ${synTag}`;
+  }
+
+  const typeGrid = document.getElementById("type-cards");
+  if (typeGrid) {
+    typeGrid.innerHTML = Object.entries(activeRun.by_type || {})
+      .map(([qt, stats]) => {
+        const r5 = stats.recall_at_5 != null ? `${(stats.recall_at_5 * 100).toFixed(1)}%` : "N/A (Trap)";
+        return `
+          <div class="kpi-box">
+            <div class="kpi-label">${escapeHtml(qt)} (${stats.count} Qs)</div>
+            <div class="kpi-val">${(stats.answer_accuracy * 100).toFixed(1)}%</div>
+            <div class="kpi-sub">Answer Acc &bull; Recall@5: ${r5}</div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
   const catGrid = document.getElementById("category-cards");
   catGrid.innerHTML = Object.entries(activeRun.by_category || {})
     .map(([cat, stats]) => {
@@ -2139,6 +2172,9 @@ function renderFailedQuestionsSection(activeRun, selectedKey) {
             <button type="button" class="secondary-btn btn-xs" onclick="tryQuestionInPlayground(${JSON.stringify(q.question).replace(/"/g, "&quot;")})">
               Test Live
             </button>
+            <button type="button" class="secondary-btn btn-xs" onclick="openQuestionBankRow(${JSON.stringify(q.id).replace(/"/g, "&quot;")})">
+              Question bank
+            </button>
           </td>
         </tr>
       `;
@@ -2187,6 +2223,9 @@ function renderQuestionsTable(report) {
           <td>
             <button type="button" class="secondary-btn btn-xs" onclick="tryQuestionInPlayground(${JSON.stringify(q.question).replace(/"/g, "&quot;")})">
               Test Live
+            </button>
+            <button type="button" class="secondary-btn btn-xs" onclick="openQuestionBankRow(${JSON.stringify(q.id).replace(/"/g, "&quot;")})">
+              Question bank
             </button>
           </td>
         </tr>
@@ -2390,12 +2429,22 @@ function renderDocumentsList() {
           </button>
           <button
             type="button"
+            class="secondary-btn btn-xs doc-generate-btn"
+            data-gen-doc-id="${escapeHtml(d.id)}"
+            ${window.__demoMode ? "disabled title='Disabled in DEMO_MODE'" : ""}
+            onclick="startDocQuestionGeneration(${JSON.stringify(d.id).replace(/"/g, "&quot;")}, this)"
+          >
+            Generate Questions
+          </button>
+          <button
+            type="button"
             class="secondary-btn btn-xs doc-delete-btn"
             onclick="promptDeleteDocument(${JSON.stringify(d.id).replace(/"/g, "&quot;")}, ${JSON.stringify(d.title).replace(/"/g, "&quot;")})"
           >
             Delete
           </button>
         </div>
+        <div class="doc-gen-progress muted-text hidden" id="doc-gen-status-${escapeHtml(d.id)}"></div>
       </div>
     `
     )
@@ -2525,3 +2574,345 @@ function showToast(message) {
     setTimeout(() => toast.remove(), 260);
   }, 3200);
 }
+
+
+/* =====================================================================
+   QUESTION BANK, GENERATION JOBS & EVAL SET SWITCHING
+   ===================================================================== */
+window.__demoMode = false;
+let qbQuestions = [];
+let qbActiveId = null;
+
+window.startDocQuestionGeneration = async function (docId, btnEl) {
+  if (window.__demoMode) {
+    showToast("Question generation is disabled in DEMO_MODE.");
+    return;
+  }
+  const statusEl = document.getElementById(`doc-gen-status-${docId}`);
+  if (btnEl) btnEl.disabled = true;
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.textContent = "Starting generation...";
+  }
+  try {
+    const res = await fetch("/api/v1/eval/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ doc_id: docId, per_chunk: 2, include_unanswerable: true }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const job = await res.json();
+    const poll = async () => {
+      const stRes = await fetch(`/api/v1/eval/generate/status?job_id=${encodeURIComponent(job.job_id)}`);
+      if (!stRes.ok) return;
+      const st = await stRes.json();
+      if (statusEl) statusEl.textContent = st.message || "Generating...";
+      if (st.status === "running") {
+        setTimeout(poll, 900);
+      } else {
+        if (btnEl) btnEl.disabled = false;
+        showToast(st.status === "completed" ? `Generated questions for ${docId}: ${st.message}` : `Generation failed: ${st.error || "error"}`);
+        await loadQuestionBank();
+      }
+    };
+    setTimeout(poll, 500);
+  } catch (err) {
+    if (btnEl) btnEl.disabled = false;
+    if (statusEl) statusEl.textContent = `Error: ${err.message}`;
+    showToast(`Generation failed: ${err.message}`);
+  }
+};
+
+function switchEvaluateSubtab(view) {
+  const benchView = document.getElementById("eval-benchmark-view");
+  const bankView = document.getElementById("eval-question-bank-view");
+  const benchBtn = document.getElementById("eval-subtab-benchmark");
+  const bankBtn = document.getElementById("eval-subtab-bank");
+  const isBank = view === "bank";
+  benchView?.classList.toggle("hidden", isBank);
+  bankView?.classList.toggle("hidden", !isBank);
+  benchBtn?.classList.toggle("active", !isBank);
+  bankBtn?.classList.toggle("active", isBank);
+  benchBtn?.setAttribute("aria-selected", String(!isBank));
+  bankBtn?.setAttribute("aria-selected", String(isBank));
+  if (isBank) loadQuestionBank();
+}
+
+window.openQuestionBankRow = async function (qid) {
+  switchEvaluateSubtab("bank");
+  await loadQuestionBank();
+  const q = qbQuestions.find((x) => x.id === qid);
+  if (q) openQuestionPreview(q);
+};
+
+async function loadQuestionBank() {
+  try {
+    const res = await fetch("/api/v1/eval/questions");
+    if (!res.ok) return;
+    const data = await res.json();
+    qbQuestions = data.questions || [];
+    window.__demoMode = Boolean(data.demo_mode);
+
+    const demoBadge = document.getElementById("qb-demo-badge");
+    const approveAllBtn = document.getElementById("qb-approve-visible-btn");
+    const addBtn = document.getElementById("qb-add-toggle-btn");
+    demoBadge?.classList.toggle("hidden", !window.__demoMode);
+    if (approveAllBtn) approveAllBtn.disabled = window.__demoMode;
+    if (addBtn) addBtn.disabled = window.__demoMode;
+
+    const c = data.counts || {};
+    const draftPill = document.getElementById("qb-draft-pill");
+    if (draftPill) draftPill.textContent = String(c.draft || 0);
+    const countsBar = document.getElementById("qb-counts-bar");
+    if (countsBar) {
+      countsBar.textContent = `Total: ${c.total || 0} · Golden: ${c.golden || 0} · Synthetic: ${c.synthetic || 0} · Approved: ${c.approved || 0} · Draft: ${c.draft || 0} · Rejected: ${c.rejected || 0}` + (c.needs_review ? ` · Needs review: ${c.needs_review}` : "");
+    }
+    populateQuestionBankDocFilters();
+    renderQuestionBank();
+  } catch (_) {}
+}
+
+function populateQuestionBankDocFilters() {
+  const docIds = Array.from(new Set([
+    ...indexedDocuments.map((d) => d.id),
+    ...qbQuestions.map((q) => q.doc_id).filter(Boolean),
+  ])).sort();
+
+  const evalDocSel = document.getElementById("eval-question-doc-select");
+  if (evalDocSel) {
+    const prev = evalDocSel.value;
+    evalDocSel.innerHTML = docIds.map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join("");
+    if (prev && docIds.includes(prev)) evalDocSel.value = prev;
+  }
+
+  const filterDoc = document.getElementById("qb-filter-doc");
+  if (filterDoc) {
+    const prev = filterDoc.value;
+    filterDoc.innerHTML = `<option value="all">All Docs</option>` + docIds.map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join("");
+    if (prev && (prev === "all" || docIds.includes(prev))) filterDoc.value = prev;
+  }
+
+  const newDoc = document.getElementById("qb-new-doc");
+  if (newDoc) {
+    const prev = newDoc.value;
+    newDoc.innerHTML = docIds.map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(id)}</option>`).join("");
+    if (prev && docIds.includes(prev)) newDoc.value = prev;
+    if (newDoc.value) loadChunksIntoSelect(newDoc.value, "qb-new-chunks", []);
+  }
+}
+
+function getFilteredQuestionBank() {
+  const fDoc = document.getElementById("qb-filter-doc")?.value || "all";
+  const fType = document.getElementById("qb-filter-type")?.value || "all";
+  const fSrc = document.getElementById("qb-filter-source")?.value || "all";
+  const fStatus = document.getElementById("qb-filter-status")?.value || "all";
+
+  return qbQuestions.filter((q) => {
+    if (fDoc !== "all" && q.doc_id !== fDoc) return false;
+    if (fType !== "all" && q.type !== fType) return false;
+    if (fSrc !== "all" && q.source !== fSrc) return false;
+    if (fStatus === "needs_review" && !q.needs_review) return false;
+    if (fStatus !== "all" && fStatus !== "needs_review" && q.status !== fStatus) return false;
+    return true;
+  });
+}
+
+function renderQuestionBank() {
+  const tbody = document.getElementById("qb-tbody");
+  if (!tbody) return;
+  const rows = getFilteredQuestionBank();
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-table-cell">No questions match current filters.</td></tr>`;
+    return;
+  }
+  const ro = window.__demoMode ? "disabled" : "";
+  tbody.innerHTML = rows.map((q) => {
+    const srcCls = q.source === "golden" ? "badge-golden" : "badge-synthetic";
+    const statusLabel = q.document_missing ? "doc missing" : (q.needs_review ? "needs review" : q.status);
+    return `
+      <tr data-qb-id="${escapeHtml(q.id)}">
+        <td>${escapeHtml(q.question)}</td>
+        <td><span class="badge-cat">${escapeHtml(q.type || "single_chunk")}</span></td>
+        <td><code>${escapeHtml(q.doc_id || "—")}</code></td>
+        <td><span class="badge ${srcCls}">${escapeHtml(q.source)}</span></td>
+        <td><span class="badge badge-status-${escapeHtml(q.status)}">${escapeHtml(statusLabel)}</span></td>
+        <td class="qb-row-actions">
+          <button type="button" class="secondary-btn btn-xs" onclick="openQuestionPreviewById(${JSON.stringify(q.id).replace(/"/g, "&quot;")})">Preview / Edit</button>
+          <button type="button" class="secondary-btn btn-xs" ${ro} onclick="setQuestionStatus(${JSON.stringify(q.id).replace(/"/g, "&quot;")}, 'approved')">Approve</button>
+          <button type="button" class="secondary-btn btn-xs" ${ro} onclick="setQuestionStatus(${JSON.stringify(q.id).replace(/"/g, "&quot;")}, 'rejected')">Reject</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function loadChunksIntoSelect(docId, selectId, selectedIds) {
+  const sel = document.getElementById(selectId);
+  if (!sel || !docId) return;
+  try {
+    const res = await fetch(`/api/v1/documents/${encodeURIComponent(docId)}/chunks`);
+    if (!res.ok) return;
+    const chunks = await res.json();
+    const selSet = new Set(selectedIds || []);
+    sel.innerHTML = chunks.map((c) => `<option value="${escapeHtml(c.chunk_id)}" ${selSet.has(c.chunk_id) ? "selected" : ""}>${escapeHtml(c.chunk_id)} — ${escapeHtml(c.heading || "")}</option>`).join("");
+  } catch (_) {}
+}
+
+window.openQuestionPreviewById = function (qid) {
+  const q = qbQuestions.find((x) => x.id === qid);
+  if (q) openQuestionPreview(q);
+};
+
+async function openQuestionPreview(q) {
+  qbActiveId = q.id;
+  const panel = document.getElementById("qb-preview-panel");
+  panel?.classList.remove("hidden");
+  const idEl = document.getElementById("qb-preview-id");
+  if (idEl) idEl.textContent = `${q.id} (${q.source} · ${q.status})`;
+
+  const qInput = document.getElementById("qb-edit-question");
+  const aInput = document.getElementById("qb-edit-answer");
+  const fInput = document.getElementById("qb-edit-facts");
+  if (qInput) qInput.value = q.question || "";
+  if (aInput) aInput.value = q.expected_answer || "";
+  if (fInput) fInput.value = (q.key_facts || []).join(", ");
+
+  const goldEl = document.getElementById("qb-preview-gold-chunks");
+  if (goldEl) {
+    const refs = q.gold_refs || [];
+    if (!refs.length) {
+      goldEl.innerHTML = `<div class="muted-text">No gold chunks (unanswerable trap).</div>`;
+    } else {
+      let chunkContents = {};
+      if (q.doc_id) {
+        try {
+          const r = await fetch(`/api/v1/documents/${encodeURIComponent(q.doc_id)}/chunks`);
+          if (r.ok) {
+            const list = await r.json();
+            list.forEach((c) => { chunkContents[c.chunk_id] = c.content; });
+          }
+        } catch (_) {}
+      }
+      goldEl.innerHTML = refs.map((r) => `
+        <div class="qb-gold-card">
+          <div class="qb-gold-meta"><code>${escapeHtml(r.chunk_id || "")}</code> · ${escapeHtml(r.heading_path || "")}</div>
+          <div class="qb-gold-text">${escapeHtml(chunkContents[r.chunk_id] || r.quote_snippet || "")}</div>
+        </div>
+      `).join("");
+    }
+  }
+  if (q.doc_id) {
+    await loadChunksIntoSelect(q.doc_id, "qb-edit-chunks", q.expected_chunk_ids || []);
+  }
+}
+
+window.setQuestionStatus = async function (qid, status) {
+  if (window.__demoMode) return;
+  const res = await fetch(`/api/v1/eval/questions/${encodeURIComponent(qid)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (res.ok) {
+    showToast(`Question ${qid} marked ${status}`);
+    await loadQuestionBank();
+  }
+};
+
+function initQuestionBank() {
+  document.getElementById("eval-subtab-benchmark")?.addEventListener("click", () => switchEvaluateSubtab("benchmark"));
+  document.getElementById("eval-subtab-bank")?.addEventListener("click", () => switchEvaluateSubtab("bank"));
+
+  const qSetSel = document.getElementById("eval-question-set-select");
+  const qDocSel = document.getElementById("eval-question-doc-select");
+  qSetSel?.addEventListener("change", () => {
+    qDocSel?.classList.toggle("hidden", qSetSel.value !== "one_document");
+  });
+
+  ["qb-filter-doc", "qb-filter-type", "qb-filter-source", "qb-filter-status"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("change", renderQuestionBank);
+  });
+
+  document.getElementById("qb-preview-close")?.addEventListener("click", () => {
+    document.getElementById("qb-preview-panel")?.classList.add("hidden");
+  });
+
+  document.getElementById("qb-approve-visible-btn")?.addEventListener("click", async () => {
+    if (window.__demoMode) return;
+    const ids = getFilteredQuestionBank().filter((q) => q.status !== "approved").map((q) => q.id);
+    if (!ids.length) {
+      showToast("No unapproved visible questions.");
+      return;
+    }
+    const res = await fetch("/api/v1/eval/questions/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, status: "approved" }),
+    });
+    if (res.ok) {
+      showToast(`Approved ${ids.length} visible questions.`);
+      await loadQuestionBank();
+    }
+  });
+
+  document.getElementById("qb-add-toggle-btn")?.addEventListener("click", () => {
+    document.getElementById("qb-add-form")?.classList.toggle("hidden");
+  });
+  document.getElementById("qb-add-cancel-btn")?.addEventListener("click", () => {
+    document.getElementById("qb-add-form")?.classList.add("hidden");
+  });
+  document.getElementById("qb-new-doc")?.addEventListener("change", (e) => {
+    loadChunksIntoSelect(e.target.value, "qb-new-chunks", []);
+  });
+
+  document.getElementById("qb-add-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (window.__demoMode) return;
+    const q = document.getElementById("qb-new-question").value.trim();
+    const type = document.getElementById("qb-new-type").value;
+    const doc_id = document.getElementById("qb-new-doc").value;
+    const chunksSel = document.getElementById("qb-new-chunks");
+    const expected_chunk_ids = Array.from(chunksSel?.selectedOptions || []).map((o) => o.value);
+    const expected_answer = document.getElementById("qb-new-answer").value.trim();
+    const key_facts = document.getElementById("qb-new-facts").value.split(",").map((s) => s.trim()).filter(Boolean);
+    const res = await fetch("/api/v1/eval/questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q, type, doc_id, expected_chunk_ids, expected_answer, key_facts, status: "approved" }),
+    });
+    if (res.ok) {
+      document.getElementById("qb-add-form").classList.add("hidden");
+      document.getElementById("qb-new-question").value = "";
+      showToast("Added manual question to bank.");
+      await loadQuestionBank();
+    }
+  });
+
+  document.getElementById("qb-edit-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!qbActiveId || window.__demoMode) return;
+    const question = document.getElementById("qb-edit-question").value.trim();
+    const expected_answer = document.getElementById("qb-edit-answer").value.trim();
+    const key_facts = document.getElementById("qb-edit-facts").value.split(",").map((s) => s.trim()).filter(Boolean);
+    const chunksSel = document.getElementById("qb-edit-chunks");
+    const expected_chunk_ids = Array.from(chunksSel?.selectedOptions || []).map((o) => o.value);
+    const res = await fetch(`/api/v1/eval/questions/${encodeURIComponent(qbActiveId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, expected_answer, key_facts, expected_chunk_ids }),
+    });
+    if (res.ok) {
+      showToast("Saved question updates.");
+      await loadQuestionBank();
+    }
+  });
+
+  document.getElementById("qb-edit-approve")?.addEventListener("click", () => qbActiveId && setQuestionStatus(qbActiveId, "approved"));
+  document.getElementById("qb-edit-reject")?.addEventListener("click", () => qbActiveId && setQuestionStatus(qbActiveId, "rejected"));
+  loadQuestionBank();
+}
+
+document.addEventListener("DOMContentLoaded", initQuestionBank);

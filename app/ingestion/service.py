@@ -95,6 +95,15 @@ def ingest_documents(documents: List[DocumentInput]) -> IngestResponse:
 
         register_in_memory_documents(documents)
 
+    try:
+        from eval.question_bank import on_document_reingested
+
+        for doc in documents:
+            doc_chunks = [c for c in all_chunks if c.document_id == doc.id]
+            on_document_reingested(doc.id, doc_chunks)
+    except Exception:
+        pass
+
     logger.info(
         "Ingested %d documents (%d chunks) into pgvector.",
         len(documents),
@@ -214,4 +223,10 @@ def delete_document(document_id: str) -> Dict[str, Any]:
     from app.retrieval.hybrid import delete_in_memory_document
 
     delete_in_memory_document(document_id)
+    try:
+        from eval.question_bank import on_document_deleted
+
+        on_document_deleted(document_id)
+    except Exception:
+        pass
     return {"deleted": True, "document_id": document_id}

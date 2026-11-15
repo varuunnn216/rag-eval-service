@@ -133,6 +133,7 @@ def evaluate_configuration(
     retrieval_latencies_ms: List[float] = []
 
     category_buckets: Dict[str, Dict[str, List[float]]] = {}
+    type_buckets: Dict[str, Dict[str, List[float]]] = {}
 
     prev_caller = _custom_llm_caller
     if prev_caller is None:
@@ -141,7 +142,9 @@ def evaluate_configuration(
     try:
         for item in dataset:
             qid = item["id"]
-            category = item["category"]
+            category = item.get("category") or item.get("type") or "exact_lookup"
+            q_type = item.get("type") or "single_chunk"
+            q_source = item.get("source") or "golden"
             question = item["question"]
             expected_chunks: List[str] = item["expected_chunk_ids"]
             expected_answer: str = item.get("expected_answer", "")
@@ -215,10 +218,20 @@ def evaluate_configuration(
                 bucket["mrr_at_5"].append(mrr5)
             bucket["answer_accuracy"].append(fact_score)
 
+            t_bucket = type_buckets.setdefault(
+                q_type, {"recall_at_5": [], "mrr_at_5": [], "answer_accuracy": []}
+            )
+            if not should_abstain:
+                t_bucket["recall_at_5"].append(r5)
+                t_bucket["mrr_at_5"].append(mrr5)
+            t_bucket["answer_accuracy"].append(fact_score)
+
             question_results.append(
                 {
                     "id": qid,
                     "category": category,
+                    "type": q_type,
+                    "source": q_source,
                     "question": question,
                     "expected_chunk_ids": expected_chunks,
                     "expected_answer": expected_answer,
@@ -254,6 +267,15 @@ def evaluate_configuration(
         }
         for cat, vals in category_buckets.items()
     }
+    type_summary = {
+        q_t: {
+            "count": len(vals["answer_accuracy"]),
+            "recall_at_5": _mean(vals["recall_at_5"]) if vals["recall_at_5"] else None,
+            "mrr_at_5": _mean(vals["mrr_at_5"]) if vals["mrr_at_5"] else None,
+            "answer_accuracy": _mean(vals["answer_accuracy"]),
+        }
+        for q_t, vals in type_buckets.items()
+    }
 
     return {
         "mode": mode,
@@ -278,6 +300,7 @@ def evaluate_configuration(
             "p95_latency_ms": _percentile(latencies_ms, 95.0),
         },
         "by_category": category_summary,
+        "by_type": type_summary,
         "questions": question_results,
     }
 
@@ -337,11 +360,14 @@ def format_markdown_report(ablation_runs: Dict[str, Dict[str, Any]]) -> str:
 def run_evaluation_suite(
     output_dir: Path | None = None,
     selected_config: Optional[str] = None,
+    question_set: str = "golden_only",
+    doc_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Execute the full or single-config ablation evaluation suite and write JSON + Markdown reports."""
+    from eval.question_bank import get_eval_questions
+
     settings = get_settings()
-    dataset_path = settings.project_root / "eval" / "dataset.json"
-    dataset = json.loads(dataset_path.read_text(encoding="utf-8"))
+    dataset = get_eval_questions(question_set=question_set, doc_id=doc_id)
 
     try:
         from app.ingestion.seed import seed_corpus
@@ -356,7 +382,7 @@ def run_evaluation_suite(
     md_path = reports_dir / "latest_eval_report.md"
 
     existing_runs: Dict[str, Dict[str, Any]] = {}
-    if selected_config and json_path.exists():
+    if selected_config and question_set == "golden_only" and json_path.exists():
         try:
             existing_runs = json.loads(json_path.read_text(encoding="utf-8")).get("ablation_runs", {})
         except Exception:
@@ -377,14 +403,21 @@ def run_evaluation_suite(
         )
         ablation_runs[cfg["name"]] = res
 
+    golden_count = sum(1 for q in dataset if q.get("source", "golden") == "golden")
+    synthetic_count = sum(1 for q in dataset if q.get("source") == "synthetic")
     full_payload = {
         "dataset_size": len(dataset),
+        "question_set": question_set,
+        "doc_id": doc_id,
+        "golden_count": golden_count,
+        "synthetic_count": synthetic_count,
         "ablation_runs": ablation_runs,
     }
 
-    json_path.write_text(json.dumps(full_payload, indent=2), encoding="utf-8")
-    md_report = format_markdown_report(ablation_runs)
-    md_path.write_text(md_report, encoding="utf-8")
+    if question_set == "golden_only":
+        json_path.write_text(json.dumps(full_payload, indent=2), encoding="utf-8")
+        md_report = format_markdown_report(ablation_runs)
+        md_path.write_text(md_report, encoding="utf-8")
 
     return full_payload
 

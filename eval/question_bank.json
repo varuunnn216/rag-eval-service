@@ -1,0 +1,295 @@
+[
+  {
+    "id": "syn_d19a6ea3",
+    "question": "Which indicator light means there is no network connection, and what action is required?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
+    "expected_document_id": "doc_11_zephyr_router",
+    "doc_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": [
+      "doc_11_zephyr_router::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_11_zephyr_router",
+        "heading_path": "Zephyr ZX-400 Router Guide > LED Indicators",
+        "quote_snippet": "| LED | Meaning | What to do | |----------------|--------------------------------------|----------------------------------| | Solid green | Online and workin...",
+        "chunk_id": "doc_11_zephyr_router::chunk_002"
+      }
+    ],
+    "expected_answer": "Solid red means no internet connection, and you should check the modem cable then restart the router.",
+    "key_facts": [
+      "Solid red",
+      "No internet connection",
+      "Check the modem cable, then restart the router"
+    ],
+    "should_abstain": false,
+    "source": "synthetic",
+    "status": "approved",
+    "created_at": "2026-11-15T04:54:40+00:00",
+    "generator_model": "gemini-3.5-flash",
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "syn_3a514a38",
+    "question": "What should I do if my hardware gets too hot and displays error E-407?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
+    "expected_document_id": "doc_11_zephyr_router",
+    "doc_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": [
+      "doc_11_zephyr_router::chunk_004"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_11_zephyr_router",
+        "heading_path": "Zephyr ZX-400 Router Guide > Error Codes",
+        "quote_snippet": "- E-101: The WAN cable is disconnected. Check both ends of the cable. - E-204: The DNS server is not responding. Set the DNS server to 1.1.1.1 in the admin p...",
+        "chunk_id": "doc_11_zephyr_router::chunk_004"
+      }
+    ],
+    "expected_answer": "Relocate it to an airy area, as it automatically powers off at seventy degrees Celsius.",
+    "key_facts": [
+      "Move it to a ventilated place.",
+      "The router shuts down automatically at 70 degrees Celsius."
+    ],
+    "should_abstain": false,
+    "source": "synthetic",
+    "status": "approved",
+    "created_at": "2026-11-15T04:55:18+00:00",
+    "generator_model": "gemini-3.5-flash",
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "syn_c9487dd8",
+    "question": "How can I fix a domain name resolution error indicated by code E-204?",
+    "type": "paraphrase",
+    "category": "paraphrase",
+    "expected_document_id": "doc_11_zephyr_router",
+    "doc_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": [
+      "doc_11_zephyr_router::chunk_004"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_11_zephyr_router",
+        "heading_path": "Zephyr ZX-400 Router Guide > Error Codes",
+        "quote_snippet": "- E-101: The WAN cable is disconnected. Check both ends of the cable. - E-204: The DNS server is not responding. Set the DNS server to 1.1.1.1 in the admin p...",
+        "chunk_id": "doc_11_zephyr_router::chunk_004"
+      }
+    ],
+    "expected_answer": "Change the DNS setting to 1.1.1.1 within the administrative dashboard.",
+    "key_facts": [
+      "Set the DNS server to 1.1.1.1 in the admin page."
+    ],
+    "should_abstain": false,
+    "source": "synthetic",
+    "status": "approved",
+    "created_at": "2026-11-15T04:55:20+00:00",
+    "generator_model": "gemini-3.5-flash",
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "syn_3efc27b7",
+    "question": "What is the consequence of holding the hardware reset switch for ten seconds?",
+    "type": "single_chunk",
+    "category": "exact_lookup",
+    "expected_document_id": "doc_11_zephyr_router",
+    "doc_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": [
+      "doc_11_zephyr_router::chunk_005"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_11_zephyr_router",
+        "heading_path": "Zephyr ZX-400 Router Guide > Factory Reset",
+        "quote_snippet": "To reset the router, hold the Reset button for 10 seconds while the router is powered on, until all LEDs flash once. A factory reset erases all settings, inc...",
+        "chunk_id": "doc_11_zephyr_router::chunk_005"
+      }
+    ],
+    "expected_answer": "It restores factory defaults, wiping out all custom configurations like network credentials and SSID.",
+    "key_facts": [
+      "A factory reset erases all settings, including the Wi-Fi name and password."
+    ],
+    "should_abstain": false,
+    "source": "synthetic",
+    "status": "approved",
+    "created_at": "2026-11-15T04:55:39+00:00",
+    "generator_model": "gemini-3.5-flash",
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "syn_ab696433",
+    "question": "What are the hours for live messaging assistance and how long do electronic mail responses take?",
+    "type": "paraphrase",
+    "category": "paraphrase",
+    "expected_document_id": "doc_11_zephyr_router",
+    "doc_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": [
+      "doc_11_zephyr_router::chunk_008"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_11_zephyr_router",
+        "heading_path": "Zephyr ZX-400 Router Guide > Support",
+        "quote_snippet": "Phone support is not available. Support is provided by email and in-app chat only. Chat is open from 8:00 AM to 8:00 PM UTC. Email replies usually arrive wit...",
+        "chunk_id": "doc_11_zephyr_router::chunk_008"
+      }
+    ],
+    "expected_answer": "Live messaging is available from 8:00 AM to 8:00 PM UTC, and electronic mail responses typically take up to 2 business days.",
+    "key_facts": [
+      "Chat is open from 8:00 AM to 8:00 PM UTC",
+      "Email replies usually arrive within 2 business days"
+    ],
+    "should_abstain": false,
+    "source": "synthetic",
+    "status": "approved",
+    "created_at": "2026-11-15T04:56:40+00:00",
+    "generator_model": "gemini-3.5-flash",
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "syn_88c8d73d",
+    "question": "What is the total cost of the Zephyr ZX-400 router, and how should you connect your modem during setup?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
+    "expected_document_id": "doc_11_zephyr_router",
+    "doc_id": "doc_11_zephyr_router",
+    "expected_chunk_ids": [
+      "doc_11_zephyr_router::chunk_000",
+      "doc_11_zephyr_router::chunk_001"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_11_zephyr_router",
+        "heading_path": "Zephyr ZX-400 Router Guide > Overview",
+        "quote_snippet": "The Zephyr ZX-400 is a home Wi-Fi router that costs 89 USD. It supports up to 64 connected devices at the same time. The box contains the router, a 12V 2A po...",
+        "chunk_id": "doc_11_zephyr_router::chunk_000"
+      },
+      {
+        "doc_id": "doc_11_zephyr_router",
+        "heading_path": "Zephyr ZX-400 Router Guide > Initial Setup",
+        "quote_snippet": "1. Plug in the power adapter and wait until the green LED blinks. 2. Connect the modem to the WAN port. - The WAN port is the blue port. - The four yellow po...",
+        "chunk_id": "doc_11_zephyr_router::chunk_001"
+      }
+    ],
+    "expected_answer": "The router costs 89 USD, and you connect the modem to the blue WAN port during setup.",
+    "key_facts": [
+      "The Zephyr ZX-400 costs 89 USD.",
+      "You connect the modem to the WAN port.",
+      "The WAN port is the blue port."
+    ],
+    "should_abstain": false,
+    "source": "synthetic",
+    "status": "approved",
+    "created_at": "2026-11-15T04:57:17+00:00",
+    "generator_model": "gemini-3.5-flash",
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "syn_624fbf20",
+    "question": "How can I fix an issue where the machine fails to take in water?",
+    "type": "paraphrase",
+    "category": "paraphrase",
+    "expected_document_id": "doc_aurora_ad70",
+    "doc_id": "doc_aurora_ad70",
+    "expected_chunk_ids": [
+      "doc_aurora_ad70::chunk_002"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_aurora_ad70",
+        "heading_path": "Aurora AD-70 Dishwasher Guide > Display Codes",
+        "quote_snippet": "- F1: Water is not draining. Clean the filter at the bottom of the tub and check the drain hose for kinks. - F3: Water inlet problem. Make sure the tap is fu...",
+        "chunk_id": "doc_aurora_ad70::chunk_002"
+      }
+    ],
+    "expected_answer": "Make sure the tap is fully open and the inlet hose is not bent.",
+    "key_facts": [
+      "Water inlet problem.",
+      "Make sure the tap is fully open and the inlet hose is not bent."
+    ],
+    "should_abstain": false,
+    "source": "synthetic",
+    "status": "approved",
+    "created_at": "2026-11-15T04:59:00+00:00",
+    "generator_model": "gemini-3.5-flash",
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "syn_fca455bf",
+    "question": "Is it necessary to rinse my plates under the tap before putting them in the appliance?",
+    "type": "paraphrase",
+    "category": "paraphrase",
+    "expected_document_id": "doc_aurora_ad70",
+    "doc_id": "doc_aurora_ad70",
+    "expected_chunk_ids": [
+      "doc_aurora_ad70::chunk_003"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_aurora_ad70",
+        "heading_path": "Aurora AD-70 Dishwasher Guide > Loading the Machine",
+        "quote_snippet": "Place cups and glasses in the upper rack. Place plates and pots in the lower rack. Cast iron pans, wooden utensils and sharp knives must be washed by hand. T...",
+        "chunk_id": "doc_aurora_ad70::chunk_003"
+      }
+    ],
+    "expected_answer": "No, rinsing beforehand is unnecessary, but you do need to remove any large food scraps.",
+    "key_facts": [
+      "There is no need to pre-rinse dishes",
+      "scrape off large food pieces"
+    ],
+    "should_abstain": false,
+    "source": "synthetic",
+    "status": "approved",
+    "created_at": "2026-11-15T04:59:20+00:00",
+    "generator_model": "gemini-3.5-flash",
+    "needs_review": false,
+    "document_missing": false
+  },
+  {
+    "id": "syn_2a483dcd",
+    "question": "How long is the Aurora AD-70 dishwasher's warranty, and what specific issues are excluded from it?",
+    "type": "multi_chunk",
+    "category": "multi_hop",
+    "expected_document_id": "doc_aurora_ad70",
+    "doc_id": "doc_aurora_ad70",
+    "expected_chunk_ids": [
+      "doc_aurora_ad70::chunk_000",
+      "doc_aurora_ad70::chunk_007"
+    ],
+    "gold_refs": [
+      {
+        "doc_id": "doc_aurora_ad70",
+        "heading_path": "Aurora AD-70 Dishwasher Guide > Overview",
+        "quote_snippet": "The Aurora AD-70 is a built-in dishwasher with room for 14 place settings. A standard cycle uses 9.5 liters of water. The noise level is 44 dB. The warranty...",
+        "chunk_id": "doc_aurora_ad70::chunk_000"
+      },
+      {
+        "doc_id": "doc_aurora_ad70",
+        "heading_path": "Aurora AD-70 Dishwasher Guide > Warranty",
+        "quote_snippet": "The warranty covers manufacturing defects for 2 years from the purchase date. Damage caused by the wrong salt or detergent is not covered. A free service vis...",
+        "chunk_id": "doc_aurora_ad70::chunk_007"
+      }
+    ],
+    "expected_answer": "The warranty lasts for 2 years, but it does not cover damage caused by using incorrect salt or detergent.",
+    "key_facts": [
+      "The warranty lasts 2 years.",
+      "Damage caused by the wrong salt or detergent is not covered."
+    ],
+    "should_abstain": false,
+    "source": "synthetic",
+    "status": "approved",
+    "created_at": "2026-11-15T05:01:00+00:00",
+    "generator_model": "gemini-3.5-flash",
+    "needs_review": false,
+    "document_missing": false
+  }
+]

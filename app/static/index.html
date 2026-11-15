@@ -898,15 +898,33 @@
          TAB 2: EVALUATION HARNESS (Grouped Retrieval & Answer Quality, Sticky Table, Best Highlighted, Failed Questions)
          ===================================================================== -->
     <section id="tab-eval" class="tab-panel" role="tabpanel">
+      <div class="eval-subtabs" role="tablist" aria-label="Evaluate Views">
+        <button type="button" class="eval-subtab-btn active" id="eval-subtab-benchmark" data-eval-view="benchmark" role="tab" aria-selected="true">
+          Benchmark
+        </button>
+        <button type="button" class="eval-subtab-btn" id="eval-subtab-bank" data-eval-view="bank" role="tab" aria-selected="false">
+          Question bank <span class="count-pill" id="qb-draft-pill">0</span>
+        </button>
+      </div>
+
+      <div id="eval-benchmark-view">
       <div class="card">
         <div class="card-header-row">
           <div>
             <h2 data-rb-blur-text>Measure quality</h2>
             <p class="muted-text" id="eval-subtitle-text">
-              Benchmark retrieval and answer accuracy across 60 test questions and 4 ablation configurations.
+              Benchmark retrieval and answer accuracy across approved test questions and 4 ablation configurations.
             </p>
+            <div class="eval-run-meta" id="eval-dataset-badge"></div>
           </div>
           <div class="eval-actions">
+            <select id="eval-question-set-select" aria-label="Select Question Set">
+              <option value="golden_only" selected>Question set: Golden only</option>
+              <option value="golden_and_synthetic">Question set: Golden + synthetic</option>
+              <option value="synthetic_only">Question set: Synthetic only</option>
+              <option value="one_document">Question set: One document</option>
+            </select>
+            <select id="eval-question-doc-select" class="hidden" aria-label="Select Document for Benchmark"></select>
             <select id="ablation-config-select" aria-label="Select Ablation Configuration">
               <option value="hybrid_rrf_rerank" selected>Hybrid (RRF) + Cross-Encoder Rerank</option>
               <option value="hybrid_rrf">Hybrid Search (RRF)</option>
@@ -960,6 +978,9 @@
             <tbody id="ablation-tbody"></tbody>
           </table>
         </div>
+
+        <h3>By Question Type</h3>
+        <div id="type-cards" class="category-grid"></div>
 
         <h3>By Question Category</h3>
         <div id="category-cards" class="category-grid"></div>
@@ -1028,6 +1049,107 @@
             </thead>
             <tbody id="questions-tbody"></tbody>
           </table>
+        </div>
+      </div>
+      </div>
+
+      <!-- QUESTION BANK VIEW -->
+      <div id="eval-question-bank-view" class="hidden">
+        <div class="card">
+          <div class="card-header-row">
+            <div>
+              <h2>Question bank</h2>
+              <p class="muted-text" id="qb-counts-bar">Loading questions...</p>
+            </div>
+            <div class="eval-actions">
+              <span id="qb-demo-badge" class="badge badge-muted hidden">Read-only (DEMO_MODE)</span>
+              <button type="button" id="qb-approve-visible-btn" class="secondary-btn">Approve all visible</button>
+              <button type="button" id="qb-add-toggle-btn" class="primary-btn">+ Add question</button>
+            </div>
+          </div>
+
+          <div class="filter-bar qb-filters">
+            <select id="qb-filter-doc" aria-label="Filter by Document"><option value="all">All Docs</option></select>
+            <select id="qb-filter-type" aria-label="Filter by Type">
+              <option value="all">All Types</option>
+              <option value="single_chunk">Single Chunk</option>
+              <option value="paraphrase">Paraphrase</option>
+              <option value="multi_chunk">Multi-Chunk</option>
+              <option value="unanswerable">Unanswerable</option>
+            </select>
+            <select id="qb-filter-source" aria-label="Filter by Source">
+              <option value="all">All Sources</option>
+              <option value="golden">Golden</option>
+              <option value="synthetic">Synthetic</option>
+            </select>
+            <select id="qb-filter-status" aria-label="Filter by Status">
+              <option value="all">All Statuses</option>
+              <option value="draft">Draft</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="needs_review">Needs Review</option>
+            </select>
+          </div>
+
+          <form id="qb-add-form" class="qb-add-form hidden">
+            <h3>Add question manually</h3>
+            <div class="qb-form-grid">
+              <label>Question <input type="text" id="qb-new-question" required maxlength="200" placeholder="Must end with ?" /></label>
+              <label>Type
+                <select id="qb-new-type">
+                  <option value="single_chunk">single_chunk</option>
+                  <option value="paraphrase">paraphrase</option>
+                  <option value="multi_chunk">multi_chunk</option>
+                  <option value="unanswerable">unanswerable</option>
+                </select>
+              </label>
+              <label>Document <select id="qb-new-doc"></select></label>
+              <label>Gold Chunk(s) <select id="qb-new-chunks" multiple size="3"></select></label>
+              <label>Expected Answer <input type="text" id="qb-new-answer" placeholder="Short expected answer (or ABSTAIN)" /></label>
+              <label>Key Facts (comma-separated) <input type="text" id="qb-new-facts" placeholder="fact1, fact2" /></label>
+            </div>
+            <div class="qb-form-actions">
+              <button type="submit" class="primary-btn">Save question</button>
+              <button type="button" id="qb-add-cancel-btn" class="secondary-btn">Cancel</button>
+            </div>
+          </form>
+
+          <div class="qb-split-layout">
+            <div class="table-wrap qb-table-wrap">
+              <table class="data-table" id="qb-table">
+                <thead>
+                  <tr>
+                    <th>Question</th>
+                    <th>Type</th>
+                    <th>Doc</th>
+                    <th>Source</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="qb-tbody"></tbody>
+              </table>
+            </div>
+
+            <aside id="qb-preview-panel" class="qb-preview-panel hidden" aria-label="Question Preview and Editor">
+              <div class="qb-preview-header">
+                <strong id="qb-preview-id">Question</strong>
+                <button type="button" id="qb-preview-close" class="secondary-btn btn-xs">Close</button>
+              </div>
+              <div id="qb-preview-gold-chunks" class="qb-gold-chunks"></div>
+              <form id="qb-edit-form" class="qb-edit-form">
+                <label>Question <textarea id="qb-edit-question" rows="2"></textarea></label>
+                <label>Expected Answer <textarea id="qb-edit-answer" rows="2"></textarea></label>
+                <label>Key Facts (comma-separated) <input type="text" id="qb-edit-facts" /></label>
+                <label>Gold Chunk Picker <select id="qb-edit-chunks" multiple size="3"></select></label>
+                <div class="qb-form-actions">
+                  <button type="submit" class="primary-btn btn-xs">Save changes</button>
+                  <button type="button" id="qb-edit-approve" class="secondary-btn btn-xs">Approve</button>
+                  <button type="button" id="qb-edit-reject" class="secondary-btn btn-xs">Reject</button>
+                </div>
+              </form>
+            </aside>
+          </div>
         </div>
       </div>
     </section>
