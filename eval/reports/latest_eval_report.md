@@ -1,4 +1,4 @@
-# RAG Evaluation Harness Report (60-Question Golden Dataset)
+# RAG Evaluation Harness Report (72-Question Golden Dataset)
 
 ## 1. Retrieval & Answer Accuracy Ablation Scorecard
 
