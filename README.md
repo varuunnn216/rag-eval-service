@@ -97,5 +97,8 @@ BASE_URL=http://127.0.0.1:8000 python3 -m unittest tests/test_security.py -v
 - **Cross-encoder latency (747 ms):** Running the MiniLM cross-encoder on CPU adds ~740 ms per query; batching on GPU or using an ONNX-quantized model would cut tail latency.
 - **CI workflow:** Add a GitHub Actions workflow to run `unittest` on every PR.
 
+## Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and test commands.
+
 ## License
 [MIT](LICENSE) © 2026 Varun Singh
