@@ -101,4 +101,4 @@ BASE_URL=http://127.0.0.1:8000 python3 -m unittest tests/test_security.py -v
 See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup and test commands.
 
 ## License
-[MIT](LICENSE) © 2026 Varun Singh
+[MIT](LICENSE) © 2026 Varun Singh · See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md).
