@@ -84,8 +84,8 @@ Measured from [`eval/reports/latest_eval_report.md`](eval/reports/latest_eval_re
 # Run the automated evaluation harness (writes JSON + Markdown reports to eval/reports/)
 python3 -m eval.runner
 
-# Run unit tests
-python3 -m unittest discover -s tests -v
+# Run offline unit tests (chunker, table linearization, query expansion, eval metrics, security helpers)
+python3 -m unittest tests/test_chunker.py tests/test_table_linearization.py tests/test_query_expansion.py tests/test_eval_metrics.py tests/test_corpus_and_dataset.py tests/test_security_unit.py -v
 
 # Run live HTTP regression and security tests against a running server
 BASE_URL=http://127.0.0.1:8000 python3 tests/regression.py
